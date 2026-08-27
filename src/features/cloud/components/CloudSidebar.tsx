@@ -57,11 +57,13 @@ export const CloudSidebar: React.FC<CloudSidebarProps> = ({
     : 0;
   const countByFilter: Record<CloudFilter, number> = {
     all: items.length,
-    text: items.filter((item) => item.type === "text").length,
+    // “Tin nhắn” groups regular text notes and voice recordings in one view.
+    text: items.filter((item) => item.type === "text" || item.type === "audio").length,
     image: items.filter((item) => item.type === "image").length,
-    file: items.filter((item) =>
-      ["file", "video", "audio"].includes(item.type),
-    ).length,
+    // Audio is part of “Tin nhắn”; keep it out of the file count. Videos
+    // remain grouped with files here because this legacy sidebar has no
+    // standalone video filter.
+    file: items.filter((item) => ["file", "video"].includes(item.type)).length,
     link: items.filter((item) => item.type === "link").length,
   };
 

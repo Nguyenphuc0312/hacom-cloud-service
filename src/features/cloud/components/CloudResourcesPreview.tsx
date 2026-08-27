@@ -45,7 +45,9 @@ interface CloudResourcesPreviewProps {
 }
 
 const itemTitle = (item: CloudItem): string =>
-  getCloudItemTitle(item, { text: "Nội dung", link: "Liên kết", file: "Tệp" });
+  item.type === "audio" && !item.title?.trim()
+    ? "Tin nhắn thoại"
+    : getCloudItemTitle(item, { text: "Nội dung", link: "Liên kết", file: "Tệp" });
 
 export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
   items,
@@ -370,6 +372,44 @@ const ResourceActions: React.FC<ResourceActionProps> = ({ item, compact = false,
     return () => document.removeEventListener("click", closeOnOutsideClick);
   }, [menuOpen]);
 
+  // The menu is portaled to document.body so it cannot be clipped by a
+  // scrolling resource panel. Keep its fixed coordinates tied to the action
+  // bar while the panel or viewport moves; otherwise a scroll leaves the menu
+  // floating at the old (often far-away) position.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const updateMenuPosition = () => {
+      const rect = actionBarRef.current?.getBoundingClientRect();
+      if (!rect || typeof window === "undefined") return;
+      const menuWidth = 256;
+      const menuHeight = menuRef.current?.getBoundingClientRect().height ?? 300;
+      const gap = 8;
+      const left = Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth));
+      const belowTop = rect.bottom + gap;
+      const aboveTop = rect.top - menuHeight - gap;
+      const canFitBelow = belowTop + menuHeight <= window.innerHeight - gap;
+      const canFitAbove = aboveTop >= gap;
+      // Prefer the position shown by Hacom Chat: directly below the action
+      // bar. Only use above as a last resort when the viewport has no room.
+      const top = canFitBelow
+        ? belowTop
+        : canFitAbove
+          ? aboveTop
+          : Math.max(gap, Math.min(belowTop, window.innerHeight - menuHeight - gap));
+      setMenuPosition({ top, left });
+    };
+
+    updateMenuPosition();
+    const frameId = window.requestAnimationFrame(updateMenuPosition);
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [menuOpen]);
+
   const openResource = () => {
     if (url && typeof window !== "undefined") window.open(url, "_blank", "noopener,noreferrer");
   };
@@ -401,6 +441,7 @@ const ResourceActions: React.FC<ResourceActionProps> = ({ item, compact = false,
   const toggleMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
+    if (isTrash) return;
     if (menuOpen) {
       setMenuOpen(false);
       return;
@@ -408,20 +449,17 @@ const ResourceActions: React.FC<ResourceActionProps> = ({ item, compact = false,
     const rect = actionBarRef.current?.getBoundingClientRect();
     if (!rect || typeof window === "undefined") return;
     const menuWidth = 256;
-    // The trash menu only contains restore/permanent-delete actions. Keeping
-    // its measured height small prevents the fixed portal from being clamped
-    // to the top of the viewport when the action is opened near the bottom.
-    const menuHeight = isTrash ? 160 : 300;
+    const menuHeight = 300;
     const gap = 8;
     const left = Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth));
-    const maxTop = Math.max(8, window.innerHeight - menuHeight - gap);
     const belowTop = rect.bottom + gap;
     const aboveTop = rect.top - menuHeight - gap;
-    const canFitBelow = belowTop <= maxTop;
+    const maxTop = Math.max(8, window.innerHeight - menuHeight - gap);
+    const canFitBelow = belowTop + menuHeight <= window.innerHeight - gap;
     const canFitAbove = aboveTop >= gap;
-    const top = actionPlacement === "top"
-      ? canFitBelow ? belowTop : canFitAbove ? aboveTop : maxTop
-      : canFitAbove ? aboveTop : canFitBelow ? belowTop : gap;
+    // Open below whenever there is room. The previous center-placement path
+    // preferred `aboveTop`, which made menus appear far above the ellipsis.
+    const top = canFitBelow ? belowTop : canFitAbove ? aboveTop : maxTop;
     window.dispatchEvent(new CustomEvent<ResourceMenuOpenDetail>(RESOURCE_MENU_OPEN_EVENT, { detail: { itemId: item.id } }));
     setMenuPosition({ top, left });
     setMenuOpen(true);
@@ -430,31 +468,37 @@ const ResourceActions: React.FC<ResourceActionProps> = ({ item, compact = false,
   return (
     <>
     <div ref={actionBarRef} className={`pointer-events-none absolute ${align === "left" ? "left-2" : "right-2"} z-40 flex items-center gap-1 rounded-lg border border-border/70 bg-surface px-1.5 py-1 shadow-lg opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 ${menuOpen ? "pointer-events-auto opacity-100" : ""} ${actionPlacement === "top" ? "top-2" : "top-1/2 -translate-y-1/2"}`}>
-      {!compact && item.type !== "link" ? (
-        <button type="button" disabled={folderActionPending} onClick={(event) => { event.preventDefault(); event.stopPropagation(); void openFolder(); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary hover:bg-surface-hover hover:text-text-primary disabled:cursor-wait disabled:opacity-60" aria-label={`Mở thư mục chứa ${itemTitle(item)}`} title={folderActionPending ? "Đang tải…" : "Mở thư mục"}>
-          <FolderOpenIcon className="h-4 w-4" />
+      {isTrash ? <>
+        <button type="button" disabled={trashExpired || !onRestoreItem} onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (!trashExpired) void onRestoreItem?.(item.id); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Khôi phục ${itemTitle(item)}`} title={trashExpired ? "Đã hết hạn khôi phục" : "Khôi phục"}>
+          <RotateCcw className="h-4 w-4" />
         </button>
-      ) : null}
-      <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); void shareResource(item); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary hover:bg-surface-hover hover:text-text-primary" aria-label={`Chia sẻ ${itemTitle(item)}`} title="Chia sẻ">
-        <ArrowUturnRightIcon className="h-4 w-4" />
-      </button>
-      <button type="button" onClick={toggleMenu} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary hover:bg-surface-hover hover:text-text-primary" aria-label={`Thêm tùy chọn cho ${itemTitle(item)}`} title="Thêm tùy chọn" aria-expanded={menuOpen}>
-        <EllipsisHorizontalIcon className="h-5 w-5" />
-      </button>
+        <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (onPermanentDeleteItem) void onPermanentDeleteItem(item.id); else void onDeleteItem?.(item); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20" aria-label={`Xóa vĩnh viễn ${itemTitle(item)}`} title="Xóa vĩnh viễn">
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </> : <>
+        {!compact && item.type !== "link" ? (
+          <button type="button" disabled={folderActionPending} onClick={(event) => { event.preventDefault(); event.stopPropagation(); void openFolder(); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary hover:bg-surface-hover hover:text-text-primary disabled:cursor-wait disabled:opacity-60" aria-label={`Mở thư mục chứa ${itemTitle(item)}`} title={folderActionPending ? "Đang tải…" : "Mở thư mục"}>
+            <FolderOpenIcon className="h-4 w-4" />
+          </button>
+        ) : null}
+        <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); void shareResource(item); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary hover:bg-surface-hover hover:text-text-primary" aria-label={`Chia sẻ ${itemTitle(item)}`} title="Chia sẻ">
+          <ArrowUturnRightIcon className="h-4 w-4" />
+        </button>
+        <button type="button" onClick={toggleMenu} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary hover:bg-surface-hover hover:text-text-primary" aria-label={`Thêm tùy chọn cho ${itemTitle(item)}`} title="Thêm tùy chọn" aria-expanded={menuOpen}>
+          <EllipsisHorizontalIcon className="h-5 w-5" />
+        </button>
+      </>}
     </div>
-    {menuOpen && menuPosition && typeof document !== "undefined" ? createPortal(
+    {!isTrash && menuOpen && menuPosition && typeof document !== "undefined" ? createPortal(
         <div ref={menuRef} className="fixed z-[10000] max-h-[calc(100dvh-1rem)] min-w-[16rem] max-w-[calc(100vw-1rem)] overflow-y-auto rounded-xl border border-border bg-surface p-2 text-sm shadow-2xl" style={{ top: menuPosition.top, left: menuPosition.left }} onClick={(event) => event.stopPropagation()} role="menu">
-          {isTrash ? <>
-            <button type="button" role="menuitem" disabled={trashExpired} className="block w-full rounded-lg px-3 py-2.5 text-left text-primary hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40" onClick={() => { setMenuOpen(false); if (!trashExpired) void onRestoreItem?.(item.id); }}>Khôi phục</button>
-            <button type="button" role="menuitem" className="block w-full rounded-lg px-3 py-2.5 text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20" onClick={() => { setMenuOpen(false); if (onPermanentDeleteItem) void onPermanentDeleteItem(item.id); else void onDeleteItem?.(item); }}>Xóa vĩnh viễn</button>
-          </> : <>
+          <>
             {!documentFile ? <button type="button" role="menuitem" className="block w-full rounded-lg px-3 py-2.5 text-left text-text-primary hover:bg-surface-hover" onClick={() => { setMenuOpen(false); openResource(); }}>Mở tài liệu</button> : null}
             <button type="button" role="menuitem" className="block w-full rounded-lg px-3 py-2.5 text-left text-text-primary hover:bg-surface-hover" onClick={() => { setMenuOpen(false); void shareResource(item); }}>Chia sẻ</button>
             <button type="button" role="menuitem" className="block w-full rounded-lg px-3 py-2.5 text-left text-text-primary hover:bg-surface-hover" onClick={() => { setMenuOpen(false); onViewOriginalMessage?.(item); }}>Xem tin nhắn gốc</button>
             <button type="button" role="menuitem" className="block w-full rounded-lg px-3 py-2.5 text-left text-text-primary hover:bg-surface-hover" onClick={() => { setMenuOpen(false); onShowInFolder?.(item); }}>Hiển thị trong thư mục</button>
             <div className="my-1 border-t border-border/70" />
             <button type="button" role="menuitem" className="block w-full rounded-lg px-3 py-2.5 text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20" onClick={() => { setMenuOpen(false); void onDeleteItem?.(item); }}>Xóa</button>
-          </>}
+          </>
         </div>
       , document.body) : null}
     </>
@@ -574,7 +618,10 @@ const ResourceGallery: React.FC<{
     return () => window.clearInterval(timer);
   }, [isTrash]);
   const tabItems = useMemo(() => {
-    const type = tab === "media" ? ["image", "video"] : tab === "files" ? ["file"] : tab === "links" ? ["link"] : ["text"];
+    // Keep text messages and voice recordings together.  Hacom Chat treats
+    // both as conversation messages rather than downloadable files, so the
+    // Trash "Tin nhắn" tab must include both resource types.
+    const type = tab === "media" ? ["image", "video"] : tab === "files" ? ["file"] : tab === "links" ? ["link"] : ["text", "audio"];
     return allItems.filter((item) => type.includes(item.type));
   }, [allItems, tab]);
   const filteredItems = useMemo(() => {
@@ -605,7 +652,7 @@ const ResourceGallery: React.FC<{
     [groups],
   );
 
-  const tabLabel = tab === "media" ? "Ảnh/Video" : tab === "files" ? "Files" : tab === "links" ? "Links" : "Văn bản";
+  const tabLabel = tab === "media" ? "Ảnh/Video" : tab === "files" ? "Files" : tab === "links" ? "Links" : "Tin nhắn";
   const toggleSelection = (itemId: string) => {
     setSelectedIds((current) => {
       const next = new Set(current);
@@ -779,7 +826,7 @@ const ResourceGallery: React.FC<{
       </header>
       <nav className="flex h-14 shrink-0 border-b border-border px-5" aria-label="Loại nội dung">
         {(isTrash
-          ? ([['media', 'Ảnh/Video'], ['files', 'Files'], ['links', 'Links'], ['text', 'Văn bản']] as const)
+          ? ([['media', 'Ảnh/Video'], ['files', 'Files'], ['links', 'Links'], ['text', 'Tin nhắn']] as const)
           : ([['media', 'Ảnh/Video'], ['files', 'Files'], ['links', 'Links']] as const)
         ).map(([key, label]) => (
           <button key={key} type="button" onClick={() => setTab(key)} className={`flex flex-1 items-center justify-center border-b-2 text-base font-medium ${key === tab ? "border-primary text-primary" : "border-transparent text-text-primary"}`}>{label}</button>
@@ -795,7 +842,12 @@ const ResourceGallery: React.FC<{
           </div></div> : null}
         </div> : null}
         {groups.length ? groups.map(([date, group]) => (
-          <section key={date} className="mb-3 border-b-8 border-surface-muted bg-surface px-5 pb-5 pt-4">
+          <section
+            key={date}
+            className={isTrash
+              ? "bg-surface px-5 pb-5 pt-4"
+              : "mb-3 border-b-8 border-surface-muted bg-surface px-5 pb-5 pt-4"}
+          >
             {!isTrash ? <h3 className="mb-5 text-lg font-semibold text-text-primary">{date}</h3> : null}
             {tab === "media" ? <div className="grid grid-cols-3 gap-3">{group.map((item) => <div key={item.id} className="group relative aspect-square"><button type="button" disabled={!item.accessUrl && !selectionMode} onPointerDown={(event) => startLongPress(item.id, event)} onPointerUp={releaseSelectionPointer} onPointerCancel={releaseSelectionPointer} onPointerLeave={cancelLongPress} onPointerEnter={() => handleMediaPointerEnter(item.id)} onClick={() => handleMediaClick(item)} className="group relative h-full w-full overflow-hidden rounded-md bg-surface-overlay disabled:cursor-default"><GalleryMedia item={item} />{isTrash ? <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px] text-white">{trashRemainingLabel(item, trashNow)}</span> : null}{selectionMode ? <SelectionCircle selected={selectedIds.has(item.id)} className="absolute left-2 top-2 z-10" /> : null}</button>{!selectionMode ? <ResourceActions compact placement="top" isTrash={isTrash} trashNow={trashNow} item={item} onRestoreItem={onRestoreTrashItem} onPermanentDeleteItem={onPermanentDeleteItem} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}</div>)}</div> : null}
             {tab === "files" ? <div className="space-y-2">{group.map((item) => <GalleryFile key={item.id} item={item} trashNow={trashNow} selectionMode={selectionMode} selected={selectedIds.has(item.id)} onToggleSelect={() => toggleSelection(item.id)} isTrash={isTrash} onRestoreItem={onRestoreTrashItem} onPermanentDeleteItem={onPermanentDeleteItem} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div> : null}
@@ -806,7 +858,7 @@ const ResourceGallery: React.FC<{
       </div>
       {suggestionsOpen && suggestionPosition && typeof document !== "undefined" ? createPortal(<div className="fixed z-[1000] grid w-56 gap-1 rounded-xl border border-border bg-surface p-3 shadow-2xl" style={{ top: suggestionPosition.top, left: suggestionPosition.left }} onMouseEnter={keepSuggestionsOpen} onMouseLeave={hideSuggestionsSoon} role="menu">{[[7, "7 ngày trước"], [30, "30 ngày trước"], [90, "3 tháng trước"]].map(([days, label]) => <button key={days} type="button" onClick={() => chooseSuggestion(Number(days))} className="rounded-md px-2 py-2 text-left text-base text-text-secondary hover:bg-surface-hover" role="menuitem">{label}</button>)}</div>, document.body) : null}
       {selectionMode ? <div className="z-30 flex shrink-0 items-center gap-3 border-t border-border bg-surface px-5 py-3 shadow-[0_-4px_12px_rgba(15,23,42,0.08)]">
-        <span className="text-sm font-medium text-text-primary">{selectedIds.size} {tab === "media" ? "hình ảnh" : tab === "files" ? "tệp" : tab === "links" ? "liên kết" : "văn bản"}</span>
+        <span className="text-sm font-medium text-text-primary">{selectedIds.size} {tab === "media" ? "hình ảnh" : tab === "files" ? "tệp" : tab === "links" ? "liên kết" : "tin nhắn"}</span>
         <div className="ml-auto flex items-center gap-2">
           <button type="button" disabled={!selectedIds.size} onClick={() => void shareSelectedItems()} className="inline-flex h-9 w-9 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40" aria-label="Chia sẻ mục đã chọn" title="Chia sẻ"><ArrowUturnRightIcon className="h-5 w-5" /></button>
           <button type="button" disabled={!selectedIds.size} onClick={() => void downloadSelectedItems()} className="inline-flex h-9 w-9 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40" aria-label="Tải xuống mục đã chọn" title="Tải xuống"><Download className="h-5 w-5" /></button>
@@ -828,7 +880,7 @@ const SelectionCircle: React.FC<{ selected: boolean; className?: string }> = ({ 
   </span>
 );
 
-const GalleryMedia: React.FC<{ item: CloudItem }> = ({ item }) => item.accessUrl ? item.type === "image" ? <img src={item.accessUrl} alt={itemTitle(item)} className="h-full w-full object-cover" loading="lazy" onError={(event) => { event.currentTarget.style.visibility = "hidden"; }} /> : <><video src={item.accessUrl} className="h-full w-full object-cover" muted preload="metadata" /><span className="absolute inset-0 flex items-center justify-center bg-black/15"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white"><Play className="h-5 w-5" fill="currentColor" /></span></span></> : <ImageIcon className="absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 text-text-muted" />;
+const GalleryMedia: React.FC<{ item: CloudItem }> = ({ item }) => item.accessUrl ? item.type === "image" ? <img src={item.accessUrl} alt={itemTitle(item)} className="h-full w-full object-cover" loading="lazy" onError={(event) => { event.currentTarget.style.visibility = "hidden"; }} /> : <><video src={item.accessUrl} className="h-full w-full object-cover" muted preload="metadata" /><span className="absolute inset-0 flex items-center justify-center bg-black/15"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white"><Play className="h-5 w-5" fill="currentColor" /></span></span></> : <span className="absolute inset-0 flex items-center justify-center"><CloudItemIcon type={item.type} className="h-10 w-10" /></span>;
 
 const TrashResourceMeta: React.FC<{ item: CloudItem; trashNow: number }> = ({ item, trashNow }) => (
   <span className="cloud-resource-trash-meta" aria-label={`${formatBytes(item.sizeBytes)}, ${trashRemainingLabel(item, trashNow)}`}>
@@ -844,7 +896,7 @@ const TrashResourceMeta: React.FC<{ item: CloudItem; trashNow: number }> = ({ it
 const GalleryFile: React.FC<ResourceRowProps> = ({ item, trashNow = Date.now(), selectionMode = false, selected = false, onToggleSelect, isTrash = false, onRestoreItem, onPermanentDeleteItem, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => (
   <div className="group relative rounded-lg bg-surface-overlay">
     {selectionMode ? <button type="button" className="absolute left-3 top-1/2 z-20 -translate-y-1/2" aria-label={`${selected ? "Bỏ chọn" : "Chọn"} ${itemTitle(item)}`} onClick={onToggleSelect}><SelectionCircle selected={selected} /></button> : null}
-    {item.accessUrl ? <a href={item.accessUrl} download={itemTitle(item)} onClick={selectionMode ? (event) => { event.preventDefault(); onToggleSelect?.(); } : undefined} className={`flex items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-16" : ""}`}><FileText className="h-7 w-7 text-text-muted" /><span className="min-w-0 flex-1"><span className="block truncate text-[15px] font-medium text-text-primary" title={itemTitle(item)}>{itemTitle(item)}</span>{isTrash ? <TrashResourceMeta item={item} trashNow={trashNow} /> : <span className="flex items-center gap-1 text-sm text-text-muted"><span>{formatBytes(item.sizeBytes)}</span></span>}</span></a> : <div onClick={selectionMode ? onToggleSelect : undefined} className={`flex items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-16" : ""}`}><FileText className="h-7 w-7 text-text-muted" /><span className="min-w-0 flex-1"><span className="block truncate text-[15px] text-text-primary" title={itemTitle(item)}>{itemTitle(item)}</span>{isTrash ? <TrashResourceMeta item={item} trashNow={trashNow} /> : null}</span></div>}
+    {item.accessUrl ? <a href={item.accessUrl} download={itemTitle(item)} onClick={selectionMode ? (event) => { event.preventDefault(); onToggleSelect?.(); } : undefined} className={`flex items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-16" : ""}`}><CloudResourceThumbnail item={item} /><span className="min-w-0 flex-1"><span className="block truncate text-[15px] font-medium text-text-primary" title={itemTitle(item)}>{itemTitle(item)}</span>{isTrash ? <TrashResourceMeta item={item} trashNow={trashNow} /> : <span className="flex items-center gap-1 text-sm text-text-muted"><span>{formatBytes(item.sizeBytes)}</span></span>}</span></a> : <div onClick={selectionMode ? onToggleSelect : undefined} className={`flex items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-16" : ""}`}><CloudResourceThumbnail item={item} /><span className="min-w-0 flex-1"><span className="block truncate text-[15px] text-text-primary" title={itemTitle(item)}>{itemTitle(item)}</span>{isTrash ? <TrashResourceMeta item={item} trashNow={trashNow} /> : null}</span></div>}
     {!selectionMode ? <ResourceActions compact isTrash={isTrash} trashNow={trashNow} item={item} onRestoreItem={onRestoreItem} onPermanentDeleteItem={onPermanentDeleteItem} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}
   </div>
 );
@@ -856,19 +908,21 @@ const GalleryLink: React.FC<ResourceRowProps> = ({ item, trashNow = Date.now(), 
   try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { /* keep url */ }
   return <div className="group relative rounded-lg bg-surface-overlay">
     {selectionMode ? <button type="button" className="absolute left-3 top-1/2 z-20 -translate-y-1/2" aria-label={`${selected ? "Bỏ chọn" : "Chọn"} ${label}`} onClick={onToggleSelect}><SelectionCircle selected={selected} /></button> : null}
-    <a href={url} target="_blank" rel="noopener noreferrer" onClick={selectionMode ? (event) => { event.preventDefault(); onToggleSelect?.(); } : undefined} className={`flex items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-16" : ""}`}><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Link2 className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[15px] font-medium text-text-primary" title={label}>{label}</span><span className="block truncate text-sm text-text-muted" title={host}>{host}</span>{isTrash ? <TrashResourceMeta item={item} trashNow={trashNow} /> : null}</span></a>
+    <a href={url} target="_blank" rel="noopener noreferrer" onClick={selectionMode ? (event) => { event.preventDefault(); onToggleSelect?.(); } : undefined} className={`flex items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-16" : ""}`}><CloudResourceThumbnail item={item} /><span className="min-w-0 flex-1"><span className="block truncate text-[15px] font-medium text-text-primary" title={label}>{label}</span><span className="block truncate text-sm text-text-muted" title={host}>{host}</span>{isTrash ? <TrashResourceMeta item={item} trashNow={trashNow} /> : null}</span></a>
     {!selectionMode ? <ResourceActions compact isTrash={isTrash} trashNow={trashNow} item={item} onRestoreItem={onRestoreItem} onPermanentDeleteItem={onPermanentDeleteItem} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}
   </div>;
 };
 
 const GalleryText: React.FC<ResourceRowProps> = ({ item, trashNow = Date.now(), selectionMode = false, selected = false, onToggleSelect, isTrash = false, onRestoreItem, onPermanentDeleteItem, onDeleteItem, onViewOriginalMessage, onShowInFolder }) => {
   const text = item.content?.trim() || itemTitle(item);
+  const isAudio = item.type === "audio";
+  const messageKind = isAudio ? "Tin nhắn thoại" : "Tin nhắn";
   return (
     <div className="group relative rounded-lg bg-surface-overlay">
       {selectionMode ? <button type="button" className="absolute left-3 top-1/2 z-20 -translate-y-1/2" aria-label={`${selected ? "Bỏ chọn" : "Chọn"} ${text}`} onClick={onToggleSelect}><SelectionCircle selected={selected} /></button> : null}
       <div className={`flex min-h-[62px] items-center gap-3 rounded-lg p-3 pr-28 ${selectionMode ? "pl-16" : ""}`}>
-        <CloudItemIcon type="text" className="h-9 w-9 shrink-0" />
-        <span className="min-w-0 flex-1"><span className="block truncate text-[15px] font-medium text-text-primary" title={text}>{text}</span>{isTrash ? <TrashResourceMeta item={item} trashNow={trashNow} /> : <span className="cloud-resource-text-meta flex min-w-0 items-center gap-2 text-sm text-text-muted"><span className="shrink-0 whitespace-nowrap">Văn bản · {formatBytes(item.sizeBytes)}</span></span>}</span>
+        <CloudItemIcon type={isAudio ? "audio" : "text"} className="h-9 w-9 shrink-0" />
+        <span className="min-w-0 flex-1"><span className="block truncate text-[15px] font-medium text-text-primary" title={text}>{text}</span>{isTrash ? <TrashResourceMeta item={item} trashNow={trashNow} /> : <span className="cloud-resource-text-meta flex min-w-0 items-center gap-2 text-sm text-text-muted"><span className="shrink-0 whitespace-nowrap">{messageKind} · {formatBytes(item.sizeBytes)}</span></span>}</span>
       </div>
       {!selectionMode ? <ResourceActions compact isTrash={isTrash} trashNow={trashNow} item={item} onRestoreItem={onRestoreItem} onPermanentDeleteItem={onPermanentDeleteItem} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} /> : null}
     </div>

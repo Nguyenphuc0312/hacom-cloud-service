@@ -82,29 +82,37 @@ export const CloudConversationInfoPanel: React.FC<
 
   const normalizedItems = useMemo(() => items.map(normalizeCloudItemType), [items]);
 
-  // Link bytes remain part of the storage bar, but Link and Free are
-  // intentionally omitted from the legend per the My Documents UI contract.
+  // Keep the storage breakdown aligned with the dedicated Manage Cloud view.
+  // Links, trash and free capacity are intentionally not shown as media
+  // segments here; the gray track represents the remaining capacity.
   const categories = useMemo(
     () => [
       {
         key: "image",
         label: labels.image,
-        color: "#22A06B",
+        color: "#F97316",
         bytes: typeBytes(normalizedItems, ["image"]),
         showLegend: true,
       },
       {
         key: "video",
         label: labels.video,
-        color: "#2F80ED",
+        color: "#2F9E5B",
         bytes: typeBytes(normalizedItems, ["video"]),
         showLegend: true,
       },
       {
         key: "file",
         label: labels.file,
-        color: "#F5B700",
+        color: "#FFC727",
         bytes: typeBytes(normalizedItems, ["file"]),
+        showLegend: true,
+      },
+      {
+        key: "audio",
+        label: isVietnamese ? "Tin nhắn thoại" : "Voice messages",
+        color: "#4D83BE",
+        bytes: typeBytes(normalizedItems, ["audio"]),
         showLegend: true,
       },
       {
@@ -115,9 +123,10 @@ export const CloudConversationInfoPanel: React.FC<
         showLegend: false,
       },
     ],
-    [normalizedItems, labels.file, labels.image, labels.video],
+    [isVietnamese, normalizedItems, labels.file, labels.image, labels.video],
   );
 
+  const quotaCategories = categories.filter((category) => category.showLegend);
   const limitBytes = quota?.limitBytes ?? 0;
   const percent = (bytes: number): number =>
     limitBytes > 0 ? Math.min(100, Math.max(0, (bytes / limitBytes) * 100)) : 0;
@@ -166,49 +175,54 @@ export const CloudConversationInfoPanel: React.FC<
 
         <div>
         <div className="h-2.5 bg-[#eef0f4]" />
-        {showStorage ? <section className="bg-surface px-5 py-5">
+        {showStorage ? (
+          <div className="px-5 py-4">
+          <section className="mx-auto w-full max-w-[428px] rounded-2xl border border-[#E1E6ED] bg-[#F5F7FA] p-5">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-[16px] font-semibold text-text-primary">{labels.storage}</h3>
-            <span className="text-[13px] text-text-muted">
-              {limitBytes > 0 ? `${((Number(quota?.usedBytes ?? 0) / limitBytes) * 100).toFixed(Number(quota?.usedBytes ?? 0) > 0 && Number(quota?.usedBytes ?? 0) / limitBytes < 0.1 ? 1 : 0)}%` : "0%"}
+            <h3 className="text-base font-semibold leading-6 text-text-primary">{labels.storage}</h3>
+            <span className="shrink-0 text-base font-semibold leading-6 text-[#0B1730]">
+              {formatBytes(quota?.usedBytes ?? 0)} / {formatBytes(limitBytes)}
             </span>
           </div>
-          <p className="mt-2 text-lg font-semibold text-text-primary">
-            {formatBytes(quota?.usedBytes ?? 0)} <span className="text-[15px] font-normal text-text-muted">đã dùng</span>
-          </p>
-          <p className="text-[13px] text-text-muted">trên tổng dung lượng {formatBytes(limitBytes)}</p>
-          <div className="mt-3 flex h-1.5 gap-px overflow-hidden rounded-full bg-surface-hover" aria-label={labels.storage}>
-            {categories.map((category) => (
-              <span key={category.key} style={{ width: `${percent(category.bytes)}%`, backgroundColor: category.color }} aria-hidden />
-            ))}
-            <span className="bg-[#F97316]" style={{ width: `${percent(quota?.trashBytes ?? 0)}%` }} aria-hidden />
-            <span className="bg-[#B8BEC9]" style={{ width: `${percent(quota?.availableBytes ?? 0)}%` }} aria-hidden />
+          <div
+            className="mt-4 flex h-2.5 w-full overflow-hidden rounded-full bg-[#B9C1CC]"
+            role="img"
+            aria-label={`${labels.storage}: ${formatBytes(quota?.usedBytes ?? 0)} / ${formatBytes(limitBytes)}`}
+          >
+            {quotaCategories.map((category) => {
+              const width = percent(category.bytes);
+              return width > 0 ? (
+                <span
+                  key={category.key}
+                  className="block h-full shrink-0 border-r border-[#F5F7FA] last:border-r-0"
+                  style={{ width: `${width}%`, minWidth: "4px", backgroundColor: category.color }}
+                  aria-hidden
+                />
+              ) : null;
+            })}
           </div>
-          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[15px] text-text-muted">
-            {categories.filter((category) => category.showLegend).map((category) => (
-              <span key={category.key} className="flex items-center gap-1.5">
-                <i className="h-3 w-3 rounded-full" style={{ backgroundColor: category.color }} />
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm text-[#64748B]">
+            {quotaCategories.map((category) => (
+              <span key={category.key} className="inline-flex items-center gap-2 whitespace-nowrap">
+                <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: category.color }} aria-hidden />
                 {category.label}
               </span>
             ))}
-            <span className="flex items-center gap-1.5">
-              <i className="h-3 w-3 rounded-full bg-[#F97316]" />
-              {labels.trash}
-            </span>
           </div>
-          <p className="mt-2 text-[15px] text-text-muted">Còn trống {formatBytes(quota?.availableBytes ?? 0)}</p>
+          </section>
           {onManageCloud ? (
             <button
               type="button"
               onClick={onManageCloud}
-              className="mt-4 flex h-12 w-full items-center gap-2 rounded-lg border border-brand-solid/25 bg-brand-soft/50 px-3 text-left text-[15px] font-medium text-brand-solid transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              className="mx-auto mt-3 flex h-12 w-full max-w-[428px] items-center gap-3 rounded-xl border border-brand-solid/25 bg-brand-soft/50 px-4 text-left text-base font-medium text-brand-solid transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             >
               <FolderOpen className="h-5 w-5 shrink-0" aria-hidden />
               <span className="min-w-0 flex-1 truncate">{labels.manage}</span>
-              <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+              <ArrowRight className="h-5 w-5 shrink-0" aria-hidden />
             </button>
           ) : null}
-        </section> : null}
+          </div>
+        ) : null}
 
         <div className="h-2.5 bg-[#eef0f4]" />
         <section className="bg-surface">

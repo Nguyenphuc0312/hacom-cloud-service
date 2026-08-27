@@ -963,7 +963,10 @@ button.cloud-delete-choice--danger:hover {
 .cloud-trash-message__menu {
   position: absolute;
   right: 0;
-  bottom: calc(100% + 6px);
+  /* Keep the menu anchored below the ellipsis control, matching the other
+     cloud/chat resource menus. It used to render above the control, which
+     made it look detached from the item (especially in a long trash list). */
+  top: calc(100% + 6px);
   z-index: 5;
   min-width: 176px;
   overflow: hidden;
