@@ -42,6 +42,7 @@ import {
   formatMessagePreview,
   showSingletonMessageToast,
 } from "../utils/messageToast";
+import { getPreviewFromMessage } from "../utils/messageContent.utils";
 import { RoomType } from "../types";
 import type { Mention } from "../types";
 import {
@@ -929,7 +930,7 @@ export const useWebSocket = (
       // trong bong bóng chat. Tính một lần, dùng cho cả trung tâm thông báo,
       // thông báo hệ điều hành lẫn toast nổi.
       const aliasedContent = applyMentionAliases(
-        input.content,
+        getPreviewFromMessage({ content: input.content }),
         input.mentionDetails,
         aliasByUserId(),
       );
