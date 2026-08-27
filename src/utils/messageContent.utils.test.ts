@@ -117,6 +117,14 @@ describe("hasRichFormatting", () => {
       ),
     ).toBe(true);
   });
+
+  it("không nhận nhầm mention chip là rich text", () => {
+    expect(
+      hasRichFormatting(
+        '<p><span data-mention-chip="" data-mention-id="user-1" class="composer-mention-chip">@Minh Nhật</span> xin chào</p>',
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("stripHtmlToText", () => {

@@ -1,4 +1,5 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 import {
   ArrowLeftIcon,
@@ -31,6 +32,8 @@ const buttonBase =
   "inline-flex h-[var(--control-height-sm)] w-[var(--control-height-sm)] shrink-0 items-center justify-center rounded-md transition-colors text-text-muted hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30";
 
 const activeClass = "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary";
+const VIEWPORT_GUTTER = 8;
+const COLOR_PICKER_WIDTH = 282;
 
 export const RichTextToolbar: React.FC<RichTextToolbarProps> = ({
   editor,
@@ -54,7 +57,14 @@ export const RichTextToolbar: React.FC<RichTextToolbarProps> = ({
       // Fixed positioning anchored to the button's own viewport coords — the
       // button lives inside the toolbar's overflow-x-auto row, so a plain
       // `absolute` popover would get clipped by that scroll container.
-      setColorPickerAnchor({ bottom: window.innerHeight - rect.top + 8, left: rect.left });
+      const left = Math.max(
+        VIEWPORT_GUTTER,
+        Math.min(
+          rect.left,
+          window.innerWidth - COLOR_PICKER_WIDTH - VIEWPORT_GUTTER,
+        ),
+      );
+      setColorPickerAnchor({ bottom: window.innerHeight - rect.top + 8, left });
     }
     // Hai bảng cùng bung một lúc thì che nhau — mở cái này đóng cái kia.
     setIsSymbolPickerOpen(false);
@@ -234,34 +244,46 @@ export const RichTextToolbar: React.FC<RichTextToolbarProps> = ({
         <ArrowsPointingInIcon className="h-4 w-4" />
       </button>
 
-      {showSymbolPicker && symbolPickerAnchor && (
-        <SpecialSymbolPicker
-          onSelect={(symbol) => {
-            // insertContent tại vị trí con trỏ hiện tại, giữ nguyên định dạng
-            // đang bật — chèn xong vẫn ở trong ô nhập để gõ tiếp ngay.
-            editor.chain().focus().insertContent(symbol).run();
-          }}
-          onClose={() => setIsSymbolPickerOpen(false)}
-          className="fixed z-dropdown"
-          style={{ bottom: symbolPickerAnchor.bottom, left: symbolPickerAnchor.left }}
-        />
-      )}
+      {showSymbolPicker && symbolPickerAnchor && typeof document !== "undefined"
+        ? createPortal(
+            <SpecialSymbolPicker
+              onSelect={(symbol) => {
+                // insertContent tại vị trí con trỏ hiện tại, giữ nguyên định dạng
+                // đang bật — chèn xong vẫn ở trong ô nhập để gõ tiếp ngay.
+                editor.chain().focus().insertContent(symbol).run();
+              }}
+              onClose={() => setIsSymbolPickerOpen(false)}
+              className="fixed z-dropdown"
+              style={{
+                bottom: symbolPickerAnchor.bottom,
+                left: symbolPickerAnchor.left,
+              }}
+            />,
+            document.body,
+          )
+        : null}
 
-      {showColorPicker && colorPickerAnchor && (
-        <TextColorPicker
-          activeColor={activeColor}
-          onSelect={(color) => {
-            if (color) {
-              editor.chain().focus().setColor(color).run();
-            } else {
-              editor.chain().focus().unsetColor().run();
-            }
-          }}
-          onClose={() => setIsColorPickerOpen(false)}
-          className="fixed z-dropdown"
-          style={{ bottom: colorPickerAnchor.bottom, left: colorPickerAnchor.left }}
-        />
-      )}
+      {showColorPicker && colorPickerAnchor && typeof document !== "undefined"
+        ? createPortal(
+            <TextColorPicker
+              activeColor={activeColor}
+              onSelect={(color) => {
+                if (color) {
+                  editor.chain().focus().setColor(color).run();
+                } else {
+                  editor.chain().focus().unsetColor().run();
+                }
+              }}
+              onClose={() => setIsColorPickerOpen(false)}
+              className="fixed z-dropdown"
+              style={{
+                bottom: colorPickerAnchor.bottom,
+                left: colorPickerAnchor.left,
+              }}
+            />,
+            document.body,
+          )
+        : null}
     </div>
   );
 };
