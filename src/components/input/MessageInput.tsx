@@ -872,12 +872,24 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         // Capture TipTap content before clearing — preserves rich text formatting
         const html = tipTapRef.current?.getHTML() ?? "";
         const plainText = tipTapRef.current?.getText().trim() ?? draftValue.trim();
+        const contentJson = tipTapRef.current?.getJSON() as
+          | Record<string, unknown>
+          | undefined;
         const isEmpty = tipTapRef.current?.isEmpty() ?? !plainText;
         const hasFormatting = !isEmpty && hasRichFormatting(html);
         const content = isEmpty ? undefined : (hasFormatting ? html : plainText);
+        const contentFormat = hasFormatting
+          ? ("rich_text" as const)
+          : ("plain_text" as const);
         // ChatWindow gathers ready attachment metadata; only clear once it
         // confirms the send was accepted into the optimistic/server flow.
-        await Promise.resolve(onSend(content));
+        await Promise.resolve(
+          onSend(content, undefined, undefined, {
+            contentFormat,
+            contentJson,
+            plainText,
+          }),
+        );
         tipTapRef.current?.clearContent();
         setDraftValue("");
         onChange("");
