@@ -59,6 +59,36 @@ export const buildEditedLastMessagePreviewPatch = (
   };
 };
 
+/**
+ * Sau reload, API hội thoại có thể còn preview cũ trong khi timeline đã trả
+ * message authoritative với `isEdited=true`. Dùng chính tin cùng identity để
+ * khôi phục preview; không lấy bừa phần tử cuối vì pagination/system message có
+ * thể khiến thứ tự cache khác summary.
+ */
+export const buildHydratedEditedLastMessagePreviewPatch = (
+  conversation: Conversation,
+  messages: readonly Message[],
+): Pick<Conversation, "lastMessage"> | null => {
+  const lastMessageIdentity =
+    conversation.lastMessage?.id ?? conversation.lastMessageId ?? "";
+  if (!lastMessageIdentity) return null;
+
+  let authoritativeMessage: Message | undefined;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (matchesMessageIdentityValue(message, lastMessageIdentity)) {
+      authoritativeMessage = message;
+      break;
+    }
+  }
+
+  if (!authoritativeMessage?.isEdited) return null;
+  return buildEditedLastMessagePreviewPatch(
+    conversation,
+    authoritativeMessage,
+  );
+};
+
 /** Rút gọn tin nhắn còn đúng phần sidebar cần để hiển thị preview. */
 export const toMessageSummary = (
   message: Message,

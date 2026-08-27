@@ -5,6 +5,7 @@ import type { Conversation, Message } from "../types";
 import {
   applyConversationReadState,
   buildEditedLastMessagePreviewPatch,
+  buildHydratedEditedLastMessagePreviewPatch,
   toConversationLastMessageStatus,
   toMessageSummary,
   updateConversationActivitySummary,
@@ -69,6 +70,57 @@ describe("buildEditedLastMessagePreviewPatch", () => {
       buildEditedLastMessagePreviewPatch(
         conversation({ lastMessage, lastMessageId: "m1" }),
         message({ id: "m0", content: "tin cũ đã sửa" }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("buildHydratedEditedLastMessagePreviewPatch", () => {
+  const lastMessage = {
+    id: "m2",
+    senderId: "u1",
+    senderName: "Nhật",
+    content: "preview cũ từ conversation API",
+    type: "text",
+    isDeleted: false,
+    createdAt: "2026-03-01T00:00:00.000Z",
+  } as Conversation["lastMessage"];
+
+  it("hydrate lại preview từ timeline authoritative sau reload", () => {
+    const patch = buildHydratedEditedLastMessagePreviewPatch(
+      conversation({ lastMessage, lastMessageId: "m2" }),
+      [
+        message({ id: "m1", content: "tin trước" }),
+        message({
+          id: "m2",
+          content: "nội dung đã sửa",
+          isEdited: true,
+          editedAt: "2026-03-01T00:05:00.000Z" as never,
+        }),
+      ],
+    );
+
+    expect(patch?.lastMessage).toMatchObject({
+      id: "m2",
+      content: "nội dung đã sửa",
+      isEdited: true,
+    });
+  });
+
+  it("không đánh dấu edited nếu timeline không có edit marker", () => {
+    expect(
+      buildHydratedEditedLastMessagePreviewPatch(
+        conversation({ lastMessage, lastMessageId: "m2" }),
+        [message({ id: "m2", content: "tin thường" })],
+      ),
+    ).toBeNull();
+  });
+
+  it("không dùng nhầm tin khác identity dù nó nằm cuối cache", () => {
+    expect(
+      buildHydratedEditedLastMessagePreviewPatch(
+        conversation({ lastMessage, lastMessageId: "m2" }),
+        [message({ id: "m3", content: "edit tin khác", isEdited: true })],
       ),
     ).toBeNull();
   });
