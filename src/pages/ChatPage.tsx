@@ -96,6 +96,7 @@ import {
 } from "../features/cloud/personalCloudPolicy";
 import { cloudApi } from "../features/cloud/api/cloudApi";
 import { asRecord, asString } from "../utils/payloadGuards";
+import { buildEditedLastMessagePreviewPatch } from "../stores/conversationSummaryState";
 
 const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
 const GroupInfo = React.lazy(() => import("../components/info/GroupInfo"));
@@ -889,18 +890,29 @@ export const ChatPage: React.FC = () => {
       if (!selectedConversationId) return;
 
       try {
-        await editMessageMutation({
+        const updatedMessage = await editMessageMutation({
           conversationId: selectedConversationId,
           messageId,
           content,
         }).unwrap();
+        const conversation =
+          useChatStore.getState().conversationById[selectedConversationId];
+        if (conversation) {
+          const previewPatch = buildEditedLastMessagePreviewPatch(
+            conversation,
+            updatedMessage,
+          );
+          if (previewPatch) {
+            updateConversation(selectedConversationId, previewPatch);
+          }
+        }
         toast.success(t("chat:toast.messageEdited"));
       } catch (error) {
         const apiError = extractApiError(error);
         toast.error(apiError.message || t("chat:toast.editFailed"));
       }
     },
-    [editMessageMutation, selectedConversationId, t],
+    [editMessageMutation, selectedConversationId, t, updateConversation],
   );
 
   const handleDeleteMessage = useCallback(

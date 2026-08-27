@@ -4,6 +4,7 @@ import { MessageStatus } from "../types";
 import type { Conversation, Message } from "../types";
 import {
   applyConversationReadState,
+  buildEditedLastMessagePreviewPatch,
   toConversationLastMessageStatus,
   toMessageSummary,
   updateConversationActivitySummary,
@@ -21,6 +22,57 @@ const message = (partial: Partial<Message>): Message =>
 
 const conversation = (partial: Partial<Conversation> = {}): Conversation =>
   ({ id: "c1", ...partial }) as Conversation;
+
+describe("buildEditedLastMessagePreviewPatch", () => {
+  const lastMessage = {
+    id: "m1",
+    senderId: "u1",
+    senderName: "Nhật",
+    content: "nội dung cũ",
+    type: "text",
+    isDeleted: false,
+    createdAt: "2026-03-01T00:00:00.000Z",
+  } as Conversation["lastMessage"];
+
+  it("đổi preview nếu tin vừa sửa là tin cuối", () => {
+    const patch = buildEditedLastMessagePreviewPatch(
+      conversation({
+        lastMessage,
+        lastMessageId: "m1",
+        unreadCount: 4,
+        lastMessageAt: "2026-03-01T00:00:00.000Z",
+      }),
+      message({ id: "m1", content: "nội dung mới" }),
+    );
+
+    expect(patch).toEqual({
+      lastMessage: {
+        ...lastMessage,
+        content: "nội dung mới",
+        isEdited: true,
+      },
+    });
+    expect(Object.keys(patch ?? {})).toEqual(["lastMessage"]);
+  });
+
+  it("nhận diện được id server qua bí danh của tin", () => {
+    const patch = buildEditedLastMessagePreviewPatch(
+      conversation({ lastMessage, lastMessageId: "m1" }),
+      message({ id: "temp-m1", stableId: "m1", content: "đã sửa" }),
+    );
+
+    expect(patch?.lastMessage?.content).toBe("đã sửa");
+  });
+
+  it("không đổi preview nếu sửa một tin cũ hơn", () => {
+    expect(
+      buildEditedLastMessagePreviewPatch(
+        conversation({ lastMessage, lastMessageId: "m1" }),
+        message({ id: "m0", content: "tin cũ đã sửa" }),
+      ),
+    ).toBeNull();
+  });
+});
 
 describe("toMessageSummary", () => {
   it("chỉ mang các trường cần cho preview sidebar", () => {

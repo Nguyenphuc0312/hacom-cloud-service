@@ -9,6 +9,55 @@
 import { normalizeConversation } from "../lib/conversationAdapter";
 import { MessageStatus } from "../types";
 import type { Conversation, Message } from "../types";
+import { matchesMessageIdentityValue } from "./messageAliasIndex";
+
+type EditedMessagePreview = Pick<
+  Message,
+  | "id"
+  | "localId"
+  | "clientMessageId"
+  | "stableId"
+  | "content"
+  | "editedAt"
+  | "updatedAt"
+>;
+
+/**
+ * Chỉ đổi nội dung preview khi tin vừa sửa đúng là tin cuối của hội thoại.
+ * Patch cố ý không chứa timestamp/unread để thao tác sửa không đẩy phòng lên
+ * đầu danh sách hoặc làm thay đổi badge.
+ */
+export const buildEditedLastMessagePreviewPatch = (
+  conversation: Conversation,
+  message: EditedMessagePreview,
+): Pick<Conversation, "lastMessage"> | null => {
+  const currentLastMessage = conversation.lastMessage;
+  const lastMessageIdentity =
+    currentLastMessage?.id ?? conversation.lastMessageId ?? "";
+
+  if (
+    !currentLastMessage ||
+    !matchesMessageIdentityValue(message, lastMessageIdentity)
+  ) {
+    return null;
+  }
+
+  return {
+    lastMessage: {
+      ...currentLastMessage,
+      content: message.content,
+      isEdited: true,
+      ...(message.editedAt ?? message.updatedAt ?? currentLastMessage.editedAt
+        ? {
+            editedAt:
+              message.editedAt ??
+              message.updatedAt ??
+              currentLastMessage.editedAt,
+          }
+        : {}),
+    },
+  };
+};
 
 /** Rút gọn tin nhắn còn đúng phần sidebar cần để hiển thị preview. */
 export const toMessageSummary = (
@@ -22,6 +71,8 @@ export const toMessageSummary = (
     type: message.type,
     isDeleted: message.isDeleted,
     createdAt: message.createdAt,
+    ...(message.isEdited ? { isEdited: true } : {}),
+    ...(message.editedAt ? { editedAt: message.editedAt } : {}),
     // Giữ lại mention: thiếu nó thì preview sidebar không biết đoạn `@Tên` trỏ
     // tới ai, nên không đổi được sang "tên gợi nhớ" của người xem.
     ...(message.mentions?.length ? { mentions: message.mentions } : {}),
