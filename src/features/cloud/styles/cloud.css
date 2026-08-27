@@ -863,31 +863,38 @@ button.cloud-delete-choice--danger:hover {
 }
 
 .cloud-resource-trash-meta {
-  display: flex;
+  display: grid;
+  grid-template-columns: 3.25rem 1rem minmax(0, 1fr);
   min-width: 0;
   align-items: center;
-  gap: 12px;
+  column-gap: 8px;
   margin-top: 3px;
   color: hsl(var(--color-text-muted));
-  font-size: 0.875rem;
-  line-height: 1.35;
+  /* Keep trash metadata in line with the 12px metadata used by Hacom Chat. */
+  font-size: 0.75rem;
+  line-height: 1.25rem;
   white-space: nowrap;
 }
 
 .cloud-resource-trash-meta > span:first-child,
 .cloud-resource-trash-meta > span:nth-child(2) {
-  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.cloud-resource-trash-meta > span:nth-child(2) {
+  text-align: center;
 }
 
 .cloud-resource-trash-meta__remaining {
   display: inline-flex;
-  flex: 0 0 auto;
+  min-width: 0;
   align-items: center;
   gap: 5px;
   white-space: nowrap;
 }
 
 .cloud-resource-trash-meta__remaining > span {
+  min-width: 0;
   white-space: nowrap;
 }
 

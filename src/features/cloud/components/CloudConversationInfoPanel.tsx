@@ -5,9 +5,6 @@ import {
   XMarkIcon as X,
 } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
-import { Pin } from "lucide-react";
-import { useUIStore } from "../../../stores/uiStore";
-import { CLOUD_CONVERSATION_ID } from "../constants";
 import type { CloudItem, CloudQuota } from "../types";
 import { formatBytes, normalizeCloudItemType } from "../utils/cloudFormat";
 import { CloudConversationAvatar } from "./CloudConversationEntry";
@@ -43,12 +40,6 @@ export const CloudConversationInfoPanel: React.FC<
   CloudConversationInfoPanelProps
 > = ({ items, trashItems, quota, onLoadAllTrash, onClose, onManageCloud, onRestoreTrashItem, onPermanentDeleteItem, onDeleteItem, onViewOriginalMessage, onShowInFolder, senderName, userId, showStorage = true }) => {
   const { i18n } = useTranslation("cloud");
-  const isPinned = useUIStore((state) =>
-    state.pinnedConversationIds.includes(CLOUD_CONVERSATION_ID),
-  );
-  const togglePinnedConversation = useUIStore(
-    (state) => state.togglePinnedConversation,
-  );
   const isVietnamese = i18n.resolvedLanguage !== "en";
   const labels = isVietnamese
     ? {
@@ -153,24 +144,6 @@ export const CloudConversationInfoPanel: React.FC<
           <CloudConversationAvatar size="xl" />
           <h3 className="mt-4 text-base font-bold text-text-primary">{labels.workspace}</h3>
           <p className="mx-auto mt-1 max-w-[18rem] text-[15px] leading-6 text-text-muted">{labels.description}</p>
-        </section>
-
-        <section className="bg-surface px-5 pb-5">
-          <div className="flex justify-center">
-            <button
-              type="button"
-              onClick={() => togglePinnedConversation(CLOUD_CONVERSATION_ID)}
-              className="group flex min-w-0 flex-col items-center gap-2 px-0.5 py-1 text-center transition-colors disabled:opacity-60"
-              aria-label={isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}
-            >
-              <span className={`relative flex h-10 w-10 items-center justify-center rounded-full transition-colors ${isPinned ? "bg-[#e8ebf0]" : "bg-[#eef1f5] group-hover:bg-[#e4e8ef]"}`}>
-                <Pin className={isPinned ? "h-5 w-5 text-text-secondary" : "h-5 w-5 text-primary"} strokeWidth={1.5} aria-hidden />
-              </span>
-              <span className="min-h-[32px] max-w-[88px] text-center text-[13px] font-medium leading-4 text-text-secondary">
-                {isPinned ? "Bỏ ghim" : "Ghim hội thoại"}
-              </span>
-            </button>
-          </div>
         </section>
 
         <div>
