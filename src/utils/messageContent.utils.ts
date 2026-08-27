@@ -18,9 +18,21 @@ const ALLOWED_TAGS = [
   "a",
   "code",
   "pre",
+  "span",
 ];
 
 const ALLOWED_ATTR = ["href", "target", "rel"];
+
+const ALLOWED_TEXT_COLORS = new Map([
+  ["rgb(229,57,53)", "#E53935"],
+  ["rgb(244,81,30)", "#F4511E"],
+  ["rgb(249,168,37)", "#F9A825"],
+  ["rgb(67,160,71)", "#43A047"],
+  ["rgb(21,101,192)", "#1565C0"],
+  ["rgb(94,53,177)", "#5E35B1"],
+  ["rgb(109,76,65)", "#6D4C41"],
+  ["rgb(117,117,117)", "#757575"],
+]);
 
 /** Chỉ 4 scheme này được phép trong href. Mọi thứ khác → gỡ link, giữ text. */
 const SAFE_HREF_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"]);
@@ -70,6 +82,20 @@ export function sanitizeMessageHtml(html: string): string {
     }
 
     for (const attr of Array.from(el.attributes)) {
+      if (tagName === "span" && attr.name === "style") {
+        const color = (el as HTMLElement).style.color
+          .replace(/\s+/g, "")
+          .toLowerCase();
+        const safeColor = ALLOWED_TEXT_COLORS.get(color);
+        if (safeColor) {
+          // Chỉ giữ đúng color thuộc palette; loại mọi CSS khác đi kèm.
+          el.setAttribute("style", `color: ${safeColor};`);
+        } else {
+          el.removeAttribute("style");
+        }
+        continue;
+      }
+
       if (!ALLOWED_ATTR.includes(attr.name)) {
         el.removeAttribute(attr.name);
       }
@@ -108,11 +134,11 @@ export function hasRichFormatting(html: string): boolean {
   // `<a href="https://real.url">click here</a>`). Without it, the send path
   // falls back to `getText()` and drops the href entirely. The backend
   // (message-content-format.util) keeps `<a href>` when sanitizing rich_text.
-  return /<(strong|b|em|i|u|s|del|ul|ol|li|code|pre|a)\b/i.test(html);
+  return /<(strong|b|em|i|u|s|del|ul|ol|li|code|pre|a|span)\b/i.test(html);
 }
 
 const LEGACY_HTML_RE =
-  /^<(p|div|ul|ol|li|strong|em|b|i|u|s|del|blockquote|h[1-6]|code|pre)\b/i;
+  /^<(p|div|ul|ol|li|strong|em|b|i|u|s|del|blockquote|h[1-6]|code|pre|span)\b/i;
 
 export function isAllowedRichHtmlContent(content?: string): boolean {
   return typeof content === "string" && LEGACY_HTML_RE.test(content.trim());
