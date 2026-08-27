@@ -64,6 +64,7 @@ import { store } from "../../store";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 import { FeatureErrorBoundary } from "../error";
 import type { LinkPreviewMeta } from "../message/linkPreviewUtils";
+import type { SendTextMessageOptions } from "../../features/chat/hooks/useSendMessage";
 
 const SearchPanel = React.lazy(() => import("../chat/SearchPanel"));
 const PinnedMessagesPanel = React.lazy(
@@ -554,7 +555,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   } = usePinnedMessages(conversation.id);
 
   const handleSend = React.useCallback(
-    (content?: string, fileMeta?: unknown, type?: string) => {
+    (
+      content?: string,
+      fileMeta?: unknown,
+      type?: string,
+      textOptions?: SendTextMessageOptions,
+    ) => {
       if (inputMode === "edit" && editingMessage && onEditMessage) {
         const nextContent = (content || "").trim();
         if (
@@ -650,6 +656,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           attachmentArg,
           messageType,
           mentionDetails,
+          textOptions?.contentFormat,
+          textOptions?.contentJson,
+          textOptions?.plainText,
+          textOptions?.linkPreview,
         );
         const sendPromise = Promise.resolve(sendResult);
         return sendPromise

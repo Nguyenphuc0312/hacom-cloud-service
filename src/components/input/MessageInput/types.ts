@@ -1,6 +1,7 @@
 import type { ComposerMode } from "../../../hooks/useComposerAvailability";
 import type { InputMode, LocationMessagePayload, Message } from "../../../types";
 import type { AttachmentDraft } from "../../../types/attachmentDraft";
+import type { SendTextMessageOptions } from "../../../features/chat/hooks/useSendMessage";
 
 export interface MentionCandidate {
   id: string;
@@ -61,6 +62,7 @@ export interface MessageInputProps {
     content?: string,
     fileMeta?: unknown,
     type?: string,
+    textOptions?: SendTextMessageOptions,
   ) => unknown | Promise<unknown>;
   mode: InputMode;
   conversationId?: string;

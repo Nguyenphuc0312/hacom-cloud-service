@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { sanitizeMessageHtml, stripHtmlToText } from "./messageContent.utils";
+import {
+  hasRichFormatting,
+  sanitizeMessageHtml,
+  stripHtmlToText,
+} from "./messageContent.utils";
 
 describe("sanitizeMessageHtml", () => {
   it.each([
@@ -39,6 +43,35 @@ describe("sanitizeMessageHtml", () => {
     expect(out).not.toMatch(/onclick/i);
   });
 
+  it.each([
+    ["rgb(229, 57, 53)", "#E53935"],
+    ["rgb(244, 81, 30)", "#F4511E"],
+    ["rgb(249, 168, 37)", "#F9A825"],
+    ["rgb(67, 160, 71)", "#43A047"],
+    ["rgb(21, 101, 192)", "#1565C0"],
+    ["rgb(94, 53, 177)", "#5E35B1"],
+    ["rgb(109, 76, 65)", "#6D4C41"],
+    ["rgb(117, 117, 117)", "#757575"],
+  ])("giữ màu toolbar %s dưới dạng an toàn %s", (input, expected) => {
+    const out = sanitizeMessageHtml(
+      `<p><span style="color: ${input};"><strong>màu</strong></span></p>`,
+    );
+    expect(out).toContain(`<span style="color: ${expected};">`);
+  });
+
+  it("chỉ giữ color thuộc palette, loại CSS khác và màu tùy ý", () => {
+    const safe = sanitizeMessageHtml(
+      '<span style="color: rgb(229, 57, 53); background-image: url(javascript:alert(1))">x</span>',
+    );
+    expect(safe).toContain('style="color: #E53935;"');
+    expect(safe).not.toMatch(/background|url\(/i);
+
+    const arbitrary = sanitizeMessageHtml(
+      '<span style="color: rgb(1, 2, 3)">x</span>',
+    );
+    expect(arbitrary).not.toContain("style=");
+  });
+
   // V-07: bản cũ return đệ quy khi gặp thẻ cấm → nuốt luôn thẻ anh em hợp lệ.
   it("gỡ thẻ cấm nhưng GIỮ nội dung hợp lệ xung quanh", () => {
     const out = sanitizeMessageHtml(
@@ -73,6 +106,16 @@ describe("sanitizeMessageHtml", () => {
     } finally {
       parseSpy.mockRestore();
     }
+  });
+});
+
+describe("hasRichFormatting", () => {
+  it("nhận diện tin chỉ tô màu là rich text", () => {
+    expect(
+      hasRichFormatting(
+        '<p><span style="color: rgb(229, 57, 53)">màu đỏ</span></p>',
+      ),
+    ).toBe(true);
   });
 });
 
