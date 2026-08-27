@@ -28,7 +28,7 @@
     "replyTargetMissing": "Original message is unavailable",
     "threadReplies": "{{count}} replies",
     "unreadDivider": "Unread messages",
-    "edited": "edited",
+    "edited": "Edited",
     "forwardedFrom": "Forwarded from {{name}}",
     "forwardedLabel": "Forwarded message",
     "forward": {
