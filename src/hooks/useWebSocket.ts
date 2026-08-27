@@ -136,6 +136,7 @@ import {
 import {
   createWebSocketResyncCoordinator,
   createWebSocketResyncCoordinatorState,
+  shouldRefreshConversationSnapshotAfterMessageEvent,
 } from "./useWebSocketResyncCoordinator";
 import {
   createWebSocketAuthCoordinator,
@@ -1596,12 +1597,13 @@ export const useWebSocket = (
       }
 
       if (
-        eventType !== "message:new" ||
-        hadMessageBeforeRtkPatch ||
-        (chatState.selectedConversationId !== conversationId &&
-          senderId &&
-          currentUserId &&
-          senderId !== currentUserId)
+        shouldRefreshConversationSnapshotAfterMessageEvent({
+          eventType,
+          hadMessageBeforeRtkPatch,
+          isActiveConversation,
+          senderId: senderId ?? null,
+          currentUserId: currentUserId ?? null,
+        })
       ) {
         void scheduleConversationSnapshotRefresh(conversationId, {
           reason: `socket:${eventType}`,

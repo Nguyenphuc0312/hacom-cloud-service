@@ -114,6 +114,8 @@ export interface Mention {
  * with a narrower type.
  */
 export type MessageSummary = SharedMessageSummary & {
+  isEdited?: boolean;
+  editedAt?: Date | string;
   lifecycleStatus?: "active" | "recalled" | "deleted_admin";
   deletedBy?: string;
   deletedAt?: Date | string;
@@ -128,8 +130,9 @@ export type ReplyMessageSummary = Omit<MessageSummary, "contentFormat" | "mentio
 
 export type Conversation = Omit<
   SharedConversation,
-  "lastReadAt" | "lastReadMessageId"
+  "lastReadAt" | "lastReadMessageId" | "lastMessage"
 > & {
+  lastMessage?: MessageSummary;
   permissions?: {
     canEditGroupProfile?: boolean;
     canAddMember?: boolean;

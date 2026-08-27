@@ -9,6 +9,20 @@ import {
 const conversation = (partial: Partial<Conversation>): Conversation =>
   ({ id: "c1", ...partial }) as Conversation;
 
+const lastMessage = (
+  partial: Partial<NonNullable<Conversation["lastMessage"]>> = {},
+): NonNullable<Conversation["lastMessage"]> =>
+  ({
+    id: "m1",
+    senderId: "u1",
+    senderName: "Nhật",
+    content: "nội dung cũ",
+    type: "text",
+    isDeleted: false,
+    createdAt: "2026-08-27T01:00:00.000Z",
+    ...partial,
+  }) as NonNullable<Conversation["lastMessage"]>;
+
 describe("shouldApplyConversationSummary", () => {
   it("chưa có bản local thì luôn nhận, đánh dấu 'inserted'", () => {
     const decision = shouldApplyConversationSummary(
@@ -163,5 +177,64 @@ describe("mergeConversationSummary — stale-read guard", () => {
       conversation({ name: "Tên mới" }),
     );
     expect(merged.name).toBe("Tên mới");
+  });
+
+  it("không cho snapshot cũ ghi đè preview vừa chỉnh sửa", () => {
+    const merged = mergeConversationSummary(
+      conversation({
+        lastMessageId: "m1",
+        lastMessage: lastMessage({
+          content: "nội dung mới",
+          isEdited: true,
+          editedAt: "2026-08-27T02:00:00.000Z",
+        }),
+      }),
+      conversation({
+        lastMessageId: "m1",
+        lastMessage: lastMessage({ content: "nội dung cũ" }),
+      }),
+    );
+
+    expect(merged.lastMessage?.content).toBe("nội dung mới");
+    expect(merged.lastMessage?.isEdited).toBe(true);
+  });
+
+  it("nhận edit mới hơn từ server cho cùng tin nhắn", () => {
+    const merged = mergeConversationSummary(
+      conversation({
+        lastMessageId: "m1",
+        lastMessage: lastMessage({
+          content: "edit local cũ hơn",
+          isEdited: true,
+          editedAt: "2026-08-27T02:00:00.000Z",
+        }),
+      }),
+      conversation({
+        lastMessageId: "m1",
+        lastMessage: lastMessage({
+          content: "edit server mới hơn",
+          isEdited: true,
+          editedAt: "2026-08-27T02:05:00.000Z",
+        }),
+      }),
+    );
+
+    expect(merged.lastMessage?.content).toBe("edit server mới hơn");
+  });
+
+  it("tin mới thật sự vẫn thay preview đã chỉnh sửa", () => {
+    const merged = mergeConversationSummary(
+      conversation({
+        lastMessageId: "m1",
+        lastMessage: lastMessage({ isEdited: true }),
+      }),
+      conversation({
+        lastMessageId: "m2",
+        lastMessage: lastMessage({ id: "m2", content: "tin mới" }),
+      }),
+    );
+
+    expect(merged.lastMessage?.id).toBe("m2");
+    expect(merged.lastMessage?.content).toBe("tin mới");
   });
 });

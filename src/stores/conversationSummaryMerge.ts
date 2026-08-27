@@ -93,6 +93,44 @@ const coerceSeq = (value: unknown): number => {
   return 0;
 };
 
+const toTimestamp = (value: unknown): number => {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value !== "string" && typeof value !== "number") return 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+/**
+ * Một snapshot hội thoại có thể về ngay sau `message:updated` nhưng vẫn chứa
+ * nội dung lastMessage trước khi sửa. Giữ preview local khi cùng một message
+ * mà snapshot không có edit marker hoặc có editedAt cũ hơn.
+ */
+const shouldPreserveEditedLastMessage = (
+  current: Conversation,
+  incoming: Conversation,
+): boolean => {
+  const currentLastMessage = current.lastMessage;
+  const incomingLastMessage = incoming.lastMessage;
+  const currentIdentity = currentLastMessage?.id ?? current.lastMessageId;
+  const incomingIdentity = incomingLastMessage?.id ?? incoming.lastMessageId;
+
+  if (
+    !currentLastMessage?.isEdited ||
+    !currentIdentity ||
+    currentIdentity !== incomingIdentity
+  ) {
+    return false;
+  }
+
+  if (!incomingLastMessage?.isEdited) {
+    return true;
+  }
+
+  const currentEditedAt = toTimestamp(currentLastMessage.editedAt);
+  const incomingEditedAt = toTimestamp(incomingLastMessage.editedAt);
+  return currentEditedAt > 0 && currentEditedAt > incomingEditedAt;
+};
+
 export const mergeConversationSummary = (
   current: Conversation | null | undefined,
   incoming: Conversation,
@@ -123,6 +161,10 @@ export const mergeConversationSummary = (
       (incoming.unreadCount ?? 0) > 0 &&
       incomingLastReadSeq > 0 &&
       incomingLastReadSeq < currentLastReadSeq);
+  const preserveEditedLastMessage = shouldPreserveEditedLastMessage(
+    current,
+    incoming,
+  );
 
   return (normalizeConversation({
     ...current,
@@ -147,6 +189,9 @@ export const mergeConversationSummary = (
       : (incoming.firstUnreadMessageAt ??
         current.firstUnreadMessageAt ??
         undefined),
+    ...(preserveEditedLastMessage
+      ? { lastMessage: current.lastMessage }
+      : {}),
     summaryVersion:
       toConversationVersion(incoming) ||
       toConversationVersion(current) ||

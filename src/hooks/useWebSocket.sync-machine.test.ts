@@ -18,11 +18,38 @@ import {
 } from "../hooks/useWebSocketConversationCoordinator";
 import {
   createWebSocketResyncCoordinatorState,
+  shouldRefreshConversationSnapshotAfterMessageEvent,
   shouldRefreshConversationSummariesForScopes,
   shouldResyncJoinedConversationsForScopes,
   shouldTriggerFriendshipResyncForScopes,
   shouldSyncUserSettingsForScopes,
 } from "../hooks/useWebSocketResyncCoordinator";
+
+describe("useWebSocket.sync-machine — message snapshot refresh", () => {
+  it("không kéo snapshot cũ sau message:updated", () => {
+    expect(
+      shouldRefreshConversationSnapshotAfterMessageEvent({
+        eventType: "message:updated",
+        hadMessageBeforeRtkPatch: true,
+        isActiveConversation: true,
+        senderId: "u1",
+        currentUserId: "u1",
+      }),
+    ).toBe(false);
+  });
+
+  it("vẫn refresh message:new khi cần reconcile", () => {
+    expect(
+      shouldRefreshConversationSnapshotAfterMessageEvent({
+        eventType: "message:new",
+        hadMessageBeforeRtkPatch: true,
+        isActiveConversation: true,
+        senderId: "u1",
+        currentUserId: "u1",
+      }),
+    ).toBe(true);
+  });
+});
 
 // ============================================
 // Conversation Sync Coordinator
