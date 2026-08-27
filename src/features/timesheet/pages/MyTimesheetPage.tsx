@@ -26,7 +26,10 @@ import { formatWorkDate } from "../../work/utils/workDatePresentation";
 import { TimesheetPeriodPicker } from "../components/TimesheetPeriodPicker";
 import { getTimesheetDayScheduleNotice } from "../timesheetDayPresentation";
 import { attendanceCalendarLabel } from "../../calendar/utils/attendanceCalendarPresentation";
-import { isSuperAdmin } from "../../auth/utils/isSuperAdmin";
+import {
+  canReviewAttendanceOnChat,
+  canViewTeamTimesheet,
+} from "../../auth/utils/workTimeLeaveCapabilities";
 import { useAuthStore } from "../../../stores/authStore";
 import {
   gridColumnFor,
@@ -366,7 +369,8 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
 }) => {
   const [searchParams] = useSearchParams();
   const currentUser = useAuthStore((auth) => auth.user);
-  const canReviewOnChat = isSuperAdmin(currentUser);
+  const canReviewOnChat = canReviewAttendanceOnChat(currentUser);
+  const canViewTeamOnChat = canViewTeamTimesheet(currentUser);
   const queryPeriod = periodFromQuery(searchParams.get("month"));
   const queryMonth = queryPeriod?.month;
   const queryYear = queryPeriod?.year;
@@ -639,13 +643,15 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
             <RefreshCcw size={16} aria-hidden="true" />
             Tải lại
           </button>
-          <Link
-            to={ROUTE_PATHS.TEAM_TIMESHEET}
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#1565C0] px-3 text-sm font-semibold text-white hover:bg-[#1976D2]"
-          >
-            <Users size={16} aria-hidden="true" />
-            Nhóm của tôi
-          </Link>
+          {canViewTeamOnChat ? (
+            <Link
+              to={ROUTE_PATHS.TEAM_TIMESHEET}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#1565C0] px-3 text-sm font-semibold text-white hover:bg-[#1976D2]"
+            >
+              <Users size={16} aria-hidden="true" />
+              Nhóm của tôi
+            </Link>
+          ) : null}
         </div>
       </div>
     </header>

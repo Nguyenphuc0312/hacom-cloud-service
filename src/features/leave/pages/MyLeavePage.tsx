@@ -37,7 +37,11 @@ import { formatWorkDate } from "../../work/utils/workDatePresentation";
 import { DateFieldVN } from "../../../components/ui/DateFieldVN";
 import { isoToVn, vnToIso } from "../../../components/ui/dateFieldVNUtils";
 import { WorkPageShell } from "../../work/components/WorkPageShell";
-import { isSuperAdmin } from "../../auth/utils/isSuperAdmin";
+import {
+  canApproveLeaveOnChat,
+  canRejectLeaveOnChat,
+  canReviewLeaveOnChat,
+} from "../../auth/utils/workTimeLeaveCapabilities";
 import { useAuthStore } from "../../../stores/authStore";
 
 type LoadState =
@@ -304,9 +308,18 @@ const RequestRow: React.FC<{
 const ApprovalRow: React.FC<{
   request: LeaveRequest;
   busy?: boolean;
+  canApprove: boolean;
+  canReject: boolean;
   onApprove: (request: LeaveRequest) => void;
   onReject: (request: LeaveRequest) => void;
-}> = ({ request, busy = false, onApprove, onReject }) => (
+}> = ({
+  request,
+  busy = false,
+  canApprove,
+  canReject,
+  onApprove,
+  onReject,
+}) => (
   <div className="rounded-lg border border-[#e2e8f0] bg-white p-3">
     <div className="flex items-start justify-between gap-3">
       <div>
@@ -350,24 +363,28 @@ const ApprovalRow: React.FC<{
       </div>
     ) : null}
     <div className="mt-3 flex gap-2">
-      <button
-        type="button"
-        className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg bg-[#1565C0] px-3 text-sm font-semibold text-white hover:bg-[#1976D2] disabled:cursor-not-allowed disabled:bg-[#94a3b8]"
-        disabled={busy}
-        onClick={() => onApprove(request)}
-      >
-        <Check size={15} aria-hidden="true" />
-        Duyệt
-      </button>
-      <button
-        type="button"
-        className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg border border-[#d7dce3] bg-white px-3 text-sm font-semibold text-[#334155] hover:bg-[#f8fbff] disabled:cursor-not-allowed disabled:text-[#94a3b8]"
-        disabled={busy}
-        onClick={() => onReject(request)}
-      >
-        <X size={15} aria-hidden="true" />
-        Từ chối
-      </button>
+      {canApprove ? (
+        <button
+          type="button"
+          className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg bg-[#1565C0] px-3 text-sm font-semibold text-white hover:bg-[#1976D2] disabled:cursor-not-allowed disabled:bg-[#94a3b8]"
+          disabled={busy}
+          onClick={() => onApprove(request)}
+        >
+          <Check size={15} aria-hidden="true" />
+          Duyệt
+        </button>
+      ) : null}
+      {canReject ? (
+        <button
+          type="button"
+          className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg border border-[#d7dce3] bg-white px-3 text-sm font-semibold text-[#334155] hover:bg-[#f8fbff] disabled:cursor-not-allowed disabled:text-[#94a3b8]"
+          disabled={busy}
+          onClick={() => onReject(request)}
+        >
+          <X size={15} aria-hidden="true" />
+          Từ chối
+        </button>
+      ) : null}
     </div>
   </div>
 );
@@ -376,7 +393,9 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({
   tabBar,
 }) => {
   const currentUser = useAuthStore((auth) => auth.user);
-  const canReviewOnChat = isSuperAdmin(currentUser);
+  const canReviewOnChat = canReviewLeaveOnChat(currentUser);
+  const canApproveOnChat = canApproveLeaveOnChat(currentUser);
+  const canRejectOnChat = canRejectLeaveOnChat(currentUser);
   const [year, setYear] = React.useState(now.getFullYear());
   const [state, setState] = React.useState<LoadState>({
     status: "idle",
@@ -617,7 +636,12 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({
     request: LeaveRequest,
     action: "approve" | "reject",
   ) {
-    if (!canReviewOnChat) return;
+    if (
+      (action === "approve" && !canApproveOnChat) ||
+      (action === "reject" && !canRejectOnChat)
+    ) {
+      return;
+    }
     setBusyId(request.id);
     try {
       if (action === "approve") {
@@ -1073,6 +1097,8 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({
                       key={request.id}
                       request={request}
                       busy={busyId === request.id}
+                      canApprove={canApproveOnChat}
+                      canReject={canRejectOnChat}
                       onApprove={(item) => void handleApproval(item, "approve")}
                       onReject={(item) => void handleApproval(item, "reject")}
                     />

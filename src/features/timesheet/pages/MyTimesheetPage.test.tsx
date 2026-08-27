@@ -5,11 +5,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getMyTimesheet = vi.fn();
 const getPendingAttendanceExplanations = vi.fn();
-const authState = vi.hoisted(() => ({ roles: ["EMPLOYEE"] as string[] }));
+const authState = vi.hoisted(() => ({
+  roles: ["EMPLOYEE"] as string[],
+  permissions: [] as string[],
+}));
 
 vi.mock("../../../stores/authStore", () => ({
-  useAuthStore: (selector: (state: { user: { id: string; username: string; roles: string[] } }) => unknown) =>
-    selector({ user: { id: "user-1", username: "tester", roles: authState.roles } }),
+  useAuthStore: (
+    selector: (state: {
+      user: {
+        id: string;
+        username: string;
+        roles: string[];
+        permissions: string[];
+      };
+    }) => unknown,
+  ) =>
+    selector({
+      user: { id: "user-1", username: "tester", ...authState },
+    }),
 }));
 
 vi.mock("../../api/hrApi", () => ({
@@ -43,6 +57,7 @@ const shift = (days: number) => {
 
 beforeEach(() => {
   authState.roles = ["EMPLOYEE"];
+  authState.permissions = [];
   getPendingAttendanceExplanations.mockResolvedValue({ items: [] });
 });
 
@@ -305,8 +320,8 @@ describe("MyTimesheetPage — Chat approval visibility", () => {
     expect(screen.queryByText("Chờ duyệt giải trình")).toBeNull();
   });
 
-  it("shows pending explanations for a Super Admin", async () => {
-    authState.roles = ["SUPER_ADMIN"];
+  it("shows pending explanations for a scoped reviewer with effective permissions", async () => {
+    authState.permissions = ["hr.attendance.read", "hr.attendance.update"];
     getPendingAttendanceExplanations.mockResolvedValueOnce({
       items: [
         {
@@ -330,5 +345,32 @@ describe("MyTimesheetPage — Chat approval visibility", () => {
     expect(await screen.findByText("Chờ duyệt giải trình")).toBeTruthy();
     expect(await screen.findByText("Trần An")).toBeTruthy();
     expect(getPendingAttendanceExplanations).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the team link only with attendance read permission", async () => {
+    const { unmount } = render(
+      <MemoryRouter>
+        <MyTimesheetPage />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(getMyTimesheet).toHaveBeenCalled());
+    expect(screen.queryByText("Nhóm của tôi")).toBeNull();
+    unmount();
+
+    vi.clearAllMocks();
+    authState.permissions = ["hr.attendance.read"];
+    getMyTimesheet.mockResolvedValue({
+      period: null,
+      confirmation: null,
+      days: [],
+      summary: { totalPaidDays: 0, totalLeaveDays: 0, countBySymbol: {} },
+    });
+    render(
+      <MemoryRouter>
+        <MyTimesheetPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Nhóm của tôi")).toBeTruthy();
   });
 });
