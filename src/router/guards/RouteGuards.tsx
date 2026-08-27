@@ -6,7 +6,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../stores";
-import { ErrorState } from "../../components/ui";
+import { Button, ErrorState } from "../../components/ui";
 import { ForbiddenPage } from "../../pages/errors";
 import { ROUTE_PATHS } from "../paths";
 import {
@@ -38,6 +38,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     activationContext,
     error,
     initialize,
+    handleAuthFailure,
   } = useAuthStore();
 
   if (!isInitialized || isBootstrappingAuth) {
@@ -73,12 +74,25 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   if (authStatus === "bootstrap_error") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[hsl(var(--color-chat-canvas))] px-6">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[hsl(var(--color-chat-canvas))] px-6">
         <ErrorState
           title={t("error:auth.profileMissing")}
           message={error ?? t("error:auth.profileRetryHint")}
           onRetry={() => void initialize()}
         />
+        <Button
+          variant="outline"
+          onClick={() =>
+            void handleAuthFailure({
+              reason: "bootstrap_relogin",
+              definitive: true,
+              broadcast: false,
+              redirect: false,
+            })
+          }
+        >
+          {t("auth:register.loginNow")}
+        </Button>
       </div>
     );
   }
