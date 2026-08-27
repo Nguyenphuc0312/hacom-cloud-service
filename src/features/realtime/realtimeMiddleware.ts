@@ -19,6 +19,7 @@ import {
 } from "../chat/domain/messageMerge";
 import { normalizeMessageForReduxCache } from "../chat/domain/serializableMessage";
 import { useChatStore } from "../../stores";
+import { buildEditedLastMessagePreviewPatch } from "../../stores/conversationSummaryState";
 import { markChatPerformance } from "../../utils/chatPerformance";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { logger } from "../../utils/logger";
@@ -293,6 +294,22 @@ export const realtimeMiddleware: Middleware<
           ]),
         ),
       );
+    }
+
+    const chatState = useChatStore.getState();
+    const conversation =
+      chatState.conversationById[action.payload.conversationId];
+    if (conversation) {
+      const previewPatch = buildEditedLastMessagePreviewPatch(
+        conversation,
+        action.payload.message,
+      );
+      if (previewPatch) {
+        chatState.updateConversation(
+          action.payload.conversationId,
+          previewPatch,
+        );
+      }
     }
   }
 

@@ -226,6 +226,10 @@ const normalizeLastMessage = (
     asString(sender?.username) ??
     "Unknown user";
   const type = asString(raw.type) ?? MessageType.TEXT;
+  const editedAt = asNullableDateValue(
+    raw.editedAt ?? (asBoolean(raw.isEdited, false) ? raw.updatedAt : undefined),
+  );
+  const isEdited = asBoolean(raw.isEdited, false) || Boolean(editedAt);
 
   return {
     id,
@@ -238,6 +242,8 @@ const normalizeLastMessage = (
       raw.createdAt ?? source.lastMessageAt ?? source.updatedAt,
       new Date(),
     ),
+    ...(isEdited ? { isEdited: true } : {}),
+    ...(editedAt ? { editedAt } : {}),
     // Ai được tag trong `content` — để preview sidebar đổi tag `@` sang "tên gợi
     // nhớ" của người xem. BE ship 30-07-26 (migration 071); tin cũ không có field
     // này thì preview hiện tên thật, đúng như trước.

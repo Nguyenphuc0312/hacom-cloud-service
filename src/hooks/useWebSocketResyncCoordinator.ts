@@ -86,6 +86,27 @@ export const shouldTriggerFriendshipResyncForScopes = (
 export const shouldSyncUserSettingsForScopes = (scopes: string[]): boolean =>
   scopes.length === 0 || scopes.includes("user_settings");
 
+/**
+ * Tin `message:updated` đã là dữ liệu authoritative cho timeline và preview.
+ * Không kéo conversation snapshot ngay sau đó: backend có thể vẫn trả bản
+ * lastMessage cũ và ghi đè nội dung vừa sửa ở sidebar.
+ */
+export const shouldRefreshConversationSnapshotAfterMessageEvent = (input: {
+  eventType: "message:new" | "message:updated";
+  hadMessageBeforeRtkPatch: boolean;
+  isActiveConversation: boolean;
+  senderId: string | null;
+  currentUserId: string | null;
+}): boolean =>
+  input.eventType === "message:new" &&
+  (input.hadMessageBeforeRtkPatch ||
+    Boolean(
+      !input.isActiveConversation &&
+        input.senderId &&
+        input.currentUserId &&
+        input.senderId !== input.currentUserId,
+    ));
+
 const CONVERSATION_SYNC_FALLBACK_TIMEOUT_MS = 2_500;
 // Phase 1: Increased from 250ms to 500ms to reduce API calls during WS event bursts
 const CONVERSATION_SNAPSHOT_REFRESH_DEBOUNCE_MS = 500;
