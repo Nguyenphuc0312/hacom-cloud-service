@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import {
+  getPreviewFromMessage,
   hasRichFormatting,
   sanitizeMessageHtml,
   stripHtmlToText,
@@ -131,5 +132,15 @@ describe("stripHtmlToText", () => {
   it("không để sót payload khi rút text cho preview sidebar", () => {
     const out = stripHtmlToText('<a href="javascript:alert(1)">Báo cáo</a>');
     expect(out).toBe("Báo cáo");
+  });
+});
+
+describe("getPreviewFromMessage", () => {
+  it("không để lộ thẻ rich text trong preview notification", () => {
+    expect(
+      getPreviewFromMessage({
+        content: "<p><strong>QA-rich-bold-red</strong></p>",
+      }),
+    ).toBe("QA-rich-bold-red");
   });
 });
