@@ -34,6 +34,9 @@ const ALLOWED_TEXT_COLORS = new Map([
   ["rgb(117,117,117)", "#757575"],
 ]);
 
+const getAllowedTextColor = (color: string): string | undefined =>
+  ALLOWED_TEXT_COLORS.get(color.replace(/\s+/g, "").toLowerCase());
+
 /** Chỉ 4 scheme này được phép trong href. Mọi thứ khác → gỡ link, giữ text. */
 const SAFE_HREF_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"]);
 
@@ -83,10 +86,7 @@ export function sanitizeMessageHtml(html: string): string {
 
     for (const attr of Array.from(el.attributes)) {
       if (tagName === "span" && attr.name === "style") {
-        const color = (el as HTMLElement).style.color
-          .replace(/\s+/g, "")
-          .toLowerCase();
-        const safeColor = ALLOWED_TEXT_COLORS.get(color);
+        const safeColor = getAllowedTextColor((el as HTMLElement).style.color);
         if (safeColor) {
           // Chỉ giữ đúng color thuộc palette; loại mọi CSS khác đi kèm.
           el.setAttribute("style", `color: ${safeColor};`);
@@ -134,7 +134,18 @@ export function hasRichFormatting(html: string): boolean {
   // `<a href="https://real.url">click here</a>`). Without it, the send path
   // falls back to `getText()` and drops the href entirely. The backend
   // (message-content-format.util) keeps `<a href>` when sanitizing rich_text.
-  return /<(strong|b|em|i|u|s|del|ul|ol|li|code|pre|a|span)\b/i.test(html);
+  if (/<(strong|b|em|i|u|s|del|ul|ol|li|code|pre|a)\b/i.test(html)) {
+    return true;
+  }
+
+  if (typeof DOMParser === "undefined" || !/<span\b/i.test(html)) {
+    return false;
+  }
+
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  return Array.from(doc.body.querySelectorAll("span")).some((span) =>
+    Boolean(getAllowedTextColor(span.style.color)),
+  );
 }
 
 const LEGACY_HTML_RE =
