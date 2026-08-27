@@ -9,6 +9,7 @@ import {
 import { useAuthStore } from "../../stores/authStore";
 
 const originalInitialize = useAuthStore.getState().initialize;
+const originalHandleAuthFailure = useAuthStore.getState().handleAuthFailure;
 
 function setAuthState(
   status: "authenticated" | "pending_hr_link" | "anonymous" | "bootstrap_error",
@@ -39,7 +40,10 @@ function setAuthState(
 afterEach(() => {
   cleanup();
   setAuthState("anonymous");
-  useAuthStore.setState({ initialize: originalInitialize });
+  useAuthStore.setState({
+    initialize: originalInitialize,
+    handleAuthFailure: originalHandleAuthFailure,
+  });
 });
 
 describe("RouteGuards pending HR link", () => {
@@ -114,9 +118,11 @@ describe("RouteGuards pending HR link", () => {
 
   it("keeps a transient bootstrap failure on the protected route for retry", () => {
     const initialize = vi.fn().mockResolvedValue(undefined);
+    const handleAuthFailure = vi.fn().mockResolvedValue(undefined);
     setAuthState("bootstrap_error");
     useAuthStore.setState({
       initialize,
+      handleAuthFailure,
       error: "Dịch vụ xác thực tạm thời không khả dụng.",
     });
 
@@ -140,5 +146,13 @@ describe("RouteGuards pending HR link", () => {
     expect(screen.getByText("Dịch vụ xác thực tạm thời không khả dụng.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /thử lại/i }));
     expect(initialize).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /đăng nhập ngay/i }));
+    expect(handleAuthFailure).toHaveBeenCalledWith({
+      reason: "bootstrap_relogin",
+      definitive: true,
+      broadcast: false,
+      redirect: false,
+    });
   });
 });
