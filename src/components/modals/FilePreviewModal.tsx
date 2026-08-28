@@ -29,6 +29,7 @@ import { truncateFilename } from '../../utils/truncateFilename';
 import { downloadResourceWithName } from '../../utils/downloadFile';
 import { markFileDownloaded } from '../../utils/downloadedFiles';
 import { asString } from '../../utils/payloadGuards';
+import { isPubliclyFetchableUrl } from '../../utils/publicUrl';
 import { SafeImage } from '../common/SafeImage';
 import {
   FileTypeIcon,
@@ -40,6 +41,7 @@ import {
   DocumentPreview,
   ArchivePreview,
 } from '../preview';
+import { OfficeOnlinePreview } from '../preview/OfficeOnlinePreview';
 import styles from './FilePreviewModal.module.css';
 
 export interface FilePreviewModalProps {
@@ -83,6 +85,13 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [pageCount, setPageCount] = useState(1);
   const overlayRef = useRef<HTMLDivElement>(null);
   const zoomMenuRef = useRef<HTMLDivElement>(null);
+  const officeViewerKey = `${currentIndex}:${secureUrl ?? ''}`;
+  const [officeViewerState, setOfficeViewerState] = useState({
+    key: officeViewerKey,
+    failed: false,
+  });
+  const officeViewerFailed =
+    officeViewerState.key === officeViewerKey && officeViewerState.failed;
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -192,8 +201,13 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   );
 
   const lowerName = fileName.toLowerCase();
+  const lowerMimeType = mimeType.toLowerCase();
   const isDocx = lowerName.endsWith('.docx');
-  const isXlsx = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls');
+  const isXlsx =
+    lowerName.endsWith('.xlsx') ||
+    lowerName.endsWith('.xls') ||
+    lowerMimeType.includes('spreadsheetml') ||
+    lowerMimeType.includes('ms-excel');
   const isOfficeDoc =
     previewType === 'document' || previewType === 'spreadsheet' || previewType === 'presentation';
   const isZoomable =
@@ -280,6 +294,17 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         );
       }
       if (isXlsx) {
+        if (!officeViewerFailed && isPubliclyFetchableUrl(secureUrl)) {
+          return (
+            <OfficeOnlinePreview
+              url={secureUrl}
+              fileName={fileName}
+              onUnavailable={() =>
+                setOfficeViewerState({ key: officeViewerKey, failed: true })
+              }
+            />
+          );
+        }
         return <ExcelPreview url={secureUrl} fileName={fileName} scale={scale} />;
       }
       return (
