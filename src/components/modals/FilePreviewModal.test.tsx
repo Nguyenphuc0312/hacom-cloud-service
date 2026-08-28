@@ -72,10 +72,13 @@ describe('FilePreviewModal — Excel 1:1', () => {
     expect(screen.getByTestId('office-preview').getAttribute('data-url')).toContain(
       'chat.hacomholdings.com.vn',
     );
-    expect(screen.getByRole('button', { name: 'Chọn mức thu phóng' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Chọn mức thu phóng' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Xem toàn màn hình' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Tải về' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Đóng' })).toBeTruthy();
+    expect(screen.getByTestId('office-preview').parentElement?.className).toContain(
+      'contentOfficeOnline',
+    );
   });
 
   it('nhận diện Excel theo MIME khi tên file không có phần mở rộng', () => {
@@ -89,6 +92,7 @@ describe('FilePreviewModal — Excel 1:1', () => {
     );
     expect(screen.getByTestId('excel-preview')).toBeTruthy();
     expect(screen.queryByTestId('office-preview')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Chọn mức thu phóng' })).toBeTruthy();
   });
 
   it('rơi về SheetJS khi Office Online báo không khả dụng', () => {
