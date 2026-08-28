@@ -462,14 +462,17 @@ export const FriendsPage: React.FC = () => {
   // command palette), so `q` filters the Bạn bè list instead of searching Khám
   // phá — which hides existing friends and would show "không tìm thấy".
   const wantsFriendsTab = searchParams.get("tab") === "friends";
+  const wantsDiscoverTab = searchParams.get("tab") === "discover";
   const [activeTab, setActiveTab] = useState<TabKey>(
     initialQrCode.trim().length > 0
       ? "qr"
       : wantsFriendsTab
         ? "friends"
-        : initialQuery.trim().length >= 2
+        : wantsDiscoverTab
           ? "discover"
-          : "friends",
+          : initialQuery.trim().length >= 2
+            ? "discover"
+            : "friends",
   );
   const [requestTab, setRequestTab] = useState<RequestTabKey>("incoming");
   const [friendFilter, setFriendFilter] = useState(
@@ -535,6 +538,7 @@ export const FriendsPage: React.FC = () => {
     const nextQuery = searchParams.get("q") || "";
     const nextQrCode = shareCode || searchParams.get("code") || "";
     const nextWantsFriendsTab = searchParams.get("tab") === "friends";
+    const nextWantsDiscoverTab = searchParams.get("tab") === "discover";
 
     if (nextWantsFriendsTab) {
       if (friendFilter !== nextQuery) setFriendFilter(nextQuery);
@@ -547,6 +551,8 @@ export const FriendsPage: React.FC = () => {
       if (activeTab !== "qr") setActiveTab("qr");
     } else if (nextWantsFriendsTab) {
       if (activeTab !== "friends") setActiveTab("friends");
+    } else if (nextWantsDiscoverTab) {
+      if (activeTab !== "discover") setActiveTab("discover");
     } else if (nextQuery.trim().length >= 2) {
       if (activeTab !== "discover") setActiveTab("discover");
     }
