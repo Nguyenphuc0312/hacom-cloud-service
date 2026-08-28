@@ -110,6 +110,9 @@ const PersonalCloudConversationSurface = React.lazy(() =>
 const NewChatModal = React.lazy(
   () => import("../components/modals/NewChatModal"),
 );
+const AddFriendModal = React.lazy(
+  () => import("../components/modals/AddFriendModal"),
+);
 const ImagePreviewModal = React.lazy(
   () => import("../components/modals/ImagePreviewModal"),
 );
@@ -579,6 +582,7 @@ export const ChatPage: React.FC = () => {
   const [mentionProfile, setMentionProfile] = useState<{ userId: string; avatarUrl?: string; displayName?: string } | null>(null);
   const { chatLayoutBreakpoint } = useResponsive();
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
+  const [isAddFriendModalOpen, setIsAddFriendModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<ImageClickPayload | null>(null);
   const filePreview = useFilePreview();
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
@@ -1244,6 +1248,10 @@ export const ChatPage: React.FC = () => {
     setIsNewChatModalOpen(true);
   }, []);
 
+  const handleOpenAddFriendModal = useCallback(() => {
+    setIsAddFriendModalOpen(true);
+  }, []);
+
   useEffect(() => {
     if (consumeOpenNewChatIntent()) {
       setTimeout(() => setIsNewChatModalOpen(true), 0);
@@ -1479,6 +1487,7 @@ export const ChatPage: React.FC = () => {
                 onRetryConversations={fetchConversations}
                 onLoadMoreConversations={handleLoadMoreConversations}
                 onCurrentUserClick={handleOpenCurrentUserProfile}
+                onAddFriendClick={handleOpenAddFriendModal}
               />
             </FeatureErrorBoundary>
           </div>
@@ -1666,6 +1675,16 @@ export const ChatPage: React.FC = () => {
             onStartChat={handleStartChat}
             onCreateGroup={handleCreateGroup}
             isSubmitting={isCreatingRoom}
+          />
+        </React.Suspense>
+      )}
+
+      {/* Add Friend Modal */}
+      {isAddFriendModalOpen && (
+        <React.Suspense fallback={<DeferredModalFallback />}>
+          <AddFriendModal
+            isOpen={isAddFriendModalOpen}
+            onClose={() => setIsAddFriendModalOpen(false)}
           />
         </React.Suspense>
       )}

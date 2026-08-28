@@ -6,12 +6,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const createMyLeaveRequest = vi.fn();
 const getMyLeave = vi.fn();
 const getPendingLeaveApprovals = vi.fn();
-const authState = vi.hoisted(() => ({ roles: ["EMPLOYEE"] as string[] }));
+const authState = vi.hoisted(() => ({
+  roles: ["EMPLOYEE"] as string[],
+  permissions: [] as string[],
+}));
 
 const searchMyLeaveReplacementCandidates = vi.fn();
 vi.mock("../../../stores/authStore", () => ({
-  useAuthStore: (selector: (state: { user: { id: string; username: string; roles: string[] } }) => unknown) =>
-    selector({ user: { id: "user-1", username: "tester", roles: authState.roles } }),
+  useAuthStore: (
+    selector: (state: {
+      user: {
+        id: string;
+        username: string;
+        roles: string[];
+        permissions: string[];
+      };
+    }) => unknown,
+  ) =>
+    selector({
+      user: { id: "user-1", username: "tester", ...authState },
+    }),
 }));
 vi.mock("../../api/hrApi", () => ({
   hrApi: {
@@ -80,6 +94,7 @@ describe("MyLeavePage — leave request payload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authState.roles = ["EMPLOYEE"];
+    authState.permissions = [];
     getMyLeave.mockResolvedValue({
       year: 2026,
       employeeId: "emp-1",
@@ -405,8 +420,8 @@ describe("MyLeavePage — leave request payload", () => {
     expect(screen.queryByText("Duyệt nhanh")).toBeNull();
   });
 
-  it("shows the leave approval panel for a Super Admin", async () => {
-    authState.roles = ["super-admin"];
+  it("shows the leave approval panel for a reviewer with effective permissions", async () => {
+    authState.permissions = ["hr.leave.approve", "hr.leave.reject"];
     getPendingLeaveApprovals.mockResolvedValueOnce({
       items: [
         {
@@ -436,5 +451,48 @@ describe("MyLeavePage — leave request payload", () => {
     expect(await screen.findByText("Duyệt nhanh")).toBeTruthy();
     expect(await screen.findByText("Trần An")).toBeTruthy();
     expect(getPendingLeaveApprovals).toHaveBeenCalledWith({ page: 1, pageSize: 50 });
+  });
+
+  it("renders only actions granted by the canonical permission set", async () => {
+    authState.permissions = ["hr.leave.approve"];
+    getPendingLeaveApprovals.mockResolvedValueOnce({
+      items: [
+        {
+          id: "leave-pending-1",
+          employeeId: "employee-2",
+          leaveType: "ANNUAL",
+          startDate: iso(THU),
+          endDate: iso(THU),
+          totalDays: 1,
+          status: "SUBMITTED",
+          employee: {
+            id: "employee-2",
+            employeeCode: "HC0002",
+            fullName: "Trần An",
+          },
+          currentApprovalStep: {
+            stepOrder: 1,
+            stepName: "Người theo dõi công",
+            status: "SUBMITTED",
+          },
+        },
+      ],
+      pagination: {
+        page: 1,
+        pageSize: 50,
+        total: 1,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+    });
+
+    render(<MyLeavePage />);
+
+    expect(await screen.findByText("Duyệt nhanh")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Duyệt" })).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Từ chối" }),
+    ).toBeNull();
   });
 });
