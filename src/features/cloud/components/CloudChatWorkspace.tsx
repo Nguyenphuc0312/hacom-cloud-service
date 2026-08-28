@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- preview target builder is covered by the Cloud regression suite. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { ConversationLane } from "../../../components/layout/ConversationLane";
@@ -23,15 +24,42 @@ import { personalCloudPolicy, personalCloudPresentation, personalCloudTimelineTy
 import { PersonalCloudAvatar } from "./PersonalCloudAvatar";
 import { HacomCloudInfoSidebar } from "./HacomCloudInfoSidebar";
 import { FilePreviewModal } from "../../../components/modals/FilePreviewModal";
-import { useFilePreview } from "../../../hooks/useFilePreview";
-import type { Message } from "../../../types";
+import { useFilePreview, type PreviewTarget } from "../../../hooks/useFilePreview";
+import type { Attachment, Message } from "../../../types";
 import { toast } from "../../../components/ui";
 import { extractApiError } from "../../../lib/apiContract";
+import { getMimePreviewType, type PreviewType } from "../../../utils/mimeRegistry";
 
 type CloudSpace = Awaited<ReturnType<typeof cloudApi.ensure>>;
 
 const SearchPanel = React.lazy(() => import("../../../components/chat/SearchPanel"));
 const PinnedMessagesPanel = React.lazy(() => import("../../../components/chat/PinnedMessagesPanel"));
+
+const isSameAttachment = (left: Attachment, right: Attachment): boolean =>
+  Boolean(
+    (left.id && left.id === right.id) ||
+    (left.objectKey && left.objectKey === right.objectKey) ||
+    (left.url && left.url === right.url),
+  );
+
+export const buildCloudPreviewTargets = (
+  messages: readonly Message[],
+  conversationId: string,
+): PreviewTarget[] =>
+  messages.flatMap((message) =>
+    (message.attachments ?? []).map((attachment) => ({
+      attachment,
+      conversationId,
+      messageId: message.id,
+      previewType: getMimePreviewType(
+        attachment.mimeType,
+        attachment.fileName,
+      ) as PreviewType,
+      uploaderName: message.senderName || null,
+      uploaderAvatarUrl: message.senderAvatar || null,
+      createdAt: message.createdAt || null,
+    })),
+  ).filter((target) => target.previewType !== "unknown");
 
 export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; conversationId?: string }> = ({ onBack, conversationId: knownConversationId }) => {
   const user = useAuthStore((state) => state.user);
@@ -139,6 +167,28 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
   const uploadQueue = useCloudUploadQueue(uploadCompleted, space?.maxUploadBytes, applyQuota);
   const hiddenCloudMessageIds = useMemo(() => new Set(assets.filter((asset) => asset.status !== "available").map((asset) => asset.messageId).filter((id): id is string => Boolean(id))), [assets]);
   const visibleMessages = useMemo(() => (messagesQuery.data?.messages ?? []).filter((message) => !hiddenCloudMessageIds.has(message.id)), [hiddenCloudMessageIds, messagesQuery.data?.messages]);
+  const previewTargets = useMemo(
+    () => buildCloudPreviewTargets(visibleMessages, conversationId),
+    [conversationId, visibleMessages],
+  );
+
+  const handleOpenFilePreview = useCallback((attachment: Attachment) => {
+    const target = previewTargets.find((candidate) =>
+      isSameAttachment(candidate.attachment, attachment),
+    ) ?? {
+      attachment,
+      conversationId,
+      previewType: getMimePreviewType(
+        attachment.mimeType,
+        attachment.fileName,
+      ) as PreviewType,
+    };
+
+    filePreview.open(
+      target,
+      previewTargets.length > 0 ? previewTargets : undefined,
+    );
+  }, [conversationId, filePreview, previewTargets]);
 
   const sendNote = useCallback(async (content?: string) => {
     const normalized = content?.trim() ?? "";
@@ -212,7 +262,7 @@ export const PersonalCloudConversationSurface: React.FC<{ onBack?: () => void; c
       {pinnedMessages.length > 0 && user && (
         <PinnedMessageBar pinnedMessages={pinnedMessages} currentUserId={user.id} onOpenList={() => { setInfoOpen(false); setSearchOpen(false); setPinnedOpen(true); }} />
       )}
-      <div className="min-h-0 flex-1">{conversationId && user ? <SimpleVirtualizedChatTimeline conversationId={conversationId} conversationType={personalCloudTimelineType} currentUserId={user.id} messages={visibleMessages} onReply={() => undefined} onReact={() => undefined} onForward={personalCloudPolicy.allowForward ? setForwardMessage : undefined} onPin={personalCloudPolicy.allowPin ? handlePin : undefined} onDelete={personalCloudPolicy.allowDelete ? handleDelete : undefined} isInitialLoading={messagesQuery.isLoading} layoutState="normal" density={density} /> : null}</div>
+      <div className="min-h-0 flex-1">{conversationId && user ? <SimpleVirtualizedChatTimeline conversationId={conversationId} conversationType={personalCloudTimelineType} currentUserId={user.id} messages={visibleMessages} onReply={() => undefined} onReact={() => undefined} onForward={personalCloudPolicy.allowForward ? setForwardMessage : undefined} onPin={personalCloudPolicy.allowPin ? handlePin : undefined} onDelete={personalCloudPolicy.allowDelete ? handleDelete : undefined} onFilePreview={handleOpenFilePreview} isInitialLoading={messagesQuery.isLoading} layoutState="normal" density={density} /> : null}</div>
       {/* Không bọc thêm padding/max-width: MessageInput tự canh lane giống ChatWindow.
           Bọc thêm làm ô nhập lệch 32px và hụt 64px so với hội thoại thường. */}
       <div className="sticky bottom-0 z-sticky shrink-0"><MessageInput ref={messageInputRef} value={draft} onChange={setDraft} onSend={sendNote} mode="normal" conversationId={conversationId} conversationName="Cloud của tôi" placeholder="Nhập ghi chú hoặc gửi tài liệu lên Hacom Cloud" conversationType="direct" currentUserId={user?.id} sendOnEnter disabled={!conversationId} submitDisabled={uploadQueue.hasUploadingDrafts} attachmentsDisabled={!conversationId} uploadDrafts={uploadQueue.drafts} onAddFiles={uploadQueue.addFiles} onRemoveDraft={uploadQueue.removeDraft} onCancelUpload={uploadQueue.cancelUpload} onRetryUpload={uploadQueue.retryUpload} onClearAllDrafts={uploadQueue.clearAll} hasUploadingDrafts={uploadQueue.hasUploadingDrafts} hasFailedDrafts={uploadQueue.hasFailedDrafts} /></div>
