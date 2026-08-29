@@ -10,6 +10,7 @@
 
 .overlayOfficeOnline {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
   align-items: stretch;
   justify-items: stretch;
