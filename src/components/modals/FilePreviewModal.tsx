@@ -29,6 +29,7 @@ import { truncateFilename } from '../../utils/truncateFilename';
 import { downloadResourceWithName } from '../../utils/downloadFile';
 import { markFileDownloaded } from '../../utils/downloadedFiles';
 import { asString } from '../../utils/payloadGuards';
+import { isPubliclyFetchableUrl } from '../../utils/publicUrl';
 import { SafeImage } from '../common/SafeImage';
 import {
   FileTypeIcon,
@@ -40,6 +41,7 @@ import {
   DocumentPreview,
   ArchivePreview,
 } from '../preview';
+import { OfficeOnlinePreview } from '../preview/OfficeOnlinePreview';
 import styles from './FilePreviewModal.module.css';
 
 export interface FilePreviewModalProps {
@@ -83,6 +85,13 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [pageCount, setPageCount] = useState(1);
   const overlayRef = useRef<HTMLDivElement>(null);
   const zoomMenuRef = useRef<HTMLDivElement>(null);
+  const officeViewerKey = `${currentIndex}:${secureUrl ?? ''}`;
+  const [officeViewerState, setOfficeViewerState] = useState({
+    key: officeViewerKey,
+    failed: false,
+  });
+  const officeViewerFailed =
+    officeViewerState.key === officeViewerKey && officeViewerState.failed;
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -192,12 +201,23 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   );
 
   const lowerName = fileName.toLowerCase();
+  const lowerMimeType = mimeType.toLowerCase();
   const isDocx = lowerName.endsWith('.docx');
-  const isXlsx = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls');
+  const isXlsx =
+    lowerName.endsWith('.xlsx') ||
+    lowerName.endsWith('.xls') ||
+    lowerMimeType.includes('spreadsheetml') ||
+    lowerMimeType.includes('ms-excel');
   const isOfficeDoc =
     previewType === 'document' || previewType === 'spreadsheet' || previewType === 'presentation';
   const isZoomable =
     previewType === 'image' || previewType === 'pdf' || (isOfficeDoc && (isDocx || isXlsx));
+  const usesOfficeOnline =
+    isOfficeDoc &&
+    isXlsx &&
+    !officeViewerFailed &&
+    Boolean(secureUrl && isPubliclyFetchableUrl(secureUrl));
+  const showsPreviewToolbar = isZoomable && !usesOfficeOnline;
 
   if (!isOpen || !current) return null;
 
@@ -280,6 +300,17 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         );
       }
       if (isXlsx) {
+        if (usesOfficeOnline) {
+          return (
+            <OfficeOnlinePreview
+              url={secureUrl}
+              fileName={fileName}
+              onUnavailable={() =>
+                setOfficeViewerState({ key: officeViewerKey, failed: true })
+              }
+            />
+          );
+        }
         return <ExcelPreview url={secureUrl} fileName={fileName} scale={scale} />;
       }
       return (
@@ -404,7 +435,9 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   return createPortal(
     <div
       ref={overlayRef}
-      className={styles.overlay}
+      className={`${styles.overlay} ${
+        usesOfficeOnline ? styles.overlayOfficeOnline : ''
+      }`}
       role="dialog"
       aria-modal="true"
       aria-label="Xem trước file"
@@ -439,13 +472,17 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         </button>
       )}
 
-      <div className={`${styles.content} ${isZoomable ? styles.contentWithToolbar : ''}`}>
+      <div
+        className={`${styles.content} ${
+          showsPreviewToolbar ? styles.contentWithToolbar : ''
+        } ${usesOfficeOnline ? styles.contentOfficeOnline : ''}`}
+      >
         {renderContent()}
       </div>
 
       {/* Chân màn hình kiểu Zalo: hàng công cụ (số trang/zoom) phía trên + hàng thông tin file phía dưới. */}
       <div className={styles.bottomChrome} onClick={(e) => e.stopPropagation()}>
-        {isZoomable && (
+        {showsPreviewToolbar && (
           <div className={styles.toolbarRow}>
             <div className={styles.toolbarLeft}>
               <FileTypeIcon type={iconType} fileName={fileName} size={16} />
@@ -529,6 +566,19 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           </div>
 
           <div className={styles.actions}>
+            {usesOfficeOnline && (
+              <>
+                <button
+                  type="button"
+                  className={styles.actionBtn}
+                  onClick={toggleFullscreen}
+                  aria-label={isFullscreen ? 'Thoát toàn màn hình' : 'Xem toàn màn hình'}
+                >
+                  {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+                </button>
+                <div className={styles.actionDivider} />
+              </>
+            )}
             <button
               type="button"
               className={styles.actionBtn}

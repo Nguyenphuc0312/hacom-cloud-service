@@ -8,6 +8,13 @@
   font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
+.overlayOfficeOnline {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: stretch;
+  justify-items: stretch;
+}
+
 .backdrop {
   position: absolute;
   inset: 0;
@@ -25,6 +32,12 @@
   z-index: 10;
   background: #fff;
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.overlayOfficeOnline .bottomChrome {
+  position: relative;
+  grid-row: 2;
+  bottom: auto;
 }
 
 /* Hàng trên: bên trái icon loại file + "TRANG X/Y" (chỉ với tài liệu Word),
@@ -242,6 +255,13 @@
 /* Khi có hàng công cụ phía trên (isZoomable) thì chân màn hình cao hơn (36px + hàng info). */
 .contentWithToolbar {
   padding-bottom: 132px;
+}
+
+.contentOfficeOnline {
+  grid-row: 1;
+  min-height: 0;
+  height: auto;
+  padding: 0;
 }
 
 .mediaBox {
