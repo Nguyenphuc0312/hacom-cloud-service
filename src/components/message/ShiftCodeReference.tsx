@@ -2,96 +2,73 @@ import React from "react";
 import clsx from "clsx";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
-import { hrApi, type WorkShiftCatalogItem } from "../../features/api/hrApi";
+import type { WorkShiftCatalogItem } from "../../features/api/hrApi";
+import {
+  FALLBACK_WORK_SHIFT_MATCHER,
+  type WorkShiftCodeMatcher,
+  useWorkShiftCatalog,
+} from "../../hooks/useWorkShiftCatalog";
 import { Button, Modal } from "../ui";
 
-const SHIFT_CODE_SOURCE = "(?:HC(?:-T7|[1-4])?|VH[1-3]|BV[1-6]|S[1-6]|C[1-3])";
-const SHIFT_CODE_SPLIT_REGEX = new RegExp(`\\b(${SHIFT_CODE_SOURCE})\\b`, "gi");
-const SHIFT_CODE_EXACT_REGEX = new RegExp(`^${SHIFT_CODE_SOURCE}$`, "i");
 const HTML_TAG_REGEX = /(<[^>]+>)/g;
 const HTML_TAG_NAME_REGEX = /^<\s*(\/)?\s*([a-z0-9-]+)/i;
 const HTML_TEXT_SKIP_TAGS = new Set(["a", "button", "code", "pre"]);
-
-const SHIFT_FAMILY_ORDER = new Map([
-  ["HC", 0],
-  ["S", 1],
-  ["C", 2],
-  ["VH", 3],
-  ["BV", 4],
-]);
-const SHIFT_CATALOG_CACHE_TTL_MS = 5 * 60 * 1000;
-
-let shiftCatalogCache: WorkShiftCatalogItem[] | null = null;
-let shiftCatalogCachedAt = 0;
-let shiftCatalogRequest: Promise<WorkShiftCatalogItem[]> | null = null;
+const WORD_CHARACTER_REGEX = /[\p{L}\p{N}_]/u;
 
 export interface ShiftCodeSegment {
   text: string;
   code?: string;
 }
 
-export function tokenizeShiftCodes(text: string): ShiftCodeSegment[] {
-  return text
-    .split(SHIFT_CODE_SPLIT_REGEX)
-    .filter(Boolean)
-    .map((part) =>
-      SHIFT_CODE_EXACT_REGEX.test(part)
-        ? { text: part, code: part.toUpperCase() }
-        : { text: part },
-    );
+const isWordCharacter = (value: string | undefined): boolean =>
+  Boolean(value && WORD_CHARACTER_REGEX.test(value));
+
+export function tokenizeShiftCodes(
+  text: string,
+  matcher: WorkShiftCodeMatcher = FALLBACK_WORK_SHIFT_MATCHER,
+): ShiftCodeSegment[] {
+  if (!text || !matcher.pattern) return text ? [{ text }] : [];
+
+  const segments: ShiftCodeSegment[] = [];
+  const regex = new RegExp(matcher.pattern, "giu");
+  let lastIndex = 0;
+
+  for (const match of text.matchAll(regex)) {
+    const index = match.index ?? 0;
+    const end = index + match[0].length;
+    if (isWordCharacter(text[index - 1]) || isWordCharacter(text[end])) {
+      continue;
+    }
+
+    const code = match[0].toUpperCase();
+    if (!matcher.codes.has(code)) continue;
+    if (index > lastIndex) {
+      segments.push({ text: text.slice(lastIndex, index) });
+    }
+    segments.push({ text: match[0], code });
+    lastIndex = end;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ text: text.slice(lastIndex) });
+  }
+  return segments.length > 0 ? segments : [{ text }];
 }
 
-const compareShiftCodes = (
-  left: WorkShiftCatalogItem,
-  right: WorkShiftCatalogItem,
-): number => {
-  const leftFamily = left.code.match(/^[A-Z]+/i)?.[0]?.toUpperCase() ?? "";
-  const rightFamily = right.code.match(/^[A-Z]+/i)?.[0]?.toUpperCase() ?? "";
-  const familyDelta =
-    (SHIFT_FAMILY_ORDER.get(leftFamily) ?? Number.MAX_SAFE_INTEGER) -
-    (SHIFT_FAMILY_ORDER.get(rightFamily) ?? Number.MAX_SAFE_INTEGER);
-
-  return (
-    familyDelta ||
-    left.code.localeCompare(right.code, undefined, {
-      numeric: true,
-      sensitivity: "base",
-    })
-  );
-};
-
-const loadShiftCatalog = (): Promise<WorkShiftCatalogItem[]> => {
-  if (
-    shiftCatalogCache &&
-    Date.now() - shiftCatalogCachedAt < SHIFT_CATALOG_CACHE_TTL_MS
-  ) {
-    return Promise.resolve(shiftCatalogCache);
-  }
-  if (shiftCatalogRequest) return shiftCatalogRequest;
-
-  shiftCatalogRequest = hrApi
-    .getWorkShiftCatalog()
-    .then((items) => {
-      const sortedItems = [...items].sort(compareShiftCodes);
-      shiftCatalogCache = sortedItems;
-      shiftCatalogCachedAt = Date.now();
-      shiftCatalogRequest = null;
-      return sortedItems;
-    })
-    .catch((error: unknown) => {
-      shiftCatalogRequest = null;
-      throw error;
-    });
-
-  return shiftCatalogRequest;
-};
+const escapeHtmlAttribute = (value: string): string =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 
 const shiftCodeButtonHtml = (text: string, code: string, isOwn: boolean) =>
-  `<button type="button" class="shift-code-trigger${isOwn ? " shift-code-trigger--own" : ""}" data-shift-code="${code}" aria-haspopup="dialog">${text}</button>`;
+  `<button type="button" class="shift-code-trigger${isOwn ? " shift-code-trigger--own" : ""}" data-shift-code="${escapeHtmlAttribute(code)}" aria-haspopup="dialog">${text}</button>`;
 
 export function linkifyShiftCodesInHtml(
   safeHtml: string,
   isOwn: boolean,
+  matcher: WorkShiftCodeMatcher = FALLBACK_WORK_SHIFT_MATCHER,
 ): string {
   const blockedTags: string[] = [];
 
@@ -115,7 +92,7 @@ export function linkifyShiftCodesInHtml(
       }
 
       if (blockedTags.length > 0) return part;
-      return tokenizeShiftCodes(part)
+      return tokenizeShiftCodes(part, matcher)
         .map((segment) =>
           segment.code
             ? shiftCodeButtonHtml(segment.text, segment.code, isOwn)
@@ -131,9 +108,10 @@ export const renderShiftCodeText = (
   isOwn: boolean,
   onSelect: (code: string) => void,
   accessibleLabel: (code: string) => string,
+  matcher: WorkShiftCodeMatcher = FALLBACK_WORK_SHIFT_MATCHER,
   keyPrefix = "shift",
 ): React.ReactNode[] =>
-  tokenizeShiftCodes(text).map((segment, index) =>
+  tokenizeShiftCodes(text, matcher).map((segment, index) =>
     segment.code ? (
       <button
         key={`${keyPrefix}-${index}`}
@@ -201,29 +179,13 @@ export const ShiftCatalogModal: React.FC<ShiftCatalogModalProps> = ({
   onClose,
 }) => {
   const { t, i18n } = useTranslation();
-  const [items, setItems] = React.useState<WorkShiftCatalogItem[] | null>(
-    shiftCatalogCache,
-  );
-  const [loadFailed, setLoadFailed] = React.useState(false);
-  const [retryVersion, setRetryVersion] = React.useState(0);
+  const { items, error, refetch } = useWorkShiftCatalog();
   const [query, setQuery] = React.useState("");
   const searchId = React.useId();
 
   React.useEffect(() => {
-    let active = true;
-
-    void loadShiftCatalog()
-      .then((nextItems) => {
-        if (active) setItems(nextItems);
-      })
-      .catch(() => {
-        if (active) setLoadFailed(true);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [retryVersion]);
+    void refetch();
+  }, [refetch]);
 
   const selectedCode = code.toUpperCase();
   const selectedShift = items?.find(
@@ -317,7 +279,7 @@ export const ShiftCatalogModal: React.FC<ShiftCatalogModalProps> = ({
         </div>
       </div>
 
-      {!items && !loadFailed ? (
+      {!items && !error ? (
         <div
           className="space-y-2 px-5 pb-6 sm:px-6"
           aria-live="polite"
@@ -332,7 +294,7 @@ export const ShiftCatalogModal: React.FC<ShiftCatalogModalProps> = ({
         </div>
       ) : null}
 
-      {loadFailed ? (
+      {error && !items ? (
         <div className="px-5 pb-6 sm:px-6" role="alert">
           <div className="rounded-lg border border-danger/25 bg-danger/5 p-4">
             <p className="text-sm font-semibold text-text-primary">
@@ -346,11 +308,7 @@ export const ShiftCatalogModal: React.FC<ShiftCatalogModalProps> = ({
               variant="outline"
               size="sm"
               className="mt-3"
-              onClick={() => {
-                setItems(null);
-                setLoadFailed(false);
-                setRetryVersion((value) => value + 1);
-              }}
+              onClick={() => void refetch()}
             >
               {t("chat:shiftReference.retry")}
             </Button>
@@ -358,7 +316,7 @@ export const ShiftCatalogModal: React.FC<ShiftCatalogModalProps> = ({
         </div>
       ) : null}
 
-      {items && !loadFailed ? (
+      {items ? (
         <div className="border-t border-border">
           {filteredItems.length > 0 ? (
             <>

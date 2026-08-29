@@ -12,6 +12,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { useTranslation } from "react-i18next";
+import { useWorkShiftCatalog } from "../../hooks/useWorkShiftCatalog";
 import { renderShiftCodeText, ShiftCatalogModal } from "./ShiftCodeReference";
 
 const sanitizeSchema = {
@@ -32,6 +33,7 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({
   isOwn,
 }) => {
   const { t } = useTranslation();
+  const { matcher: shiftCodeMatcher } = useWorkShiftCatalog();
   const [selectedShiftCode, setSelectedShiftCode] = React.useState<
     string | null
   >(null);
@@ -43,6 +45,7 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({
             isOwn,
             setSelectedShiftCode,
             (code) => t("chat:shiftReference.open", { code }),
+            shiftCodeMatcher,
             `markdown-${index}`,
           )
         : child,

@@ -15,6 +15,10 @@ import { enrichUserProfile } from "../../services/enrichUserProfile";
 import { dispatchMentionProfileView } from "../../features/chat/events/chatUiEvents";
 import { buildMentionSegments } from "../../utils/mentionSegments";
 import { useResolvedDisplayName } from "../../stores/useResolvedDisplayName";
+import {
+  type WorkShiftCodeMatcher,
+  useWorkShiftCatalog,
+} from "../../hooks/useWorkShiftCatalog";
 import { renderShiftCodeText, ShiftCatalogModal } from "./ShiftCodeReference";
 
 // Lazy-load the markdown renderer so the entire react-markdown + unified
@@ -163,6 +167,7 @@ const renderWithMentions = (
     isOwn: boolean;
     onShiftCodeSelect: (code: string) => void;
     shiftCodeLabel: (code: string) => string;
+    shiftCodeMatcher: WorkShiftCodeMatcher;
   },
 ): React.ReactNode[] => {
   const {
@@ -172,9 +177,17 @@ const renderWithMentions = (
     isOwn,
     onShiftCodeSelect,
     shiftCodeLabel,
+    shiftCodeMatcher,
   } = options;
   const renderPlain = (value: string, key: string) =>
-    renderShiftCodeText(value, isOwn, onShiftCodeSelect, shiftCodeLabel, key);
+    renderShiftCodeText(
+      value,
+      isOwn,
+      onShiftCodeSelect,
+      shiftCodeLabel,
+      shiftCodeMatcher,
+      key,
+    );
 
   // No metadata at all: style bare `@token`s so legacy messages still look like
   // mentions, but they stay inert.
@@ -272,6 +285,7 @@ const TextMessageComponent: React.FC<TextMessageProps> = ({
 
   const isMarkdown = contentFormat === "markdown";
   const { t } = useTranslation();
+  const { matcher: shiftCodeMatcher } = useWorkShiftCatalog();
   const [selectedShiftCode, setSelectedShiftCode] = React.useState<
     string | null
   >(null);
@@ -435,6 +449,7 @@ const TextMessageComponent: React.FC<TextMessageProps> = ({
                   isOwn,
                   onShiftCodeSelect: setSelectedShiftCode,
                   shiftCodeLabel,
+                  shiftCodeMatcher,
                 })}
               </React.Fragment>
             );

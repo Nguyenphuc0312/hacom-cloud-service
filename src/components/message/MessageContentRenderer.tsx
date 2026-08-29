@@ -1,6 +1,7 @@
 import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
+import { useWorkShiftCatalog } from "../../hooks/useWorkShiftCatalog";
 import {
   linkifyShiftCodesInHtml,
   renderShiftCodeText,
@@ -25,6 +26,7 @@ export const MessageContentRenderer: React.FC<MessageContentRendererProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
+  const { matcher: shiftCodeMatcher } = useWorkShiftCatalog();
   const [selectedShiftCode, setSelectedShiftCode] = React.useState<
     string | null
   >(null);
@@ -35,7 +37,11 @@ export const MessageContentRenderer: React.FC<MessageContentRendererProps> = ({
 
   if (isRich) {
     const safeHtml = sanitizeMessageHtml(content);
-    const interactiveHtml = linkifyShiftCodesInHtml(safeHtml, isOwn);
+    const interactiveHtml = linkifyShiftCodesInHtml(
+      safeHtml,
+      isOwn,
+      shiftCodeMatcher,
+    );
     return (
       <>
         <div
@@ -115,8 +121,12 @@ export const MessageContentRenderer: React.FC<MessageContentRendererProps> = ({
           className,
         )}
       >
-        {renderShiftCodeText(content, isOwn, setSelectedShiftCode, (code) =>
-          t("chat:shiftReference.open", { code }),
+        {renderShiftCodeText(
+          content,
+          isOwn,
+          setSelectedShiftCode,
+          (code) => t("chat:shiftReference.open", { code }),
+          shiftCodeMatcher,
         )}
       </p>
       {selectedShiftCode ? (
