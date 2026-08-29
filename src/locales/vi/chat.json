@@ -113,6 +113,37 @@
       "current": "hiện tại"
     }
   },
+  "shiftReference": {
+    "title": "Tra cứu ca làm việc",
+    "description": "Thông tin ca dùng chung từ hệ thống nhân sự.",
+    "selectedDescription": "{{code}} · {{name}}",
+    "open": "Xem thông tin ca {{code}}",
+    "searchLabel": "Tìm ca làm việc",
+    "searchPlaceholder": "Tìm theo mã, tên ca hoặc nhóm",
+    "workingTime": "Giờ làm việc",
+    "breakTime": "Nghỉ giữa ca",
+    "noBreakInfo": "Không có",
+    "ungrouped": "Chưa phân nhóm",
+    "loading": "Đang tải danh mục ca",
+    "loadErrorTitle": "Không tải được danh mục ca",
+    "loadErrorDescription": "Kết nối tới hệ thống nhân sự chưa sẵn sàng. Hãy thử lại.",
+    "retry": "Thử lại",
+    "viewing": "Đang xem",
+    "tableCaption": "Danh mục ca làm việc",
+    "emptyTitle": "Không tìm thấy ca phù hợp",
+    "emptyDescription": "Hãy thử mã ca hoặc từ khóa khác.",
+    "durationHours": "{{hours}} giờ",
+    "durationHoursMinutes": "{{hours}} giờ {{minutes}} phút",
+    "durationMinutes": "{{minutes}} phút",
+    "workdayValue": "{{value}} công",
+    "columns": {
+      "code": "Mã ca",
+      "name": "Tên ca",
+      "group": "Nhóm",
+      "time": "Giờ làm việc",
+      "workValue": "Thời lượng / Công"
+    }
+  },
   "composer": {
     "replyingTo": "Đang trả lời {{name}}",
     "editing": "Đang chỉnh sửa tin nhắn",

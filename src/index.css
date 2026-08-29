@@ -809,6 +809,42 @@ body {
   max-width: 100%;
   height: auto;
 }
+/* Shift codes stay inline with message text but read as an intentional action. */
+.shift-code-trigger {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.45em;
+  margin-inline: 0.08em;
+  padding-inline: 0.32em;
+  border: 1px solid hsl(var(--color-primary) / 0.34);
+  border-radius: 6px;
+  background: hsl(var(--color-primary) / 0.09);
+  color: hsl(var(--color-primary));
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.25;
+  vertical-align: baseline;
+  cursor: pointer;
+  transition:
+    background-color var(--chat-transition-fast) ease-out,
+    border-color var(--chat-transition-fast) ease-out;
+}
+
+.shift-code-trigger:hover {
+  border-color: hsl(var(--color-primary) / 0.55);
+  background: hsl(var(--color-primary) / 0.15);
+}
+
+.shift-code-trigger--own {
+  border-color: hsl(var(--chat-bubble-sent-text) / 0.3);
+  background: hsl(var(--chat-bubble-sent-text) / 0.09);
+  color: inherit;
+}
+
+.shift-code-trigger--own:hover {
+  border-color: hsl(var(--chat-bubble-sent-text) / 0.5);
+  background: hsl(var(--chat-bubble-sent-text) / 0.15);
+}
 
 .chat-shell[data-chat-layout-profile="mobile-compact"] .chat-composer-root {
   padding-top: 0;

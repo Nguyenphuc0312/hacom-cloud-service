@@ -113,6 +113,37 @@
       "current": "current"
     }
   },
+  "shiftReference": {
+    "title": "Work shift reference",
+    "description": "Shared shift information from the HR system.",
+    "selectedDescription": "{{code}} · {{name}}",
+    "open": "View shift {{code}}",
+    "searchLabel": "Search work shifts",
+    "searchPlaceholder": "Search by code, shift name, or group",
+    "workingTime": "Working hours",
+    "breakTime": "Break",
+    "noBreakInfo": "None",
+    "ungrouped": "No group",
+    "loading": "Loading shift catalogue",
+    "loadErrorTitle": "Could not load shift catalogue",
+    "loadErrorDescription": "The HR system is not available right now. Please try again.",
+    "retry": "Try again",
+    "viewing": "Viewing",
+    "tableCaption": "Work shift catalogue",
+    "emptyTitle": "No matching shift",
+    "emptyDescription": "Try a different shift code or keyword.",
+    "durationHours": "{{hours}} hr",
+    "durationHoursMinutes": "{{hours}} hr {{minutes}} min",
+    "durationMinutes": "{{minutes}} min",
+    "workdayValue": "{{value}} workday",
+    "columns": {
+      "code": "Shift code",
+      "name": "Shift name",
+      "group": "Group",
+      "time": "Working hours",
+      "workValue": "Duration / Workday"
+    }
+  },
   "composer": {
     "replyingTo": "Replying to {{name}}",
     "editing": "Editing message",
