@@ -48,6 +48,7 @@ export const OfficeOnlinePreview: React.FC<OfficeOnlinePreviewProps> = ({
   // setState trong effect (tránh thêm một vòng render thừa).
   const [loadState, setLoadState] = useState({ key: url, loaded: false });
   const isLoading = !(loadState.key === url && loadState.loaded);
+  const isSpreadsheet = /\.xlsx?$/i.test(fileName);
 
   // Giữ callback trong ref: cha thường truyền hàm inline (đổi mỗi lần render),
   // đưa thẳng vào deps sẽ khiến bộ đếm bị đặt lại liên tục và không bao giờ chạy.
@@ -80,8 +81,12 @@ export const OfficeOnlinePreview: React.FC<OfficeOnlinePreviewProps> = ({
     <div className={clsx("relative h-full w-full bg-white", className)}>
       {isLoading && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#1565C0] border-t-transparent" />
-          <span className="text-sm text-text-muted">Đang mở tài liệu…</span>
+          {!isSpreadsheet && (
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#1565C0] border-t-transparent" />
+          )}
+          <span className={isSpreadsheet ? "text-[13px] text-[#868e96]" : "text-sm text-text-muted"}>
+            {isSpreadsheet ? "Đang tải bảng tính…" : "Đang mở tài liệu…"}
+          </span>
         </div>
       )}
       <iframe

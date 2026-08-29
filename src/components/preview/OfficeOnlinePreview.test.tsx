@@ -88,6 +88,19 @@ describe("OfficeOnlinePreview", () => {
     expect(screen.queryByText("Đang mở tài liệu…")).toBeNull();
   });
 
+  it("giữ trạng thái tải bảng tính giống UI hiện tại", () => {
+    render(
+      <OfficeOnlinePreview
+        url={PUBLIC_URL}
+        fileName="bao-cao.xlsx"
+        onUnavailable={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Đang tải bảng tính…")).toBeTruthy();
+    expect(screen.queryByText("Đang mở tài liệu…")).toBeNull();
+  });
+
   it("đổi sang file khác thì tính lại hạn chờ từ đầu", () => {
     const onUnavailable = vi.fn();
     const { rerender } = render(
