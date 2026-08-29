@@ -174,6 +174,18 @@ export interface AttendanceCalendarResponse {
   message?: string | null;
 }
 
+export interface WorkShiftCatalogItem {
+  code: string;
+  name: string;
+  groupName: string | null;
+  startTime: string;
+  endTime: string;
+  breakStart: string | null;
+  breakEnd: string | null;
+  standardMinutes: number;
+  dayValue: number;
+}
+
 export type TimesheetPeriodStatus =
   "DRAFT" | "PENDING_EMPLOYEE" | "PENDING_HR" | "CLOSED";
 
@@ -510,6 +522,13 @@ export const hrApi = {
             .data ?? null)
         : body
     ) as AttendanceCalendarDay | null;
+  },
+
+  getWorkShiftCatalog: async (): Promise<WorkShiftCatalogItem[]> => {
+    const response = await hrApiClient.get(
+      "/attendance/calendar/shift-catalog",
+    );
+    return unwrapHrEnvelope<WorkShiftCatalogItem[]>(response.data);
   },
 
   /**

@@ -1,5 +1,11 @@
 import React from "react";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -28,6 +34,19 @@ vi.mock("../../../stores/authStore", () => ({
 
 vi.mock("../../api/hrApi", () => ({
   hrApi: {
+    getWorkShiftCatalog: vi.fn().mockResolvedValue([
+      {
+        code: "HC1",
+        name: "Ca HC1",
+        groupName: "Hành chính",
+        startTime: "08:00",
+        endTime: "17:00",
+        breakStart: "12:00",
+        breakEnd: "13:00",
+        standardMinutes: 480,
+        dayValue: 1,
+      },
+    ]),
     getMyTimesheet: (...args: unknown[]) => getMyTimesheet(...args),
     confirmMyTimesheet: vi.fn(),
     disputeMyTimesheet: vi.fn(),
@@ -107,12 +126,14 @@ describe("MyTimesheetPage — future days", () => {
 
   const cellFor = async (date: string) => {
     const label = String(Number(date.slice(8, 10)));
-    const nodes = await screen.findAllByText(label);
-    const cell = nodes
-      .map((node) => node.closest("div.flex.flex-col"))
-      .find((node): node is HTMLElement => node !== null);
-    if (!cell) throw new Error(`No cell rendered for ${date}`);
-    return cell;
+    return waitFor(() => {
+      const cell = screen
+        .queryAllByText(label)
+        .map((node) => node.closest("div[title]")?.parentElement)
+        .find((node): node is HTMLElement => Boolean(node));
+      if (!cell) throw new Error(`No cell rendered for ${date}`);
+      return cell;
+    });
   };
 
   const renderPage = () =>
@@ -243,6 +264,28 @@ describe("MyTimesheetPage — shifts that include Sunday", () => {
     expect(within(sunday).queryByText("Nghỉ")).toBeNull();
     expect(within(sunday).getByText("HC1")).toBeTruthy();
     expect(within(sunday).queryByText("+")).toBeNull();
+  });
+
+  it("opens the shift catalogue when the displayed shift code is clicked", async () => {
+    await renderMonth([
+      day(SUNDAYS[0], {
+        isWorkingDay: true,
+        paidDays: 1,
+        displaySymbol: "+",
+        shiftCode: "HC1",
+        source: "DEVICE",
+        firstPunch: "08:00",
+        lastPunch: "17:30",
+        needsExplanation: false,
+      }),
+    ]);
+
+    const sunday = await cellByDayNumber(SUNDAYS[0]);
+    const trigger = within(sunday).getByRole("button", { name: /HC1/i });
+    fireEvent.click(trigger);
+
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect((await screen.findAllByText("Ca HC1")).length).toBeGreaterThan(0);
   });
 
   it("keeps the Sunday header neutral when the shift works Sundays", async () => {

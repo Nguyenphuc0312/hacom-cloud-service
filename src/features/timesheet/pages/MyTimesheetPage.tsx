@@ -22,6 +22,7 @@ import {
 } from "../../api/hrApi";
 import { ROUTE_PATHS } from "../../../router/paths";
 import { WorkPageShell } from "../../work/components/WorkPageShell";
+import { ShiftCatalogModal } from "../../../components/message/ShiftCodeReference";
 import { formatWorkDate } from "../../work/utils/workDatePresentation";
 import { TimesheetPeriodPicker } from "../components/TimesheetPeriodPicker";
 import { getTimesheetDayScheduleNotice } from "../timesheetDayPresentation";
@@ -128,12 +129,16 @@ const dayNumber = (date: string) => {
   return Number.isFinite(value) ? value : 0;
 };
 
-const DayCell: React.FC<{ day: MyTimesheetDay; isFuture?: boolean }> = ({
-  day,
-  isFuture = false,
-}) => {
+const DayCell: React.FC<{
+  day: MyTimesheetDay;
+  isFuture?: boolean;
+  onShiftCodeSelect: (code: string) => void;
+}> = ({ day, isFuture = false, onShiftCodeSelect }) => {
   const scheduleNotice = getTimesheetDayScheduleNotice(day.source);
   const dayLabel = attendanceCalendarLabel(day);
+  const shiftCode = day.shiftCode?.trim() ?? "";
+  const isShiftCodeLabel =
+    Boolean(shiftCode) && dayLabel.toUpperCase() === shiftCode.toUpperCase();
   const isUnpaidHoliday = day.source === "HOLIDAY_UNPAID";
   const weekdayLabel = WEEKDAY_LABELS[weekdayIndex(day.date)];
   /*
@@ -204,6 +209,15 @@ const DayCell: React.FC<{ day: MyTimesheetDay; isFuture?: boolean }> = ({
             Cần HR thiết lập lịch làm việc
           </div>
         </>
+      ) : dayLabel && isShiftCodeLabel ? (
+        <button
+          type="button"
+          className={`inline-flex min-w-8 items-center justify-center rounded-md border px-2 py-1 text-sm font-semibold transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/40 ${symbolClass(day.displaySymbol)}`}
+          aria-label={`Xem thông tin ca ${shiftCode}`}
+          onClick={() => onShiftCodeSelect(shiftCode)}
+        >
+          {dayLabel}
+        </button>
       ) : dayLabel ? (
         <span
           className={`inline-flex min-w-8 items-center justify-center rounded-md border px-2 py-1 text-sm font-semibold ${symbolClass(day.displaySymbol)}`}
@@ -257,7 +271,8 @@ const ExplainableDayCell: React.FC<{
    */
   firstColumn?: number;
   onExplain: (day: MyTimesheetDay) => void;
-}> = ({ day, isFuture = false, firstColumn, onExplain }) => (
+  onShiftCodeSelect: (code: string) => void;
+}> = ({ day, isFuture = false, firstColumn, onExplain, onShiftCodeSelect }) => (
   // Nút xếp dưới ô, không absolute: bản absolute đè lên dòng giờ chấm công
   // (08:05 - 17:35) làm mất thông tin ở đúng những ngày cần đọc kỹ nhất.
   <div
@@ -265,7 +280,11 @@ const ExplainableDayCell: React.FC<{
       firstColumn && firstColumn > 1 ? LG_COLUMN_START[firstColumn] : ""
     }`}
   >
-    <DayCell day={day} isFuture={isFuture} />
+    <DayCell
+      day={day}
+      isFuture={isFuture}
+      onShiftCodeSelect={onShiftCodeSelect}
+    />
     {/*
       Ngày chưa tới thì không có gì để giải trình. Máy chủ đã ngừng gắn cờ cho
       ngày tương lai, nhưng vẫn chặn thêm một lớp ở đây: bảng công cũ đã tính
@@ -391,6 +410,9 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
   >(null);
   const [explainingDay, setExplainingDay] =
     React.useState<MyTimesheetDay | null>(null);
+  const [selectedShiftCode, setSelectedShiftCode] = React.useState<
+    string | null
+  >(null);
   const [explanationReason, setExplanationReason] = React.useState("");
   const [submittingExplanation, setSubmittingExplanation] =
     React.useState(false);
@@ -698,10 +720,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
           ) : state.status === "loading" && !days.length ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
               {Array.from({ length: 28 }, (_, index) => (
-                <div
-                  key={index}
-                  className="skeleton h-[92px] rounded-lg"
-                />
+                <div key={index} className="skeleton h-[92px] rounded-lg" />
               ))}
             </div>
           ) : (
@@ -737,6 +756,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
                       setExplainingDay(item);
                       setExplanationReason("");
                     }}
+                    onShiftCodeSelect={setSelectedShiftCode}
                     // Chỉ ngày đầu tháng cần đẩy vào đúng cột thứ của nó; các
                     // ngày sau tự chảy tiếp. Chỉ áp dụng ở lưới 7 cột.
                     {...(index === 0
@@ -906,6 +926,12 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
           ) : null}
         </aside>
       </section>
+      {selectedShiftCode ? (
+        <ShiftCatalogModal
+          code={selectedShiftCode}
+          onClose={() => setSelectedShiftCode(null)}
+        />
+      ) : null}
     </WorkPageShell>
   );
 };
