@@ -180,8 +180,9 @@
     "employmentStatusValues": {
       "PROBATION": "Probation",
       "ACTIVE": "Active",
+      "ADMIN": "Admin",
       "SUSPENDED": "Suspended",
-      "TERMINATED": "Terminated",
+      "TERMINATED": "No longer employed",
       "RESIGNED": "Admin"
     },
     "joinDate": "Join date",
