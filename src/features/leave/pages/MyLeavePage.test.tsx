@@ -207,6 +207,40 @@ describe("MyLeavePage — leave request payload", () => {
     expect(within(annualBalance).getByText("9,5")).toBeTruthy();
   });
 
+  it("shows a provisional annual balance calculated from the hire date", async () => {
+    getMyLeave.mockResolvedValueOnce({
+      year: 2026,
+      employeeId: "emp-1",
+      mode: "TRIAL_PENDING_CSV_RECONCILIATION",
+      balances: [
+        {
+          leaveType: "ANNUAL",
+          label: "Phép năm",
+          entitlementDays: 5,
+          usedDays: 1.5,
+          pendingDays: 0.5,
+          remainingDays: 3,
+          source: "CALCULATED_FROM_HIRE_DATE",
+          balanceStatus: "PENDING_HR_CSV_RECONCILIATION",
+        },
+      ],
+      requests: [],
+    });
+
+    render(<MyLeavePage />);
+
+    expect(
+      await screen.findByText("Số dư tạm tính theo ngày vào làm"),
+    ).toBeTruthy();
+    expect(screen.getByText("Tính từ ngày vào làm")).toBeTruthy();
+    expect(screen.queryByText("Số dư đang được HR đối chiếu")).toBeNull();
+    const annualBalance = screen.getByTestId("leave-balance-ANNUAL");
+    expect(within(annualBalance).getByText("5")).toBeTruthy();
+    expect(within(annualBalance).getByText("3")).toBeTruthy();
+    expect(within(annualBalance).getByText("1,5")).toBeTruthy();
+    expect(within(annualBalance).getByText("0,5")).toBeTruthy();
+  });
+
   it("labels an unreconciled annual balance as trial data from the P timesheet", async () => {
     getMyLeave.mockResolvedValueOnce({
       year: 2026,
