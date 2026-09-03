@@ -60,6 +60,16 @@ export const LG_COLUMN_START: Record<number, string> = {
   7: "lg:col-start-7",
 };
 
+/** Danh sách ISO của mọi ngày trong một tháng, kể cả ngày chưa có bảng công. */
+export const datesInMonth = (year: number, month: number): string[] => {
+  const totalDays = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const prefix = `${year}-${String(month).padStart(2, "0")}`;
+  return Array.from(
+    { length: totalDays },
+    (_, index) => `${prefix}-${String(index + 1).padStart(2, "0")}`,
+  );
+};
+
 /** Hôm nay dạng `YYYY-MM-DD` theo lịch máy người dùng. */
 export const todayIso = (): string => {
   const value = new Date();

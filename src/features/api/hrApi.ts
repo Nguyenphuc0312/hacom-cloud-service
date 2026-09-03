@@ -186,6 +186,23 @@ export interface WorkShiftCatalogItem {
   dayValue: number;
 }
 
+export interface LeavePolicyCatalogItem {
+  id: string;
+  code: string;
+  name: string;
+  displaySymbol: string;
+  deductsAnnualLeave: boolean;
+  paid?: boolean | null;
+  dayValue?: number | null;
+  requiresAttachment: boolean;
+  attachmentMinDays?: number | null;
+  quotaMode: string;
+  maxDaysPerEvent?: number | null;
+  hrRuleStatus: string;
+  note?: string | null;
+  status: string;
+}
+
 export type TimesheetPeriodStatus =
   "DRAFT" | "PENDING_EMPLOYEE" | "PENDING_HR" | "CLOSED";
 
@@ -531,6 +548,11 @@ export const hrApi = {
     return unwrapHrEnvelope<WorkShiftCatalogItem[]>(response.data);
   },
 
+  getLeaveTypeCatalog: async (): Promise<LeavePolicyCatalogItem[]> => {
+    const response = await hrApiClient.get("/leave/me/types");
+    return unwrapHrEnvelope<LeavePolicyCatalogItem[]>(response.data);
+  },
+
   /**
    * Check if HR API is available
    */
@@ -686,7 +708,7 @@ export const hrApi = {
 
   rejectAttendanceExplanation: async (
     id: string,
-    note?: string,
+    note: string,
   ): Promise<AttendanceExplanation> => {
     const response = await hrApiClient.post(
       `/attendance/explanations/${id}/reject`,
