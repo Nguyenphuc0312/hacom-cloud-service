@@ -1,8 +1,15 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { EllipsisHorizontalIcon, TrashIcon } from "@heroicons/react/24/outline";
+import {
+  ChevronRightIcon,
+  CheckIcon,
+  EllipsisHorizontalIcon,
+  TagIcon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
+import { Pin } from "lucide-react";
 import { Avatar } from "../../common/Avatar";
 import { GroupAvatar } from "../../common/GroupAvatar";
 import {
@@ -40,9 +47,19 @@ import {
   useDeleteMessageMutation,
 } from "../../../features/api/chatApi";
 import { toast } from "../../ui";
-import { Pin } from "lucide-react";
-import { conversationApi } from "../../../services/api";
 import { extractApiError } from "../../../lib/apiContract";
+import { conversationApi } from "../../../services/api";
+import { PersonalCloudAvatar } from "../../../features/cloud/components/PersonalCloudAvatar";
+import { isPersonalCloudConversation, personalCloudPresentation } from "../../../features/cloud/personalCloudPolicy";
+import {
+  ConversationLabelChips,
+  ConversationLabelMarker,
+} from "./ConversationLabels";
+import type { ConversationLabel } from "../../../stores/uiStore";
+import {
+  getConversationMenuPosition,
+  type ConversationMenuPosition,
+} from "./conversationMenuPosition";
 
 interface RoomItemContainerProps {
   conversationId: string;
@@ -67,20 +84,33 @@ interface RoomItemViewProps {
   avatarSrc?: string;
   avatarStatus?: UserStatus;
   isDirect: boolean;
+  isPersonalCloud: boolean;
   isActive: boolean;
   isKeyboardActive: boolean;
   isPinned: boolean;
+  labels: ConversationLabel[];
+  assignedLabels: ConversationLabel[];
+  assignedLabelIds: string[];
   isDropTarget: boolean;
   onSelect: (conversationId: string) => void;
-  onDragOver: (event: React.DragEvent<HTMLButtonElement>) => void;
-  onDragLeave: (event: React.DragEvent<HTMLButtonElement>) => void;
-  onDrop: (event: React.DragEvent<HTMLButtonElement>) => void;
-  onTogglePin: () => void;
-  onDeleteConversation: () => void | Promise<void>;
+  onTogglePinned: (conversationId: string) => void;
+  onToggleLabel: (conversationId: string, labelId: string) => void;
+  onDeleteConversation: (conversationId: string) => void;
+  onOpenLabelManager: () => void;
+  onDragOver: (event: React.DragEvent<HTMLDivElement>) => void;
+  onDragLeave: (event: React.DragEvent<HTMLDivElement>) => void;
+  onDrop: (event: React.DragEvent<HTMLDivElement>) => void;
 }
 
 type RoomItemVisualState =
-  "default" | "hover" | "active" | "unread" | "muted" | "mention";
+  | "default"
+  | "hover"
+  | "active"
+  | "unread"
+  | "muted"
+  | "mention";
+
+const EMPTY_LABEL_IDS: string[] = [];
 
 interface RoomItemStateStyles {
   container: string;
@@ -107,7 +137,8 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
       "group-hover:text-text-primary group-data-[keyboard-active=true]:text-text-primary",
     preview:
       "group-hover:text-text-secondary group-data-[keyboard-active=true]:text-text-secondary",
-    time: "group-hover:text-text-secondary group-data-[keyboard-active=true]:text-text-secondary",
+    time:
+      "group-hover:text-text-secondary group-data-[keyboard-active=true]:text-text-secondary",
     timeBadge:
       "group-hover:bg-surface-overlay/95 group-hover:text-text-secondary group-data-[keyboard-active=true]:bg-surface-overlay/95 group-data-[keyboard-active=true]:text-text-secondary",
     unreadBadge: "",
@@ -117,7 +148,8 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
     title: "text-[#0D3F7A] font-bold",
     preview: "text-text-primary font-medium",
     time: "text-text-secondary",
-    timeBadge: "bg-transparent text-text-secondary",
+    timeBadge:
+      "bg-transparent text-text-secondary",
     unreadBadge: "bg-[#FFC857] text-[#C41E3A]",
   },
   unread: {
@@ -125,7 +157,8 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
     title: "text-text-primary",
     preview: "text-text-secondary",
     time: "text-text-secondary",
-    timeBadge: "bg-transparent text-text-secondary",
+    timeBadge:
+      "bg-transparent text-text-secondary",
     unreadBadge: "bg-[#FFC857] text-[#C41E3A]",
   },
   muted: {
@@ -222,108 +255,307 @@ const buildPreviewText = (
   );
 };
 
-/** Matches Hacom Chat: conversation actions live behind the hover ellipsis. */
 export const ConversationItemMenu: React.FC<{
+  conversationId: string;
+  isPersonalCloud: boolean;
   isPinned: boolean;
-  onTogglePin: () => void;
-  onDeleteConversation?: () => void | Promise<void>;
-}> = ({ isPinned, onTogglePin, onDeleteConversation }) => {
+  labels: ConversationLabel[];
+  assignedLabelIds: string[];
+  onTogglePinned: (conversationId: string) => void;
+  onToggleLabel: (conversationId: string, labelId: string) => void;
+  onDeleteConversation: (conversationId: string) => void;
+  onOpenLabelManager: () => void;
+}> = ({
+  conversationId,
+  isPersonalCloud,
+  isPinned,
+  labels,
+  assignedLabelIds,
+  onTogglePinned,
+  onToggleLabel,
+  onDeleteConversation,
+  onOpenLabelManager,
+}) => {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const buttonRef = useRef<HTMLSpanElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const [position, setPosition] = useState({ left: 0, top: 0 });
+  const [labelSubmenuOpen, setLabelSubmenuOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [menuPosition, setMenuPosition] =
+    useState<ConversationMenuPosition | null>(null);
+  const [labelSubmenuPosition, setLabelSubmenuPosition] = useState({
+    left: 0,
+    top: 0,
+  });
+  const buttonRef = React.useRef<HTMLButtonElement | null>(null);
+  const labelTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const menuRef = React.useRef<HTMLDivElement | null>(null);
+  const labelSubmenuRef = React.useRef<HTMLDivElement | null>(null);
+  const labelSubmenuCloseTimerRef = React.useRef<number | null>(null);
 
-  const updatePosition = () => {
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const width = 220;
-    const height = 112;
-    setPosition({
-      left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
-      top: Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - height - 8)),
-    });
-  };
+  const updateMenuPosition = React.useCallback(() => {
+    const buttonRect = buttonRef.current?.getBoundingClientRect();
+    const menuRect = menuRef.current?.getBoundingClientRect();
+    if (!buttonRect || !menuRect) return;
+
+    setMenuPosition(
+      getConversationMenuPosition(
+        buttonRect,
+        { width: menuRect.width, height: menuRect.height },
+        { width: window.innerWidth, height: window.innerHeight },
+      ),
+    );
+  }, []);
+
+  React.useLayoutEffect(() => {
+    if (!open) return undefined;
+
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [open, updateMenuPosition]);
 
   useEffect(() => {
     if (!open) return undefined;
-    updatePosition();
-    const close = (event: PointerEvent) => {
+
+    const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
-      if (!target || buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      if (!target) return;
+      if (
+        buttonRef.current?.contains(target) ||
+        menuRef.current?.contains(target) ||
+        labelSubmenuRef.current?.contains(target)
+      ) {
+        return;
+      }
       setOpen(false);
+      setLabelSubmenuOpen(false);
     };
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
-    window.addEventListener("resize", updatePosition);
-    window.addEventListener("scroll", updatePosition, true);
-    document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", onKeyDown);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        setLabelSubmenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
     return () => {
-      window.removeEventListener("resize", updatePosition);
-      window.removeEventListener("scroll", updatePosition, true);
-      document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [open]);
 
-  const handleDelete = async () => {
-    if (deleting || !onDeleteConversation) return;
-    setDeleting(true);
-    try {
-      await onDeleteConversation();
-      setOpen(false);
-      toast.success("Đã xóa cuộc trò chuyện");
-    } catch (error) {
-      toast.error(extractApiError(error).message || "Không thể xóa cuộc trò chuyện");
-    } finally {
-      setDeleting(false);
+  useEffect(
+    () => () => {
+      if (labelSubmenuCloseTimerRef.current !== null) {
+        window.clearTimeout(labelSubmenuCloseTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setMenuPosition(null);
+    }
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      setLabelSubmenuOpen(false);
     }
   };
 
+  const clearLabelSubmenuCloseTimer = () => {
+    if (labelSubmenuCloseTimerRef.current !== null) {
+      window.clearTimeout(labelSubmenuCloseTimerRef.current);
+      labelSubmenuCloseTimerRef.current = null;
+    }
+  };
+
+  const openLabelSubmenu = () => {
+    clearLabelSubmenuCloseTimer();
+    const rect = labelTriggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const width = 256;
+      const padding = 8;
+      setLabelSubmenuPosition({
+        left: Math.max(
+          padding,
+          Math.min(rect.right - 4, window.innerWidth - width - padding),
+        ),
+        top: Math.max(
+          padding,
+          Math.min(rect.top, window.innerHeight - 352 - padding),
+        ),
+      });
+    }
+    setLabelSubmenuOpen(true);
+  };
+
+  const scheduleLabelSubmenuClose = () => {
+    clearLabelSubmenuCloseTimer();
+    labelSubmenuCloseTimerRef.current = window.setTimeout(() => {
+      setLabelSubmenuOpen(false);
+      labelSubmenuCloseTimerRef.current = null;
+    }, 120);
+  };
+
   return (
-    <>
-      <span
+    <div className="relative shrink-0">
+      <button
         ref={buttonRef}
-        role="button"
-        tabIndex={0}
-        aria-label="Tùy chọn hội thoại"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={(event) => { event.stopPropagation(); setOpen((value) => !value); }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            event.stopPropagation();
-            setOpen((value) => !value);
-          }
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          handleOpenChange(!open);
         }}
         className={clsx(
-          "inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted opacity-0 transition-micro",
-          "group-hover:opacity-100 hover:bg-surface-hover hover:text-text-primary focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+          "flex h-7 w-7 items-center justify-center rounded-md text-text-muted opacity-0 transition-micro",
+          "hover:bg-surface-hover hover:text-text-primary focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
           open && "bg-surface-hover text-text-primary opacity-100",
+          "group-hover:opacity-100",
         )}
+        aria-label={t("sidebar:labels.conversationMenu")}
+        aria-haspopup="menu"
+        aria-expanded={open}
       >
         <EllipsisHorizontalIcon className="h-5 w-5" />
-      </span>
+      </button>
+
       {open && typeof document !== "undefined" ? createPortal(
-        <div ref={menuRef} role="menu" className="fixed z-[1000] w-56 overflow-hidden rounded-lg border border-border bg-surface py-1 text-sm shadow-elev3" style={position} onClick={(event) => event.stopPropagation()}>
-          <button type="button" role="menuitem" onClick={() => { onTogglePin(); setOpen(false); }} className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-text-primary transition-micro hover:bg-surface-hover">
+        <div
+          ref={menuRef}
+          role="menu"
+          onClick={(event) => event.stopPropagation()}
+          className="fixed z-[1000] w-72 overflow-visible rounded-lg border border-border bg-surface py-1 text-sm shadow-elev3"
+          style={{
+            left: menuPosition?.left ?? 0,
+            top: menuPosition?.top ?? 0,
+            visibility: menuPosition ? "visible" : "hidden",
+          }}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              onTogglePinned(conversationId);
+              setOpen(false);
+            }}
+            className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-text-primary transition-micro hover:bg-surface-hover"
+          >
             <Pin className="h-4 w-4 text-text-secondary" strokeWidth={1.6} />
-            <span>{isPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại"}</span>
+            <span>{isPinned ? t("sidebar:labels.unpin") : t("sidebar:labels.pin")}</span>
           </button>
-          {onDeleteConversation ? (
+
+          <div className="my-1 border-t border-border/70" />
+
+          <div
+            className="relative"
+            onMouseEnter={openLabelSubmenu}
+            onMouseLeave={scheduleLabelSubmenuClose}
+          >
+            <button
+              ref={labelTriggerRef}
+              type="button"
+              role="menuitem"
+              onFocus={openLabelSubmenu}
+              className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-text-primary transition-micro hover:bg-surface-hover"
+            >
+              <TagIcon className="h-4 w-4 text-text-secondary" />
+              <span>{t("sidebar:labels.classify")}</span>
+              <ChevronRightIcon className="ml-auto h-4 w-4 text-text-secondary" />
+            </button>
+
+            {labelSubmenuOpen && typeof document !== "undefined" ? createPortal(
+              <div
+                ref={labelSubmenuRef}
+                role="menu"
+                onMouseEnter={clearLabelSubmenuCloseTimer}
+                onMouseLeave={scheduleLabelSubmenuClose}
+                className="fixed z-[1000] max-h-[min(22rem,calc(100vh-1rem))] w-64 overflow-y-auto rounded-lg border border-border bg-surface py-1 shadow-elev3"
+                style={labelSubmenuPosition}
+              >
+                {labels.map((label) => {
+                  const checked = assignedLabelIds.includes(label.id);
+                  return (
+                    <button
+                      key={label.id}
+                      type="button"
+                      role="menuitemcheckbox"
+                      aria-checked={checked}
+                      onClick={() => onToggleLabel(conversationId, label.id)}
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-text-primary transition-micro hover:bg-surface-hover"
+                    >
+                      <span className="flex h-4 w-4 items-center justify-center">
+                        {checked ? (
+                          <CheckIcon className="h-4 w-4 text-[#1565C0]" />
+                        ) : null}
+                      </span>
+                      <ConversationLabelMarker color={label.color} />
+                      <span className="min-w-0 flex-1 truncate">{label.name}</span>
+                    </button>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setOpen(false);
+                    setLabelSubmenuOpen(false);
+                    onOpenLabelManager();
+                  }}
+                  className="flex w-full items-center gap-3 border-t border-border/70 px-3 py-2.5 text-left font-medium text-[#1565C0] transition-micro hover:bg-[#1976D2]/8"
+                >
+                  <TagIcon className="h-4 w-4" />
+                  <span>{t("sidebar:labels.manage")}</span>
+                </button>
+              </div>,
+              document.body,
+            ) : null}
+          </div>
+
+          {!isPersonalCloud ? (
             <>
               <div className="my-1 border-t border-border/70" />
-              <button type="button" role="menuitem" disabled={deleting} onClick={() => { void handleDelete(); }} className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-danger transition-micro hover:bg-danger/6 disabled:cursor-wait disabled:opacity-60">
+
+              <button
+                type="button"
+                role="menuitem"
+                onClick={async () => {
+                  if (isDeleting) return;
+                  setIsDeleting(true);
+                  try {
+                    await conversationApi.deleteConversation(conversationId);
+                    onDeleteConversation(conversationId);
+                    toast.success(t("sidebar:labels.deleteConversationSuccess"));
+                  } catch (error) {
+                    toast.error(
+                      extractApiError(error).message ||
+                        t("sidebar:labels.deleteConversationFailed"),
+                    );
+                  } finally {
+                    setIsDeleting(false);
+                    setOpen(false);
+                    setLabelSubmenuOpen(false);
+                  }
+                }}
+                disabled={isDeleting}
+                className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-danger transition-micro hover:bg-danger/6 disabled:cursor-wait disabled:opacity-60"
+              >
                 <TrashIcon className="h-4 w-4" />
-                <span>{deleting ? "Đang xóa…" : "Xóa cuộc trò chuyện"}</span>
+                <span>{t("sidebar:labels.deleteConversation")}</span>
               </button>
             </>
           ) : null}
         </div>,
         document.body,
       ) : null}
-    </>
+    </div>
   );
 };
 
@@ -341,16 +573,22 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
   avatarSrc,
   avatarStatus,
   isDirect,
+  isPersonalCloud,
   isActive,
   isKeyboardActive,
   isPinned,
+  labels,
+  assignedLabels,
+  assignedLabelIds,
   isDropTarget,
   onSelect,
+  onTogglePinned,
+  onToggleLabel,
+  onDeleteConversation,
+  onOpenLabelManager,
   onDragOver,
   onDragLeave,
   onDrop,
-  onTogglePin,
-  onDeleteConversation,
 }) => {
   const { t } = useTranslation();
   const isDense = layoutState !== "normal";
@@ -367,16 +605,14 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
   const previewToneClass =
     previewState === "failed" ? "text-danger" : visualStyles.preview;
   const timeBadgeClasses =
-    timeLabel.length > 0 &&
-    (visualState === "active" || shouldEmphasizeUnreadPreview)
+    timeLabel.length > 0 && (visualState === "active" || shouldEmphasizeUnreadPreview)
       ? visualStyles.timeBadge
       : visualState === "muted"
         ? visualStyles.timeBadge
         : "bg-transparent";
 
   return (
-    <button
-      type="button"
+    <div
       onClick={() => onSelect(conversation.id)}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -387,12 +623,13 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
       data-keyboard-active={isKeyboardActive}
       data-render-probe="conversation-item"
       className={clsx(
-        "group relative mx-1 flex h-[var(--size-room-item)] w-[calc(100%-0.5rem)] items-center text-left",
+        "group relative mx-1 flex h-[var(--size-room-item)] w-[calc(100%-0.5rem)] cursor-pointer items-center text-left",
         "transition-micro active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
         isDense ? "rounded-md px-2" : "rounded-lg px-2.5",
         visualStyles.container,
         hoverStyles?.container,
-        isDropTarget && "bg-[#1565C0]/15 ring-2 ring-inset ring-[#1565C0]/70",
+        isDropTarget &&
+          "bg-[#1565C0]/15 ring-2 ring-inset ring-[#1565C0]/70",
       )}
       aria-label={displayName}
     >
@@ -402,7 +639,9 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
           isDense ? "gap-2" : "gap-2.5",
         )}
       >
-        {isDirect ? (
+        {isPersonalCloud ? (
+          <PersonalCloudAvatar size="md" />
+        ) : isDirect ? (
           <Avatar
             src={avatarSrc}
             alt={displayName}
@@ -431,7 +670,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
                 strokeWidth="1.8"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="hidden shrink-0 text-[#1976D2]/70"
+                className="shrink-0 text-[#1976D2]/70"
                 role="img"
                 aria-label="Đã ghim"
               >
@@ -452,6 +691,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
             >
               {displayName}
             </p>
+            <ConversationLabelChips labels={assignedLabels} />
           </div>
 
           {draftText ? (
@@ -500,11 +740,6 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
             isDense ? "gap-1" : "gap-1.5",
           )}
         >
-          <ConversationItemMenu
-            isPinned={isPinned}
-            onTogglePin={onTogglePin}
-            onDeleteConversation={onDeleteConversation}
-          />
           <span
             className={clsx(
               "inline-flex items-center rounded-full font-medium tabular-nums",
@@ -524,9 +759,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
             <span
               className={clsx(
                 "inline-flex items-center justify-center rounded-full font-semibold tabular-nums",
-                isDense
-                  ? "min-h-4 min-w-4 px-1 text-[10px]"
-                  : "min-h-4 min-w-4 px-1 text-[11px]",
+                isDense ? "min-h-4 min-w-4 px-1 text-[10px]" : "min-h-4 min-w-4 px-1 text-[11px]",
                 visualStyles.unreadBadge,
               )}
               aria-label={t("sidebar:room.unreadBadge", { count: unreadCount })}
@@ -536,7 +769,20 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
           )}
         </div>
       </div>
-    </button>
+      <div className="absolute right-1 top-1">
+        <ConversationItemMenu
+          conversationId={conversation.id}
+          isPersonalCloud={isPersonalCloud}
+          isPinned={isPinned}
+          labels={labels}
+          assignedLabelIds={assignedLabelIds}
+          onTogglePinned={onTogglePinned}
+          onToggleLabel={onToggleLabel}
+          onDeleteConversation={onDeleteConversation}
+          onOpenLabelManager={onOpenLabelManager}
+        />
+      </div>
+    </div>
   );
 };
 
@@ -556,13 +802,19 @@ const RoomItemView = React.memo(
     prev.avatarSrc === next.avatarSrc &&
     prev.avatarStatus === next.avatarStatus &&
     prev.isDirect === next.isDirect &&
+    prev.isPersonalCloud === next.isPersonalCloud &&
     prev.isActive === next.isActive &&
     prev.isKeyboardActive === next.isKeyboardActive &&
     prev.isPinned === next.isPinned &&
+    prev.labels === next.labels &&
+    prev.assignedLabels === next.assignedLabels &&
+    prev.assignedLabelIds === next.assignedLabelIds &&
     prev.isDropTarget === next.isDropTarget &&
     prev.onSelect === next.onSelect &&
-    prev.onTogglePin === next.onTogglePin &&
+    prev.onTogglePinned === next.onTogglePinned &&
+    prev.onToggleLabel === next.onToggleLabel &&
     prev.onDeleteConversation === next.onDeleteConversation &&
+    prev.onOpenLabelManager === next.onOpenLabelManager &&
     prev.onDragOver === next.onDragOver &&
     prev.onDragLeave === next.onDragLeave &&
     prev.onDrop === next.onDrop,
@@ -583,22 +835,27 @@ export const RoomItemContainer = React.memo(
         [conversationId],
       ),
     );
-    const isPinned = useUIStore(
-      useMemo(
-        () => (state) => state.pinnedConversationIds.includes(conversationId),
-        [conversationId],
-      ),
-    );
-    const togglePinnedConversation = useUIStore(
-      (state) => state.togglePinnedConversation,
-    );
+    const labels = useUIStore((state) => state.conversationLabels);
     const removeConversation = useChatStore((state) => state.removeConversation);
+    const updateConversation = useChatStore((state) => state.updateConversation);
+    const openConversationLabelManager = useUIStore(
+      (state) => state.openConversationLabelManager,
+    );
+    const setConversationLabelAssignment = useUIStore(
+      (state) => state.setConversationLabelAssignment,
+    );
+    const isPinned = Boolean(conversation?.pinnedAt);
+    const assignedLabelIds = conversation?.labelIds ?? EMPTY_LABEL_IDS;
+    const assignedLabels = useMemo(
+      () => labels.filter((label) => assignedLabelIds.includes(label.id)),
+      [assignedLabelIds, labels],
+    );
     // Unsent draft preview ("Chưa gửi") — hidden on the active room since its
     // composer is already visible. Draft lives in chatUiStore (sessionStorage).
     const draftText = useChatUiStore(
       useMemo(
         () => (s) =>
-          isActive ? "" : (s.composerDraftByConversation[conversationId] ?? ""),
+          isActive ? "" : s.composerDraftByConversation[conversationId] ?? "",
         [conversationId, isActive],
       ),
     );
@@ -609,8 +866,77 @@ export const RoomItemContainer = React.memo(
     const [forwardMessages] = useForwardMessagesMutation();
     const [deleteMessage] = useDeleteMessageMutation();
 
+    const handleTogglePinned = React.useCallback(
+      async (targetConversationId: string) => {
+        const currentConversation =
+          useChatStore.getState().conversationById[targetConversationId];
+        if (!currentConversation) return;
+        const wasPinned = Boolean(currentConversation.pinnedAt);
+        const optimisticPinnedAt = wasPinned ? null : new Date().toISOString();
+        updateConversation(targetConversationId, {
+          pinnedAt: optimisticPinnedAt,
+          pinOrder: wasPinned ? null : 0,
+          isPinned: !wasPinned,
+        });
+
+        try {
+          const result = await conversationApi.setConversationPinned(
+            targetConversationId,
+            !wasPinned,
+          );
+          updateConversation(targetConversationId, {
+            pinnedAt: result.pinnedAt,
+            pinOrder: result.pinOrder,
+            isPinned: Boolean(result.pinnedAt),
+          });
+        } catch (error) {
+          updateConversation(targetConversationId, {
+            pinnedAt: currentConversation.pinnedAt ?? null,
+            pinOrder: currentConversation.pinOrder ?? null,
+            isPinned: Boolean(currentConversation.pinnedAt),
+          });
+          toast.error(extractApiError(error).message);
+        }
+      },
+      [updateConversation],
+    );
+
+    const handleToggleLabel = React.useCallback(
+      async (targetConversationId: string, labelId: string) => {
+        const currentConversation =
+          useChatStore.getState().conversationById[targetConversationId];
+        if (!currentConversation) return;
+        const currentLabelIds = currentConversation.labelIds ?? [];
+        const nextLabelIds = currentLabelIds.includes(labelId)
+          ? currentLabelIds.filter((id) => id !== labelId)
+          : [...currentLabelIds, labelId];
+
+        updateConversation(targetConversationId, { labelIds: nextLabelIds });
+        setConversationLabelAssignment(targetConversationId, nextLabelIds);
+
+        try {
+          const result = await conversationApi.setConversationLabels(
+            targetConversationId,
+            nextLabelIds,
+          );
+          updateConversation(targetConversationId, { labelIds: result.labelIds });
+          setConversationLabelAssignment(targetConversationId, result.labelIds);
+        } catch (error) {
+          updateConversation(targetConversationId, {
+            labelIds: currentConversation.labelIds ?? [],
+          });
+          setConversationLabelAssignment(
+            targetConversationId,
+            currentConversation.labelIds ?? [],
+          );
+          toast.error(extractApiError(error).message);
+        }
+      },
+      [setConversationLabelAssignment, updateConversation],
+    );
+
     const handleDragOver = React.useCallback(
-      (event: React.DragEvent<HTMLButtonElement>) => {
+      (event: React.DragEvent<HTMLDivElement>) => {
         if (!isMessageDrag(event.dataTransfer)) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = "copy";
@@ -620,7 +946,7 @@ export const RoomItemContainer = React.memo(
     );
 
     const handleDragLeave = React.useCallback(
-      (event: React.DragEvent<HTMLButtonElement>) => {
+      (event: React.DragEvent<HTMLDivElement>) => {
         // Ignore leaves into child elements — only clear when truly leaving.
         if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
           return;
@@ -631,10 +957,7 @@ export const RoomItemContainer = React.memo(
     );
 
     const directPartnerId = useMemo(
-      () =>
-        conversation
-          ? (getOtherParticipant(conversation, currentUser.id)?.id ?? null)
-          : null,
+      () => (conversation ? getOtherParticipant(conversation, currentUser.id)?.id ?? null : null),
       [conversation, currentUser.id],
     );
     const livePresence = usePresenceStore(
@@ -650,8 +973,7 @@ export const RoomItemContainer = React.memo(
     // TTL-cached so repeated mounts are cheap.
     const enrichedName = useEnrichedProfileStore(
       useMemo(
-        () => (s) =>
-          directPartnerId ? s.nameByUserId[directPartnerId] : undefined,
+        () => (s) => (directPartnerId ? s.nameByUserId[directPartnerId] : undefined),
         [directPartnerId],
       ),
     );
@@ -660,10 +982,7 @@ export const RoomItemContainer = React.memo(
     // and races enrichUserProfile. This makes the sidebar alias reliable.
     const alias = useFriendshipStore(
       useMemo(
-        () => (s) =>
-          directPartnerId
-            ? (s.friendByUserId[directPartnerId]?.alias ?? undefined)
-            : undefined,
+        () => (s) => (directPartnerId ? s.friendByUserId[directPartnerId]?.alias ?? undefined : undefined),
         [directPartnerId],
       ),
     );
@@ -672,10 +991,7 @@ export const RoomItemContainer = React.memo(
     const lastSenderId = conversation?.lastMessage?.senderId;
     const lastSenderAlias = useFriendshipStore(
       useMemo(
-        () => (s) =>
-          lastSenderId
-            ? (s.friendByUserId[lastSenderId]?.alias ?? undefined)
-            : undefined,
+        () => (s) => (lastSenderId ? s.friendByUserId[lastSenderId]?.alias ?? undefined : undefined),
         [lastSenderId],
       ),
     );
@@ -684,7 +1000,7 @@ export const RoomItemContainer = React.memo(
     }, [directPartnerId]);
 
     const handleDrop = React.useCallback(
-      (event: React.DragEvent<HTMLButtonElement>) => {
+      (event: React.DragEvent<HTMLDivElement>) => {
         const payload = decodeMessageDrag(event.dataTransfer);
         if (!payload) return;
         event.preventDefault();
@@ -749,7 +1065,10 @@ export const RoomItemContainer = React.memo(
         return null;
       }
 
-      const displayName =
+      const isPersonalCloud = isPersonalCloudConversation(conversation);
+      const displayName = isPersonalCloud
+        ? personalCloudPresentation.title
+        :
         alias ||
         enrichedName ||
         getConversationDisplayName(conversation, currentUser.id) ||
@@ -762,39 +1081,29 @@ export const RoomItemContainer = React.memo(
         conversation.lastMessageSortAt ||
         conversation.lastMessageAt ||
         conversation.lastMessage?.createdAt;
-      const unreadCount = Math.max(0, conversation.unreadCount || 0);
+      const unreadCount = isPersonalCloud ? 0 : Math.max(0, conversation.unreadCount || 0);
       const isDirect = isDirectConversation(conversation);
 
       return {
         conversation,
         displayName,
-        previewText: buildPreviewText(
-          conversation,
-          currentUser,
-          lastSenderAlias,
-        ),
+        previewText: buildPreviewText(conversation, currentUser, lastSenderAlias),
         previewState,
         timeLabel: referenceTime
           ? formatRelativeTime(new Date(referenceTime))
           : "",
         unreadCount,
         unreadLabel: unreadCount > 99 ? "99+" : String(unreadCount),
-        hasUnreadMention: hasConversationMention(conversation, currentUser),
+        hasUnreadMention: !isPersonalCloud && hasConversationMention(conversation, currentUser),
         avatarSrc: getConversationAvatar(conversation, currentUser.id),
         // Live presence (WS) only — never the backend `otherUser.status` field.
         avatarStatus: isDirect
           ? resolveLivePresenceStatus(livePresence)
           : undefined,
+        isPersonalCloud,
         isDirect,
       };
-    }, [
-      conversation,
-      currentUser,
-      livePresence,
-      enrichedName,
-      alias,
-      lastSenderAlias,
-    ]);
+    }, [conversation, currentUser, livePresence, enrichedName, alias, lastSenderAlias]);
 
     if (!viewModel) {
       return null;
@@ -815,24 +1124,22 @@ export const RoomItemContainer = React.memo(
         avatarSrc={viewModel.avatarSrc}
         avatarStatus={viewModel.avatarStatus}
         isDirect={viewModel.isDirect}
+        isPersonalCloud={viewModel.isPersonalCloud}
         isActive={isActive}
         isKeyboardActive={isKeyboardActive}
         isPinned={isPinned}
+        labels={labels}
+        assignedLabels={assignedLabels}
+        assignedLabelIds={assignedLabelIds}
         isDropTarget={isDropTarget}
         onSelect={onSelect}
+        onTogglePinned={handleTogglePinned}
+        onToggleLabel={handleToggleLabel}
+        onDeleteConversation={removeConversation}
+        onOpenLabelManager={openConversationLabelManager}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onTogglePin={() => {
-          togglePinnedConversation(conversationId);
-          toast.success(
-            isPinned ? "Đã bỏ ghim hội thoại" : "Đã ghim hội thoại",
-          );
-        }}
-        onDeleteConversation={async () => {
-          await conversationApi.deleteConversation(conversationId);
-          removeConversation(conversationId);
-        }}
       />
     );
   },

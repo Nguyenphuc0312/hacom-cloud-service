@@ -9,6 +9,85 @@
 import { normalizeConversation } from "../lib/conversationAdapter";
 import { MessageStatus } from "../types";
 import type { Conversation, Message } from "../types";
+import { matchesMessageIdentityValue } from "./messageAliasIndex";
+
+type EditedMessagePreview = Pick<
+  Message,
+  | "id"
+  | "localId"
+  | "clientMessageId"
+  | "stableId"
+  | "content"
+  | "editedAt"
+  | "updatedAt"
+>;
+
+/**
+ * Chỉ đổi nội dung preview khi tin vừa sửa đúng là tin cuối của hội thoại.
+ * Patch cố ý không chứa timestamp/unread để thao tác sửa không đẩy phòng lên
+ * đầu danh sách hoặc làm thay đổi badge.
+ */
+export const buildEditedLastMessagePreviewPatch = (
+  conversation: Conversation,
+  message: EditedMessagePreview,
+): Pick<Conversation, "lastMessage"> | null => {
+  const currentLastMessage = conversation.lastMessage;
+  const lastMessageIdentity =
+    currentLastMessage?.id ?? conversation.lastMessageId ?? "";
+
+  if (
+    !currentLastMessage ||
+    !matchesMessageIdentityValue(message, lastMessageIdentity)
+  ) {
+    return null;
+  }
+
+  return {
+    lastMessage: {
+      ...currentLastMessage,
+      content: message.content,
+      isEdited: true,
+      ...(message.editedAt ?? message.updatedAt ?? currentLastMessage.editedAt
+        ? {
+            editedAt:
+              message.editedAt ??
+              message.updatedAt ??
+              currentLastMessage.editedAt,
+          }
+        : {}),
+    },
+  };
+};
+
+/**
+ * Sau reload, API hội thoại có thể còn preview cũ trong khi timeline đã trả
+ * message authoritative với `isEdited=true`. Dùng chính tin cùng identity để
+ * khôi phục preview; không lấy bừa phần tử cuối vì pagination/system message có
+ * thể khiến thứ tự cache khác summary.
+ */
+export const buildHydratedEditedLastMessagePreviewPatch = (
+  conversation: Conversation,
+  messages: readonly Message[],
+): Pick<Conversation, "lastMessage"> | null => {
+  const lastMessageIdentity =
+    conversation.lastMessage?.id ?? conversation.lastMessageId ?? "";
+  if (!lastMessageIdentity) return null;
+
+  let authoritativeMessage: Message | undefined;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (matchesMessageIdentityValue(message, lastMessageIdentity)) {
+      authoritativeMessage = message;
+      break;
+    }
+  }
+
+  if (!authoritativeMessage?.isEdited) return null;
+  return buildEditedLastMessagePreviewPatch(
+    conversation,
+    authoritativeMessage,
+  );
+};
 
 /** Rút gọn tin nhắn còn đúng phần sidebar cần để hiển thị preview. */
 export const toMessageSummary = (
@@ -22,6 +101,8 @@ export const toMessageSummary = (
     type: message.type,
     isDeleted: message.isDeleted,
     createdAt: message.createdAt,
+    ...(message.isEdited ? { isEdited: true } : {}),
+    ...(message.editedAt ? { editedAt: message.editedAt } : {}),
     // Giữ lại mention: thiếu nó thì preview sidebar không biết đoạn `@Tên` trỏ
     // tới ai, nên không đổi được sang "tên gợi nhớ" của người xem.
     ...(message.mentions?.length ? { mentions: message.mentions } : {}),

@@ -30,7 +30,10 @@ import { FileType, MessageType } from "../../../types";
 import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
 import { isUuid } from "../../../utils/isUuid";
 import { logger } from "../../../utils/logger";
-import { shouldTreatMessageContentAsRichText } from "../../../utils/messageContent.utils";
+import {
+  shouldTreatMessageContentAsRichText,
+  stripHtmlToText,
+} from "../../../utils/messageContent.utils";
 import { looksLikeRawFileName } from "../../../utils/messageHelpers";
 import { areMessagesRenderEquivalent } from "../../../utils/messageRenderSignature";
 import { useAuthStore } from "../../../stores";
@@ -370,7 +373,9 @@ const renderTextContent = (
   isCollapsibleText?: boolean,
   onToggleTextExpand?: () => void,
 ) => {
+  const hasMentions = Boolean(message.mentions?.length);
   if (
+    !hasMentions &&
     shouldTreatMessageContentAsRichText({
       contentFormat: message.contentFormat,
       content: message.content,
@@ -384,9 +389,12 @@ const renderTextContent = (
       />
     );
   }
+  const content = hasMentions
+    ? message.plainText?.trim() || stripHtmlToText(message.content)
+    : message.content;
   return (
     <TextMessage
-      content={message.content}
+      content={content}
       contentFormat={message.contentFormat}
       isOwn={isOwn}
       currentUsername={currentUsername}

@@ -133,7 +133,12 @@ export const FileFallback: React.FC<{
       )}
     >
       {iconType ? (
-        <FileTypeIcon type={iconType} className={iconSizeClasses[variant]} />
+        <FileTypeIcon
+          type={iconType}
+          fileName={name}
+          variant="outline"
+          className={iconSizeClasses[variant]}
+        />
       ) : (
         <DocumentIcon className={iconSizeClasses[variant]} aria-hidden="true" />
       )}

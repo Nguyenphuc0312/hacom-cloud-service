@@ -890,6 +890,16 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
     const limit = options?.limit ?? FRIENDS_PAGE_SIZE;
     const append = options?.append === true;
     const state = get();
+    // This is transient ordering metadata, not a second alias source of truth.
+    // A GET that began before a confirmed local/realtime change must not roll
+    // that newer value back when its older response eventually arrives. A GET
+    // started afterwards still accepts the API response as authoritative.
+    const aliasesAtFetchStart = new Map(
+      Object.entries(state.friendByUserId).map(([userId, friend]) => [
+        userId,
+        friend.alias ?? null,
+      ]),
+    );
 
     if (append && (state.isFriendsLoadingMore || state.isFriendsLoading)) {
       return;
@@ -908,14 +918,27 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
         .map((relation) => toFriendRecord(relation))
         .filter((item): item is FriendRecord => item !== null);
 
-      // Mirror aliases into enrichedProfileStore so ChatHeader/RoomItem reflect them
-      // immediately — set when present, clear when removed server-side.
-      list.forEach((f) => syncAliasToEnrichedProfile(f.id, f.alias));
-
+      let reconciledList: FriendRecord[] = [];
       set((state) => {
+        // Keep an alias that changed after this request started. This covers
+        // successful local saves and realtime updates that arrive before an
+        // older directory snapshot; `Map.has` keeps alias removal (`null`)
+        // distinct from a friend not present at request start.
+        reconciledList = list.map((friend) => {
+          const currentFriend = state.friendByUserId[friend.id];
+          const aliasAtFetchStart = aliasesAtFetchStart.get(friend.id);
+          const aliasChangedSinceFetchStarted =
+            currentFriend !== undefined &&
+            (!aliasesAtFetchStart.has(friend.id) ||
+              (currentFriend.alias ?? null) !== aliasAtFetchStart);
+
+          return aliasChangedSinceFetchStarted
+            ? { ...friend, alias: currentFriend.alias ?? null }
+            : friend;
+        });
         const mergedFriends = append
-          ? mergeFriendsByUserId(state.friends, list)
-          : list;
+          ? mergeFriendsByUserId(state.friends, reconciledList)
+          : reconciledList;
         const next = normalizeSnapshot({
           ...currentSnapshot(state),
           friends: mergedFriends,
@@ -937,6 +960,11 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
           friendsLoadMoreError: null,
         };
       });
+
+      // Mirror only the reconciled data. Mirroring the raw GET list first
+      // would briefly clear/overwrite a newer alias before the store is fixed.
+      reconciledList.forEach((friend) =>
+        syncAliasToEnrichedProfile(friend.id, friend.alias));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Load friends failed";
       if (append) {

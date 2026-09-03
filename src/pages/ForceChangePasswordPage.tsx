@@ -16,7 +16,7 @@ import { translateI18nMessage } from "../utils/userMessages";
 
 export const ForceChangePasswordPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { logoutSoft } = useAuthStore();
+  const { logoutSoft, passwordChangeContinuation, refreshUser } = useAuthStore();
   const { t } = useTranslation();
 
   const {
@@ -38,14 +38,17 @@ export const ForceChangePasswordPage: React.FC = () => {
   const onSubmit = async (data: ChangePasswordFormData) => {
     setIsSubmitting(true);
     try {
-      await authApi.changePassword({
+      if (!passwordChangeContinuation) throw new Error("Phiên đổi mật khẩu đã hết hạn");
+      await authApi.changeRequiredPassword({
+        passwordChangeContinuation,
         currentPassword: data.currentPassword,
         newPassword: data.newPassword,
         confirmPassword: data.confirmPassword,
       });
 
-      toast.success("Đổi mật khẩu thành công. Vui lòng đăng nhập lại.");
-      await logoutSoft();
+      await refreshUser();
+      useAuthStore.setState({ passwordChangeContinuation: null });
+      toast.success("Đổi mật khẩu thành công.");
     } catch (error: unknown) {
       const apiError = extractApiError(error);
       toast.error(
@@ -115,7 +118,7 @@ export const ForceChangePasswordPage: React.FC = () => {
             autoComplete="new-password"
           />
 
-          <div className="flex gap-3 pt-2">
+          <div className="grid gap-3 pt-2 sm:grid-cols-2">
             <Button
               type="button"
               variant="brand-outline"

@@ -15,14 +15,35 @@ interface AiWeeklyReportFilePreviewModalProps {
   onClose: () => void;
 }
 
+// mimeType đến từ Content-Type của AI service, và blob: URL kế thừa MIME đó.
+// "text/*" cũ cho qua CẢ text/html → file HTML độc hại chạy JS trong origin của
+// app (đọc được token, tin nhắn). Whitelist đúng loại xem được, không dùng prefix.
+const INLINE_PREVIEW_MIME_TYPES = new Set([
+  "application/pdf",
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+]);
+
+const INLINE_PREVIEW_EXTENSIONS = [
+  "pdf",
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "txt",
+  "md",
+  "csv",
+];
+
 function canInlinePreview(mimeType: string, filename: string): boolean {
-  if (mimeType.startsWith("image/")) return true;
-  if (mimeType === "application/pdf") return true;
-  if (mimeType.startsWith("text/")) return true;
+  // Bỏ tham số charset: "text/plain; charset=utf-8" phải khớp "text/plain".
+  const baseMime = mimeType.split(";")[0].trim().toLowerCase();
+  if (baseMime.startsWith("image/")) return true;
+  if (INLINE_PREVIEW_MIME_TYPES.has(baseMime)) return true;
   const ext = filename.split(".").pop()?.toLowerCase() ?? "";
-  return ["pdf", "png", "jpg", "jpeg", "gif", "webp", "txt", "md", "csv"].includes(
-    ext,
-  );
+  return INLINE_PREVIEW_EXTENSIONS.includes(ext);
 }
 
 function isPdfPreview(mimeType: string, filename: string): boolean {
@@ -69,6 +90,10 @@ export const AiWeeklyReportFilePreviewModal: React.FC<
             src={preview.blobUrl}
             title={preview.filename}
             className="h-[min(70vh,720px)] w-full rounded-lg border border-border bg-surface"
+            /* Không allow-same-origin: blob: kế thừa origin của app, thiếu
+               sandbox thì file độc hại đọc được localStorage/cookie. PDF viewer
+               của trình duyệt vẫn chạy bình thường trong origin "null". */
+            sandbox=""
           />
         ) : preview.mimeType.startsWith("image/") ? (
           <img
@@ -81,6 +106,10 @@ export const AiWeeklyReportFilePreviewModal: React.FC<
             src={preview.blobUrl}
             title={preview.filename}
             className="h-[min(70vh,720px)] w-full rounded-lg border border-border bg-surface"
+            /* Không allow-same-origin: blob: kế thừa origin của app, thiếu
+               sandbox thì file độc hại đọc được localStorage/cookie. PDF viewer
+               của trình duyệt vẫn chạy bình thường trong origin "null". */
+            sandbox=""
           />
         )
       ) : (

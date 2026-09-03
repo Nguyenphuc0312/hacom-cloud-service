@@ -8,6 +8,7 @@ export type MessageActionId =
   | "reply"
   | "forward"
   | "copy"
+  | "downloadAttachment"
   | "retry"
   | "pin"
   | "unpin"
@@ -32,6 +33,8 @@ export interface MessageActionPolicyInput {
   canEdit?: boolean;
   /** Owner/admin được "Xóa ở mọi người" trên tin của người khác (BE: moderator delete). */
   canRecallOthers?: boolean;
+  /** Cloud cá nhân chỉ có đúng 1 nút "Xóa" trong menu tin nhắn. */
+  isPersonalCloud?: boolean;
 }
 
 interface ActionCandidate {
@@ -49,6 +52,9 @@ export interface MessageActionPolicyResult {
 
 const canCopyMessage = (message: Message): boolean =>
   getCopyableMessageText(message) !== null;
+
+const canDownloadAttachment = (message: Message): boolean =>
+  Array.isArray(message.attachments) && message.attachments.length > 0;
 
 const canReactToMessage = (message: Message): boolean =>
   message.type !== MessageType.SYSTEM &&
@@ -96,6 +102,17 @@ const canEditMessage = (message: Message): boolean =>
   !isFailedMessage(message) &&
   Boolean(message.content?.trim());
 
+// Tin upload chiếm dung lượng Cloud (khớp mediaTypeFor của BE).
+const CLOUD_MEDIA_TYPES = new Set<MessageType>([
+  MessageType.IMAGE,
+  MessageType.VIDEO,
+  MessageType.AUDIO,
+  MessageType.FILE,
+]);
+
+export const isCloudMediaMessage = (message: Pick<Message, "type">): boolean =>
+  CLOUD_MEDIA_TYPES.has(message.type);
+
 // Zalo rule: thu hồi chỉ trong 24h sau khi gửi; quá hạn chỉ còn "Xóa chỉ ở phía tôi".
 const RECALL_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -115,6 +132,7 @@ const getActionCandidates = ({
   canDelete = false,
   canEdit = false,
   canRecallOthers = false,
+  isPersonalCloud = false,
 }: MessageActionPolicyInput): ActionCandidate[] => {
   const failed = isFailedMessage(message);
   const candidates: ActionCandidate[] = [];
@@ -152,6 +170,15 @@ const getActionCandidates = ({
       railOrder: 3,
       menuOrder: 0,
       railEligible: true,
+      menuEligible: true,
+    });
+  }
+
+  if (canDownloadAttachment(message)) {
+    candidates.push({
+      id: "downloadAttachment",
+      menuOrder: 0.5,
+      railEligible: false,
       menuEligible: true,
     });
   }
@@ -197,6 +224,15 @@ const getActionCandidates = ({
   }
 
   if (canDelete && canDeleteMessage(message)) {
+    if (isPersonalCloud) {
+      candidates.push({
+        id: "deleteForMe",
+        menuOrder: 3,
+        railEligible: false,
+        menuEligible: true,
+      });
+      return candidates;
+    }
     if (isOwn && isWithinRecallWindow(message)) {
       candidates.push({
         id: "recall",

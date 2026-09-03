@@ -1,14 +1,31 @@
 import { AUTH_CONFIG } from "../config";
+import { logger } from "../utils/logger";
 
 const isBrowser = (): boolean =>
   typeof window !== "undefined" &&
   typeof localStorage !== "undefined" &&
   typeof sessionStorage !== "undefined";
 
-const REFRESH_TOKEN_STORAGE_MODE =
-  import.meta.env.VITE_REFRESH_TOKEN_STORAGE_MODE === "cookie"
-    ? "cookie"
-    : "session";
+// Production LUÔN dùng HttpOnly cookie, bất kể env truyền vào. Refresh token
+// nằm trong localStorage biến một XSS đơn lẻ thành chiếm tài khoản lâu dài:
+// kẻ tấn công đổi lấy access token mới mãi mãi từ máy của chính họ.
+// Chế độ "session" chỉ còn dùng được ở dev, cho backend local chưa bật
+// AUTH_REFRESH_COOKIE_ENABLED.
+const REFRESH_TOKEN_STORAGE_MODE: "cookie" | "session" = import.meta.env.PROD
+  ? "cookie"
+  : import.meta.env.VITE_REFRESH_TOKEN_STORAGE_MODE === "session"
+    ? "session"
+    : "cookie";
+
+if (
+  import.meta.env.PROD &&
+  import.meta.env.VITE_REFRESH_TOKEN_STORAGE_MODE === "session"
+) {
+  // Build prod với cấu hình sai phải thấy ngay, không im lặng nuốt.
+  logger.error("security", "refresh_token_session_mode_ignored_in_production", {
+    requestedMode: import.meta.env.VITE_REFRESH_TOKEN_STORAGE_MODE,
+  });
+}
 
 let inMemoryAccessToken: string | null = null;
 
@@ -182,7 +199,29 @@ export const clearTokens = (): void => {
   setAuthSessionActive(false);
   localStorage.removeItem(AUTH_CONFIG.USER_KEY);
   localStorage.removeItem(AUTH_CONFIG.REMEMBER_ME_KEY);
+  localStorage.removeItem(AUTH_CONFIG.AUTH_SESSION_IDENTITY_KEY);
   sessionStorage.removeItem(AUTH_CONFIG.USER_KEY);
+  sessionStorage.removeItem(AUTH_CONFIG.AUTH_SESSION_IDENTITY_KEY);
+};
+
+/**
+ * Drop only this document's credentials after a cross-account mismatch.
+ * Shared cookie markers/localStorage may belong to a newer login in another
+ * tab and must remain untouched.
+ */
+export const clearCurrentTabTokens = (): void => {
+  inMemoryAccessToken = null;
+  if (!isBrowser()) return;
+
+  sessionStorage.removeItem(AUTH_CONFIG.ACCESS_TOKEN_KEY);
+  sessionStorage.removeItem(AUTH_CONFIG.REFRESH_TOKEN_KEY);
+  sessionStorage.removeItem(AUTH_CONFIG.USER_KEY);
+  // Keep this tab fail-closed across another F5. A later explicit login
+  // replaces the sentinel with its validated principal binding.
+  sessionStorage.setItem(
+    AUTH_CONFIG.AUTH_SESSION_IDENTITY_KEY,
+    AUTH_CONFIG.AUTH_SESSION_MISMATCH_SENTINEL,
+  );
 };
 
 export const parseMustChangePasswordFromToken = (token: string): boolean => {

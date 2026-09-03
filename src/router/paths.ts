@@ -19,8 +19,12 @@ export const ROUTE_PATHS = {
   SETTINGS: "/settings",
   MAINTENANCE: "/maintenance",
   TASKS: "/tasks",
+  TIMESHEET: "/timesheet",
+  TEAM_TIMESHEET: "/timesheet/team",
+  LEAVE: "/leave",
   CALENDAR: "/calendar",
   AI_ASSISTANT: "/ai-assistant",
+  WORK_REPORT_DRAFTS: "/work-report-drafts",
   // My Documents is a first-class chat conversation, not a separate module.
   CLOUD: "/chat/my-documents",
   CLOUD_MANAGE: "/cloud/manage",

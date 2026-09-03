@@ -5,6 +5,7 @@
     "expandSidebar": "Mở rộng thanh bên",
     "collapseSidebar": "Thu gọn thanh bên",
     "conversations": "Tin nhắn",
+    "addFriendLabel": "Thêm bạn bè",
     "composeLabel": "Tạo chat mới",
     "notificationsLabel": "Thông báo"
   },
@@ -47,7 +48,8 @@
       "to": "Đến ngày",
       "cancel": "Hủy",
       "confirm": "Xác nhận",
-      "clear": "Xóa lọc"
+      "clear": "Xóa lọc",
+      "noSenders": "Không tìm thấy người gửi"
     },
     "fileType": {
       "all": "Tất cả",
@@ -127,7 +129,11 @@
   "rail": {
     "messages": "Tin nhắn",
     "contacts": "Danh bạ",
+    "cloud": "Cloud",
     "tasks": "Công việc",
+    "timesheet": "Công",
+    "leave": "Nghỉ phép",
+    "work": "Công & Phép",
     "calendar": "Lịch",
     "aiAssistant": "AI cá nhân",
     "cloud": "Hacom Cloud",

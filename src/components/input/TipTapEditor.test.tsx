@@ -66,6 +66,72 @@ describe("TipTapEditor", () => {
     expect(caret).toBe(text.length);
   });
 
+  // Bug 10-08-26: tag gõ tiếng Việt để lại mảnh chữ quanh chip
+  // ("@Trần Đăng Công Đăng Công"). `handleMentionSelect` lấy độ dài query từ
+  // `mentionMatch` trong state — chụp ở nhịp onSelectionChange TRƯỚC — rồi trừ
+  // vào caret hiện tại. IME (Unikey bỏ dấu "Côn"→"Công") commit thêm ký tự sau
+  // nhịp đó, nên deleteRange cắt trượt đúng phần chênh. Phép tính đúng là đo
+  // lại '@' ngay lúc chèn; đây là bản sao của nó, ba ca cùng phải sạch.
+  describe("vị trí xoá khi chèn chip", () => {
+    const insertAtRealAt = (
+      ref: React.RefObject<TipTapEditorHandle | null>,
+      attrs: { id: string; label: string; sendLabel: string },
+    ) => {
+      const editor = ref.current!.getEditor()!;
+      const to = editor.state.selection.anchor;
+      const $pos = editor.state.doc.resolve(to);
+      const atOffset = $pos.parent
+        .textBetween(0, $pos.parentOffset, undefined, " ")
+        .lastIndexOf("@");
+      if (atOffset < 0) return;
+      ref.current!.insertMentionChip({ from: $pos.start() + atOffset, to }, attrs);
+    };
+
+    const setup = async () => {
+      const ref = React.createRef<TipTapEditorHandle>();
+      render(<TipTapEditor ref={ref} />);
+      await vi.waitFor(() => expect(ref.current?.getEditor()).toBeTruthy());
+      return ref;
+    };
+
+    const cong = { id: "u2", label: "Trần Đăng Công", sendLabel: "Trần Đăng Công" };
+
+    it("IME commit thêm ký tự sau khi panel mở", async () => {
+      const ref = await setup();
+      ref.current!.insertAtCursor("Em báo cáo thầy @Trần Đăng Cô");
+      ref.current!.insertAtCursor("ng"); // Unikey ghép dấu ở nhịp sau
+      insertAtRealAt(ref, cong);
+
+      expect(ref.current!.getEditor()!.getText()).toBe(
+        "Em báo cáo thầy @Trần Đăng Công ",
+      );
+    });
+
+    it("gõ liền rồi chọn ngay", async () => {
+      const ref = await setup();
+      ref.current!.insertAtCursor("Em báo cáo thầy @Trần Đăng Công");
+      insertAtRealAt(ref, cong);
+
+      expect(ref.current!.getEditor()!.getText()).toBe(
+        "Em báo cáo thầy @Trần Đăng Công ",
+      );
+    });
+
+    it("tag thứ hai khi đã có một chip", async () => {
+      const ref = await setup();
+      ref.current!.insertMentionChip(
+        { from: 0, to: 0 },
+        { id: "u1", label: "Huy Hoàng", sendLabel: "Nguyễn Thế Huy Hoàng" },
+      );
+      ref.current!.insertAtCursor("và @Trần Đăng Công");
+      insertAtRealAt(ref, cong);
+
+      expect(ref.current!.getEditor()!.getText()).toBe(
+        "@Nguyễn Thế Huy Hoàng và @Trần Đăng Công ",
+      );
+    });
+  });
+
   // The real report: a multi-line announcement whose first line already holds a
   // mention chip. Typing "@" mid-message did nothing until you pressed space a
   // couple of times, because the reported caret drifted one char per line break
@@ -111,7 +177,10 @@ describe("TipTapEditor", () => {
       ref.current!.getEditor()!.commands.focus("end");
 
       onSelectionChange.mockClear();
-      ref.current!.insertAtCursor("@");
+      // Gõ cả dấu cách rồi mới tới "@": trình phân tích HTML nuốt mất khoảng
+      // trắng cuối của fixture, nên phải chèn lại bằng chính editor. Đúng luật
+      // Zalo, "@" dính vào từ trước ("PDF@") KHÔNG phải lệnh tag.
+      ref.current!.insertAtCursor(" @");
       await vi.waitFor(() => expect(onSelectionChange).toHaveBeenCalled());
 
       const { text, caret, match } = lastMatch(onSelectionChange);
@@ -130,7 +199,10 @@ describe("TipTapEditor", () => {
       ref.current!.getEditor()!.commands.focus("end");
 
       onSelectionChange.mockClear();
-      ref.current!.insertAtCursor("@");
+      // Gõ cả dấu cách rồi mới tới "@": trình phân tích HTML nuốt mất khoảng
+      // trắng cuối của fixture, nên phải chèn lại bằng chính editor. Đúng luật
+      // Zalo, "@" dính vào từ trước ("PDF@") KHÔNG phải lệnh tag.
+      ref.current!.insertAtCursor(" @");
       await vi.waitFor(() => expect(onSelectionChange).toHaveBeenCalled());
 
       const { text, caret } = lastMatch(onSelectionChange);
@@ -153,11 +225,58 @@ describe("TipTapEditor", () => {
       ref.current!.getEditor()!.commands.focus("end");
 
       onSelectionChange.mockClear();
-      ref.current!.insertAtCursor("@Quố");
+      ref.current!.insertAtCursor(" @Quố");
       await vi.waitFor(() => expect(onSelectionChange).toHaveBeenCalled());
 
       const { match } = lastMatch(onSelectionChange);
       expect(match?.query).toBe("Quố");
+    });
+
+    /**
+     * Bug 13-08-26: Shift+Enter chèn <br> NẰM TRONG cùng một <p>, nên nó không
+     * phải ranh giới block và `blockSeparator` không áp dụng. `getText()` vẫn
+     * đổi nó thành "\n" còn `textBetween` đếm 0 → caret thiếu 1 ký tự cho MỖI
+     * lần Shift+Enter, và panel tag không bao giờ bung từ dòng thứ hai trở đi.
+     * Đo được trên web thật: text dài 21, caret báo 20, ký tự tại caret-1 là
+     * "i" thay vì "@".
+     */
+    it("caret đúng sau Shift+Enter (hard break trong cùng một đoạn)", async () => {
+      const { onSelectionChange, ref } = await setup();
+
+      seedParagraphs(ref, "<p>dòng một<br>dòng hai&nbsp;</p>");
+      ref.current!.getEditor()!.commands.focus("end");
+
+      onSelectionChange.mockClear();
+      ref.current!.insertAtCursor("@");
+      await vi.waitFor(() => expect(onSelectionChange).toHaveBeenCalled());
+
+      const { text, caret, match } = lastMatch(onSelectionChange);
+      // Caret phải trỏ đúng cuối chuỗi, không thiếu ký tự vì <br>.
+      expect(caret).toBe(text.length);
+      expect(text[caret - 1]).toBe("@");
+      expect(match).not.toBeNull();
+      expect(match!.query).toBe("");
+    });
+
+    it("mention range đúng khi có hard break đứng trước chip", async () => {
+      const { ref } = await setup();
+
+      seedParagraphs(ref, "<p>dòng một<br>dòng hai </p>");
+      const editor = ref.current!.getEditor()!;
+      editor.commands.focus("end");
+      ref.current!.insertMentionChip(
+        { from: editor.state.selection.anchor, to: editor.state.selection.anchor },
+        { id: "u9", label: "Quốc", sendLabel: "Vũ Minh Quốc" },
+      );
+
+      const text = ref.current!.getText();
+      const [range] = ref.current!.getMentionRanges();
+      expect(range).toBeTruthy();
+      // Offset phải cắt ra đúng chữ của chip trong chuỗi getText().
+      const cut = Array.from(text)
+        .slice(range.offset, range.offset + range.length)
+        .join("");
+      expect(cut).toBe("@Vũ Minh Quốc");
     });
   });
 });

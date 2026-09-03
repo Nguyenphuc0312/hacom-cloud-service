@@ -34,6 +34,7 @@ import {
   isChatPerformanceEnabled,
   recordChatPerformanceMeasure,
 } from "../../utils/chatPerformance";
+import { logger } from "../../utils/logger";
 import {
   createLongMessageTextFile,
   getInlineMessageValidationState,
@@ -61,7 +62,11 @@ import { ComposerLinkPreview } from "./MessageInput/ComposerLinkPreview";
 import { ComposerActionBar } from "./MessageInput/ComposerActionBar";
 import { ComposerLengthFooter } from "./MessageInput/ComposerLengthFooter";
 import { COMPOSER_VISUAL_STATE_MAP } from "./MessageInput/constants";
-import { buildMentionMatch, normalizeMentionCandidates } from "./MessageInput/utils";
+import {
+  buildMentionMatch,
+  filterMentionCandidates,
+  normalizeMentionCandidates,
+} from "./MessageInput/utils";
 import type {
   MentionCandidate,
   MessageInputHandle,
@@ -171,6 +176,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     onShareContact,
     onShareLocation,
     conversationName,
+    placeholder,
     conversationType,
     // Multi-file upload queue
     uploadDrafts,
@@ -194,7 +200,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   const tipTapRef = React.useRef<TipTapEditorHandle>(null);
   const [tipTapEditor, setTipTapEditor] = React.useState<Editor | null>(null);
 
-  const { textareaRef, recomputeHeight } = useAutoResizeTextarea({
+  const { recomputeHeight } = useAutoResizeTextarea({
     value: draftValue,
     minRows: 1,
     maxRows: isFormatModeExpanded ? 15 : 5,
@@ -381,7 +387,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(getAudioSendErrorMessage(err, t));
-      console.error("[AudioSend]", msg);
+      logger.error("audio-send", "send_failed", { message: msg });
       audioMarkFailed({
         code: err instanceof AudioUploadError ? err.code : "MESSAGE_CREATE_FAILURE",
         message: getAudioSendErrorMessage(err, t),
@@ -390,7 +396,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     } finally {
       audioSendLockedRef.current = false;
     }
-  }, [audioBeginFinalizingUpload, audioBeginSending, audioBeginUpload, audioClip, audioMarkFailed, audioMarkSent, audioUpload, conversationId, currentUserId, onSendAudio, sendVoiceMessage, t]);
+  }, [audioAmplitude, audioBeginFinalizingUpload, audioBeginSending, audioBeginUpload, audioClip, audioMarkFailed, audioMarkSent, audioUpload, conversationId, currentUserId, onSendAudio, sendVoiceMessage, t]);
 
   const handleAudioStart = React.useCallback(async () => {
     const permissionReady = await audioRequestPermission();
@@ -467,6 +473,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       focus: (options?: { scrollIntoView?: boolean }) => {
         tipTapRef.current?.focus(options);
       },
+      getMentionRanges: () => tipTapRef.current?.getMentionRanges() ?? [],
     }),
     [onAddFiles],
   );
@@ -485,7 +492,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     mentionMatch?.query ?? "",
   );
 
-  const mentionSuggestions = React.useMemo(() => {
+  const mentionSuggestions = (() => {
     if (!mentionMatch) {
       return [] as MentionCandidate[];
     }
@@ -498,33 +505,21 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       (candidate) => !taggedIds.has(candidate.id),
     );
 
-    const query = deferredMentionQuery.trim().toLowerCase();
-    // Show every remaining member (Zalo-style) — no cap. The panel scrolls on
-    // overflow. ponytail: one Avatar per member; fine for normal groups. If
-    // groups grow to hundreds, virtualize the list instead of capping.
-    if (!query) {
-      return available;
-    }
+    // Lọc bỏ dấu + xếp hạng (khớp đầu tên lên trên) — xem
+    // `filterMentionCandidates`. Show every remaining member (Zalo-style) — no
+    // cap. The panel scrolls on overflow. ponytail: one Avatar per member; fine
+    // for normal groups. If groups grow to hundreds, virtualize the list.
+    return filterMentionCandidates(available, deferredMentionQuery);
+  })();
 
-    return available.filter((candidate) => {
-      const username = candidate.username.toLowerCase();
-      const displayName = candidate.displayName?.toLowerCase() || "";
-      const fullName = candidate.fullName?.toLowerCase() || "";
-      const employeeCode = candidate.employeeCode?.toLowerCase() || "";
-      // Match the viewer's alias too — they search by the name they know.
-      const aliasLabel = candidate.aliasLabel?.toLowerCase() || "";
-      return (
-        username.includes(query) ||
-        displayName.includes(query) ||
-        fullName.includes(query) ||
-        employeeCode.includes(query) ||
-        aliasLabel.includes(query)
-      );
-    });
-    // draftValue: chip inserts/deletes change it, so tagged ids re-read then.
-  }, [deferredMentionQuery, mentionMatch, normalizedMentionCandidates, draftValue]);
-
-  const showMentionPanel = Boolean(mentionMatch) && !disabled;
+  // Không còn ai khớp thì ĐÓNG hẳn panel, đúng như Zalo — không hiện khung
+  // "không có kết quả" treo lơ lửng.
+  //
+  // Đây không chỉ là chuyện thẩm mỹ: panel còn mở là còn nuốt phím Enter (Enter
+  // lúc đó = "chọn người đang bôi đậm"). Gõ "@abcxyz" không ra ai rồi bấm Enter
+  // thì tin nhắn KHÔNG gửi được và không rõ vì sao — panel rỗng vẫn chặn phím.
+  const showMentionPanel =
+    Boolean(mentionMatch) && !disabled && mentionSuggestions.length > 0;
 
   const clearMentionState = React.useCallback(() => {
     setMentionMatch(null);
@@ -905,12 +900,24 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         // Capture TipTap content before clearing — preserves rich text formatting
         const html = tipTapRef.current?.getHTML() ?? "";
         const plainText = tipTapRef.current?.getText().trim() ?? draftValue.trim();
+        const contentJson = tipTapRef.current?.getJSON() as
+          | Record<string, unknown>
+          | undefined;
         const isEmpty = tipTapRef.current?.isEmpty() ?? !plainText;
         const hasFormatting = !isEmpty && hasRichFormatting(html);
         const content = isEmpty ? undefined : (hasFormatting ? html : plainText);
+        const contentFormat = hasFormatting
+          ? ("rich_text" as const)
+          : ("plain_text" as const);
         // ChatWindow gathers ready attachment metadata; only clear once it
         // confirms the send was accepted into the optimistic/server flow.
-        await Promise.resolve(onSend(content));
+        await Promise.resolve(
+          onSend(content, undefined, undefined, {
+            contentFormat,
+            contentJson,
+            plainText,
+          }),
+        );
         tipTapRef.current?.clearContent();
         setDraftValue("");
         onChange("");
@@ -1125,11 +1132,26 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
       const editor = tipTapRef.current?.getEditor();
       if (editor) {
-        // The freshly-typed "@query" is plain text right before the caret, so
-        // its ProseMirror length equals its char count.
-        const matchLength = mentionMatch.end - mentionMatch.start;
+        // Đo lại '@' NGAY LÚC CHÈN, không tin `mentionMatch` trong state.
+        // `mentionMatch` chụp ở nhịp onSelectionChange trước; gõ tiếng Việt thì
+        // IME còn commit thêm ký tự sau nhịp đó (Unikey bỏ dấu "Côn"→"Công").
+        // Dùng độ dài query cũ với caret mới thì `from` lệch đúng phần chênh,
+        // deleteRange cắt trượt và để lại mảnh chữ quanh chip — bug 10-08-26
+        // ("@Trần Đăng Công Đăng Công").
         const to = editor.state.selection.anchor;
-        const from = to - matchLength;
+        const $pos = editor.state.doc.resolve(to);
+        // Chỉ tìm trong khối chứa caret: '@' của dòng trên không phải của tag này.
+        // leafText=" " là BẮT BUỘC: chip là node atom, chiếm đúng 1 vị trí trong
+        // toạ độ khối. Bỏ tham số này thì chip đếm thành 0 ký tự và mọi tag đứng
+        // sau một chip sẽ chèn lệch 1.
+        const atOffset = $pos.parent
+          .textBetween(0, $pos.parentOffset, undefined, " ")
+          .lastIndexOf("@");
+        if (atOffset < 0) {
+          clearMentionState();
+          return;
+        }
+        const from = $pos.start() + atOffset;
         const isAll = candidate.id === "all";
         // Atomic chip either way (cursor steps over it, Backspace clears it):
         // blue for a user, amber for @all — matches the sent-bubble styling.
@@ -1284,11 +1306,10 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     }
   }, [mode]);
 
-  React.useEffect(() => {
-    if (!conversationId || !textareaRef.current) return;
-
-    textareaRef.current.focus();
-  }, [conversationId, textareaRef]);
+  // ponytail: textareaRef trỏ vào <textarea> ẩn của useAutoResizeTextarea — ô nhập
+  // thật render qua TipTapEditor nên effect focus() cũ ở đây không bao giờ chạy.
+  // Auto-focus-khi-mở-hội-thoại đã có đúng chỗ (ChatWindow gọi qua messageInputRef,
+  // desktop-only + rAF), xóa effect chết thay vì fix tại chỗ.
 
   React.useEffect(() => {
     if (!showMentionPanel) {
@@ -1631,7 +1652,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                 ref={tipTapRef}
                 data-testid="chat-composer-input"
                 initialContent={externalValue}
-                placeholder={
+                placeholder={placeholder ?? (
                   conversationName
                     ? t("chat:composer.dynamicPlaceholder", {
                       name: conversationName,
@@ -1640,7 +1661,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                     : t("chat:composer.placeholder", {
                       defaultValue: "Nhập @, tin nhắn tới...",
                     })
-                }
+                )}
                 disabled={disabled}
                 onContentChange={(plainText) => {
                   setDraftValue(plainText);

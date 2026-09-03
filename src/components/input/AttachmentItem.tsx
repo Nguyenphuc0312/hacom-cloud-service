@@ -54,10 +54,15 @@ const StatusBadge: React.FC<{
         </span>
       );
     case "uploading":
-    case "completing":
       return (
         <span className="text-[10px] font-medium text-[#1565C0]">
           {t("chat:attachmentTray.uploading")}
+        </span>
+      );
+    case "completing":
+      return (
+        <span className="text-[10px] font-medium text-[#1565C0]">
+          {t("chat:attachmentTray.completing", { defaultValue: "Đang hoàn tất…" })}
         </span>
       );
     case "security_pending":

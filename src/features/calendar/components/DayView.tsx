@@ -38,11 +38,6 @@ import { useNowMinute } from "../hooks/useNowMinute";
 interface DayViewProps {
   date: Date;
   events: CalendarEvent[];
-  attendance?: {
-    firstPunch?: string | null;
-    lastPunch?: string | null;
-    totalTime?: string | null;
-  };
   onEventClick: (event: CalendarEvent) => void;
   /** Click ô khung giờ trống → tạo lịch tại thời điểm đó (phút từ nửa đêm). */
   onSlotClick?: (date: Date, minutes: number) => void;
@@ -54,7 +49,6 @@ const PX_PER_MIN = HOUR_HEIGHT / 60;
 const MIN_BLOCK_HEIGHT = 22;
 
 const formatHour = (hour: number): string => `${hour.toString().padStart(2, "0")}:00`;
-const formatTime = (time: string | null | undefined): string => (time ? time : "--:--");
 const fmtMin = (min: number): string => {
   const clamped = Math.max(0, Math.min(min, MINUTES_PER_DAY));
   const h = Math.floor(clamped / 60) % 24;
@@ -197,7 +191,6 @@ const TimedEventBlock: React.FC<{
 const DayViewImpl: React.FC<DayViewProps> = ({
   date,
   events,
-  attendance,
   onEventClick,
   onSlotClick,
 }) => {
@@ -265,34 +258,6 @@ const DayViewImpl: React.FC<DayViewProps> = ({
           </span>
         )}
       </div>
-
-      {/* Attendance summary */}
-      {attendance && (
-        <div className="border-b border-border bg-emerald-50 px-4 py-2 dark:bg-emerald-900/20">
-          <div className="flex items-center gap-4 text-sm">
-            <span className="flex items-center gap-1">
-              <span className="font-medium text-emerald-700 dark:text-emerald-300">Giờ đến:</span>
-              <span className="font-mono text-emerald-600 dark:text-emerald-400">
-                {formatTime(attendance.firstPunch)}
-              </span>
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="font-medium text-emerald-700 dark:text-emerald-300">Giờ về:</span>
-              <span className="font-mono text-emerald-600 dark:text-emerald-400">
-                {formatTime(attendance.lastPunch)}
-              </span>
-            </span>
-            {attendance.totalTime && (
-              <span className="flex items-center gap-1">
-                <span className="font-medium text-emerald-700 dark:text-emerald-300">Tổng:</span>
-                <span className="font-mono text-emerald-600 dark:text-emerald-400">
-                  {attendance.totalTime}
-                </span>
-              </span>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* All-day row */}
       {allDay.length > 0 && (

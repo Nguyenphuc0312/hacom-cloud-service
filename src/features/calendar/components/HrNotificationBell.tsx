@@ -11,6 +11,7 @@ import { XMarkIcon } from "@heroicons/react/24/outline";
 import {
   CalendarDaysIcon,
   CheckCircleIcon,
+  ClipboardDocumentCheckIcon,
   ExclamationTriangleIcon,
   XCircleIcon,
 } from "@heroicons/react/24/solid";
@@ -49,6 +50,7 @@ const KIND_TABS: Array<{ id: HrNotificationKindFilter; label: string }> = [
   { id: "accepted", label: "Đồng ý" },
   { id: "declined", label: "Từ chối" },
   { id: "changed", label: "Thay đổi" },
+  { id: "timesheet", label: "Công" },
 ];
 
 const relativeTime = (iso: string): string => {
@@ -106,8 +108,21 @@ const TONE_CHANGED: NotificationTone = {
   // Tối màu lại cho chữ/icon, vẫn giữ đúng sắc cảnh báo.
   text: "text-amber-700 dark:text-amber-400",
 };
+const TONE_TIMESHEET: NotificationTone = {
+  label: "Công",
+  icon: ClipboardDocumentCheckIcon,
+  stripe: "bg-[#0f766e]",
+  chip: "bg-[#0f766e]/[0.12]",
+  text: "text-[#0f766e]",
+};
 
 const toneOf = (n: HrAppNotification): NotificationTone => {
+  if (n.type.startsWith("timesheet.")) {
+    if (n.type === "timesheet.confirmation.disputed") {
+      return { ...TONE_TIMESHEET, label: "Khiếu nại" };
+    }
+    return TONE_TIMESHEET;
+  }
   if (n.type === "calendar.meeting.participant_responded") {
     return n.payload?.["response"] === "DECLINED"
       ? TONE_DECLINED
@@ -250,7 +265,7 @@ export const HrNotificationBell: React.FC = () => {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        title="Thông báo lịch họp"
+        title="Thông báo HR"
         className="relative rounded-lg p-1.5 text-text-muted transition-micro hover:bg-surface-hover hover:text-text-primary"
       >
         <BellIcon className="h-5 w-5" />
@@ -306,7 +321,7 @@ export const HrNotificationBell: React.FC = () => {
                   </button>
                 ))}
               </div>
-              {/* Loại: 5 mục, cuộn ngang một hàng thay vì xuống dòng lởm chởm. */}
+              {/* Loại: cuộn ngang một hàng thay vì xuống dòng lởm chởm. */}
               <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {KIND_TABS.map((tab) => (
                   <FilterChip

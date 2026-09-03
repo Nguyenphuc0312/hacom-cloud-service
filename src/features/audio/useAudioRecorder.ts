@@ -17,6 +17,7 @@ import {
   type AudioRecorderState,
   type RecordedClip,
 } from "./AudioRecorderState";
+import { logger } from "../../utils/logger";
 
 // ---------------------------------------------------------------------------
 // MIME candidates (from Phase 2A results)
@@ -98,8 +99,11 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       const from = stateRef.current;
       const allowed = ALLOWED_TRANSITIONS.get(from);
       if (!allowed?.has(to)) {
-        console.warn(
-          `[AudioRecorder] Forbidden transition: ${from} → ${to}`,
+        logger.warn(
+          "audio-recorder",
+          "forbidden_transition",
+          { from, to },
+          { debugOnly: true },
         );
         return false;
       }

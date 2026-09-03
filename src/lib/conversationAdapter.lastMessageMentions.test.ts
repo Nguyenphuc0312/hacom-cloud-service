@@ -63,3 +63,26 @@ describe("conversationAdapter — lastMessage.mentions", () => {
     ]);
   });
 });
+
+describe("conversationAdapter — lastMessage edit metadata", () => {
+  it("giữ edit marker để snapshot cũ không ghi đè preview", () => {
+    const conversation = normalizeConversation({
+      ...basePayload,
+      lastMessage: {
+        id: "msg-1",
+        senderId: "u1",
+        senderName: "Đậu Cao Minh Nhật",
+        content: "nội dung đã sửa",
+        type: "text",
+        createdAt: "2026-07-30T09:00:00.000Z",
+        isEdited: true,
+        editedAt: "2026-07-30T09:05:00.000Z",
+      },
+    });
+
+    expect(conversation?.lastMessage?.isEdited).toBe(true);
+    expect(
+      new Date(conversation?.lastMessage?.editedAt as never).toISOString(),
+    ).toBe("2026-07-30T09:05:00.000Z");
+  });
+});

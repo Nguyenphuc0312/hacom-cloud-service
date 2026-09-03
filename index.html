@@ -10,15 +10,43 @@
     <title>Hacom Holdings</title>
     <script>
       (function () {
+        var r = document.documentElement;
+        var path = window.location.pathname;
+        var isChat = /(^|\/)chat(?:\/|$)/.test(path);
+        var isAuthSplit =
+          /(^|\/)(login|forgot-password|force-change-password|pending-hr-link)(?:\/|$)/.test(
+            path,
+          );
+        var isAuthCard =
+          /(^|\/)(activation|verify-email|reset-password)(?:\/|$)/.test(path);
+        var isApp =
+          /(^|\/)(cloud|friends|friend-discovery|join|calendar|settings|maintenance|tasks|timesheet|leave|ai-assistant|work-report-drafts|archive|notifications|help|faq|tips|report-issue)(?:\/|$)/.test(
+            path,
+          );
+        r.dataset.bootRoute = isChat
+          ? "chat"
+          : isApp
+            ? "app"
+            : isAuthSplit
+              ? "auth-split"
+              : isAuthCard
+                ? "auth-card"
+                : "default";
         try {
           var s = JSON.parse(localStorage.getItem("ui-storage") || "{}");
           var st = (s && s.state) || {};
-          var theme = ["light","dark","system"].includes(st.theme) ? st.theme : "system";
-          var brand = ["blue","green","purple"].includes(st.brand) ? st.brand : "blue";
-          var resolved = theme === "system"
-            ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
-            : theme;
-          var r = document.documentElement;
+          var theme = ["light", "dark", "system"].includes(st.theme)
+            ? st.theme
+            : "system";
+          var brand = ["blue", "green", "purple"].includes(st.brand)
+            ? st.brand
+            : "blue";
+          var resolved =
+            theme === "system"
+              ? window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light"
+              : theme;
           r.dataset.themePreference = theme;
           r.dataset.theme = resolved;
           r.dataset.brand = brand;
@@ -26,9 +54,747 @@
         } catch (e) {}
       })();
     </script>
+    <style>
+      html,
+      body,
+      #root {
+        min-height: 100%;
+        margin: 0;
+      }
+      html[data-boot-route="chat"],
+      html[data-boot-route="chat"] body,
+      html[data-boot-route="chat"] #root,
+      html[data-boot-route="app"],
+      html[data-boot-route="app"] body,
+      html[data-boot-route="app"] #root,
+      html[data-boot-route="auth-split"],
+      html[data-boot-route="auth-split"] body,
+      html[data-boot-route="auth-split"] #root,
+      html[data-boot-route="auth-card"],
+      html[data-boot-route="auth-card"] body,
+      html[data-boot-route="auth-card"] #root {
+        border: 0 !important;
+        outline: 0 !important;
+        box-shadow: none !important;
+      }
+      #app-boot-loader {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: #f8fafc;
+      }
+      #app-boot-loader,
+      #app-boot-loader * {
+        border: 0 !important;
+        outline: 0 !important;
+        box-shadow: none !important;
+      }
+      [data-theme="dark"] #app-boot-loader {
+        background: #0e0f10;
+      }
+      #app-boot-loader > div {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+      }
+      #app-boot-loader img {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        box-shadow: 0 3px 8px rgb(15 23 42 / 9%) !important;
+      }
+      #app-boot-loader span {
+        position: relative;
+        width: 72px;
+        height: 3px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #e5e7eb;
+      }
+      [data-theme="dark"] #app-boot-loader span {
+        background: #27292b;
+      }
+      #app-boot-loader span::after {
+        content: "";
+        position: absolute;
+        inset-block: 0;
+        left: 0;
+        width: 100%;
+        border-radius: inherit;
+        background: #1565c0;
+        transform-origin: left;
+        animation: app-boot-progress 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+      @keyframes app-boot-progress {
+        from {
+          opacity: 0.65;
+          transform: scaleX(0.16);
+        }
+        to {
+          opacity: 1;
+          transform: scaleX(1);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #app-boot-loader span::after {
+          opacity: 0.72;
+          animation: none;
+        }
+      }
+      #app-boot-auth {
+        --auth-boot-canvas: #f7f8fb;
+        --auth-boot-surface: #fff;
+        --auth-boot-border: #e2e6ec;
+        --auth-boot-skeleton: #e6e9ed;
+        position: fixed;
+        inset: 0;
+        display: none;
+        overflow: hidden;
+        background: var(--auth-boot-canvas);
+      }
+      [data-theme="dark"] #app-boot-auth {
+        --auth-boot-canvas: #111315;
+        --auth-boot-surface: #1a1c1f;
+        --auth-boot-border: #2c3034;
+        --auth-boot-skeleton: #292d31;
+      }
+      [data-boot-route="auth-split"] #app-boot-loader,
+      [data-boot-route="auth-card"] #app-boot-loader {
+        display: none;
+      }
+      [data-boot-route="auth-split"] #app-boot-auth,
+      [data-boot-route="auth-card"] #app-boot-auth {
+        display: flex;
+      }
+      #app-boot-auth,
+      #app-boot-auth * {
+        box-sizing: border-box;
+        border: 0 !important;
+        outline: 0 !important;
+        box-shadow: none !important;
+      }
+      .boot-auth-visual {
+        position: relative;
+        display: none;
+        width: 50%;
+        overflow: hidden;
+        background: #111827;
+      }
+      .boot-auth-visual > img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .boot-auth-overlay {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          to top,
+          rgb(0 0 0 / 78%),
+          rgb(0 0 0 / 16%) 58%,
+          rgb(0 0 0 / 38%)
+        );
+      }
+      .boot-auth-copy {
+        position: absolute;
+        inset-inline: 0;
+        bottom: 0;
+        z-index: 1;
+        padding: clamp(24px, 4vw, 64px);
+        color: #fff;
+      }
+      .boot-auth-copy h2 {
+        margin: 0;
+        font:
+          700 clamp(24px, 3.5vw, 48px) / 1.1 system-ui,
+          sans-serif;
+        letter-spacing: -0.025em;
+      }
+      .boot-auth-copy p {
+        max-width: 640px;
+        margin: 12px 0 0;
+        color: rgb(255 255 255 / 90%);
+        font:
+          300 clamp(14px, 1.5vw, 20px) / 1.6 system-ui,
+          sans-serif;
+      }
+      .boot-auth-progress {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-top: 32px;
+      }
+      .boot-auth-progress span {
+        height: 4px;
+        border-radius: 999px;
+        background: rgb(255 255 255 / 20%);
+      }
+      .boot-auth-progress span:first-child {
+        background: #fff;
+      }
+      .boot-auth-form-pane {
+        display: flex;
+        width: 100%;
+        min-height: 100%;
+        align-items: center;
+        justify-content: center;
+        overflow-y: auto;
+        padding: clamp(16px, 4dvh, 40px) clamp(12px, 3vw, 40px);
+        background: var(--auth-boot-canvas);
+      }
+      #app-boot-auth .boot-auth-card {
+        width: 100%;
+        max-width: clamp(320px, 90vw, 500px);
+        padding: clamp(20px, 3.5dvh, 36px) clamp(16px, 4vw, 36px);
+        border: 1px solid var(--auth-boot-border) !important;
+        border-radius: 24px;
+        background: var(--auth-boot-surface);
+        box-shadow: 0 8px 30px rgb(0 0 0 / 6%) !important;
+      }
+      [data-theme="dark"] #app-boot-auth .boot-auth-card {
+        box-shadow: 0 12px 40px rgb(0 0 0 / 50%) !important;
+      }
+      [data-boot-route="auth-card"] .boot-auth-form-pane {
+        background: var(--auth-boot-canvas);
+      }
+      [data-boot-route="auth-card"] .boot-auth-card {
+        max-width: 448px;
+      }
+      .boot-auth-sk {
+        border-radius: 8px;
+        background: var(--auth-boot-skeleton);
+        animation: auth-boot-pulse 1.6s ease-in-out infinite;
+      }
+      .boot-auth-logo {
+        width: 112px;
+        height: 64px;
+        margin-inline: auto;
+        border-radius: 14px;
+      }
+      .boot-auth-center {
+        margin-inline: auto;
+      }
+      .boot-auth-field {
+        margin-top: 20px;
+      }
+      @keyframes auth-boot-pulse {
+        50% {
+          opacity: 0.58;
+        }
+      }
+      @media (min-width: 1024px) {
+        [data-boot-route="auth-split"] .boot-auth-visual {
+          display: block;
+        }
+        [data-boot-route="auth-split"] .boot-auth-form-pane {
+          width: 50%;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-auth-sk {
+          animation: none;
+        }
+      }
+      #app-boot-chat {
+        --boot-canvas: #f1f4f7;
+        --boot-surface: #fff;
+        --boot-border: #dde3ea;
+        --boot-skeleton: #e6e9ed;
+        position: fixed;
+        inset: 0;
+        display: none;
+        overflow: hidden;
+        background: var(--boot-canvas);
+      }
+      [data-theme="dark"] #app-boot-chat {
+        --boot-canvas: #0e0f10;
+        --boot-surface: #181a1c;
+        --boot-border: #292c2f;
+        --boot-skeleton: #24272a;
+      }
+      [data-boot-route="chat"] #app-boot-loader,
+      [data-boot-route="app"] #app-boot-loader {
+        display: none;
+      }
+      [data-boot-route="chat"] #app-boot-chat,
+      [data-boot-route="app"] #app-boot-chat {
+        display: flex;
+      }
+      #app-boot-chat,
+      #app-boot-chat * {
+        box-sizing: border-box;
+        border: 0 !important;
+        outline: 0 !important;
+        box-shadow: none !important;
+      }
+      #app-boot-chat .boot-rail {
+        display: flex;
+        width: 56px;
+        min-width: 56px;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 6px;
+        border-right: 1px solid #b71c1c !important;
+        background: linear-gradient(180deg, #d32f2f, #c41e3a);
+      }
+      .boot-rail-logo {
+        width: 44px;
+        height: 44px;
+        margin-bottom: 4px;
+        padding: 6px;
+        border-radius: 14px;
+        background: #fff;
+        object-fit: contain;
+      }
+      .boot-rail-item {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        background: rgb(255 255 255 / 14%);
+      }
+      .boot-rail-item:first-of-type {
+        background: rgb(255 255 255 / 24%);
+      }
+      .boot-rail-spacer {
+        flex: 1;
+      }
+      .boot-workspace {
+        display: grid;
+        min-width: 0;
+        flex: 1;
+        grid-template-columns: clamp(320px, 22vw, 380px) minmax(0, 1fr);
+      }
+      #app-boot-chat .boot-sidebar {
+        overflow: hidden;
+        border-right: 1px solid var(--boot-border) !important;
+        background: var(--boot-surface);
+      }
+      #app-boot-chat .boot-sidebar-head {
+        height: 134px;
+        padding: 18px 16px;
+        border-bottom: 1px solid var(--boot-border) !important;
+      }
+      .boot-filters {
+        display: flex;
+        gap: 10px;
+        padding: 16px;
+      }
+      .boot-row {
+        display: flex;
+        height: 68px;
+        align-items: center;
+        gap: 12px;
+        padding: 0 20px;
+      }
+      .boot-row-copy {
+        min-width: 0;
+        flex: 1;
+      }
+      .boot-main {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+      }
+      #app-boot-chat .boot-header {
+        display: flex;
+        height: 60px;
+        align-items: center;
+        gap: 12px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--boot-border) !important;
+        background: var(--boot-surface);
+      }
+      .boot-header-copy {
+        flex: 1;
+      }
+      .boot-messages {
+        flex: 1;
+        padding: 20px 12%;
+      }
+      .boot-message {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin: 28px 0;
+      }
+      .boot-message.me {
+        justify-content: flex-start;
+        flex-direction: row-reverse;
+      }
+      .boot-bubble {
+        width: 46%;
+        min-height: 58px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: var(--boot-surface);
+      }
+      .boot-message.me .boot-bubble {
+        width: 38%;
+        background: #dfe9f6;
+      }
+      [data-theme="dark"] .boot-message.me .boot-bubble {
+        background: #172638;
+      }
+      #app-boot-chat .boot-composer {
+        display: flex;
+        height: 76px;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 20px;
+        border-top: 1px solid var(--boot-border) !important;
+        background: var(--boot-surface);
+      }
+      .boot-sk {
+        border-radius: 7px;
+        background: var(--boot-skeleton);
+      }
+      .boot-circle {
+        width: 40px;
+        height: 40px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+      }
+      .boot-line {
+        height: 12px;
+      }
+      .boot-line + .boot-line {
+        margin-top: 9px;
+      }
+      .boot-app-page {
+        display: none;
+        min-width: 0;
+        flex: 1;
+        flex-direction: column;
+        background: var(--boot-canvas);
+      }
+      [data-boot-route="app"] .boot-workspace {
+        display: none;
+      }
+      [data-boot-route="app"] .boot-app-page {
+        display: flex;
+      }
+      .boot-app-head {
+        display: flex;
+        min-height: 68px;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 28px;
+        border-bottom: 1px solid var(--boot-border) !important;
+        background: var(--boot-surface);
+      }
+      .boot-app-head-copy {
+        min-width: 0;
+        flex: 1;
+      }
+      .boot-app-body {
+        min-height: 0;
+        flex: 1;
+        padding: 24px;
+      }
+      .boot-app-panel {
+        height: 100%;
+        overflow: hidden;
+        border: 1px solid var(--boot-border) !important;
+        border-radius: 16px;
+        background: var(--boot-surface);
+      }
+      .boot-app-tools {
+        display: flex;
+        gap: 12px;
+        padding: 18px;
+        border-bottom: 1px solid var(--boot-border) !important;
+      }
+      .boot-app-row {
+        display: flex;
+        min-height: 72px;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--boot-border) !important;
+      }
+      .boot-app-row-copy {
+        min-width: 0;
+        flex: 1;
+      }
+      @media (max-width: 767px) {
+        .boot-workspace {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .boot-main {
+          display: none;
+        }
+        .boot-app-body {
+          padding: 14px;
+        }
+        .boot-app-head {
+          padding-inline: 16px;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div
+        id="app-boot-loader"
+        role="status"
+        aria-label="Đang tải Hacom Holdings"
+      >
+        <div aria-hidden="true">
+          <img src="%BASE_URL%logo.png" width="56" height="56" alt="" />
+          <span></span>
+        </div>
+      </div>
+      <div
+        id="app-boot-auth"
+        role="status"
+        aria-label="Đang tải trang xác thực"
+      >
+        <div class="boot-auth-visual" aria-hidden="true">
+          <img src="%BASE_URL%hacom-imperial-dalat.jpg" alt="" />
+          <div class="boot-auth-overlay"></div>
+          <div class="boot-auth-copy">
+            <h2>Hacom Imperial Dalat</h2>
+            <p>
+              Dự án nổi bật tại Đà Lạt - Kiến trúc tân cổ điển sang trọng giữa
+              ngàn hoa
+            </p>
+            <div class="boot-auth-progress">
+              <span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+        </div>
+        <div class="boot-auth-form-pane" aria-hidden="true">
+          <div class="boot-auth-card">
+            <div class="boot-auth-sk boot-auth-logo"></div>
+            <div
+              class="boot-auth-sk boot-auth-center"
+              style="width: 68%; height: 24px; margin-top: 20px"
+            ></div>
+            <div
+              class="boot-auth-sk boot-auth-center"
+              style="width: 76%; height: 14px; margin-top: 10px"
+            ></div>
+            <div
+              class="boot-auth-sk"
+              style="height: 48px; margin-top: 20px"
+            ></div>
+            <div
+              class="boot-auth-sk boot-auth-field"
+              style="width: 34%; height: 14px"
+            ></div>
+            <div
+              class="boot-auth-sk"
+              style="height: 48px; margin-top: 8px"
+            ></div>
+            <div
+              class="boot-auth-sk boot-auth-field"
+              style="width: 26%; height: 14px"
+            ></div>
+            <div
+              class="boot-auth-sk"
+              style="height: 48px; margin-top: 8px"
+            ></div>
+            <div
+              style="
+                display: flex;
+                height: 24px;
+                align-items: center;
+                justify-content: space-between;
+                margin-top: 20px;
+              "
+            >
+              <div class="boot-auth-sk" style="width: 34%; height: 14px"></div>
+              <div class="boot-auth-sk" style="width: 30%; height: 14px"></div>
+            </div>
+            <div
+              class="boot-auth-sk"
+              style="height: 48px; margin-top: 20px"
+            ></div>
+          </div>
+        </div>
+      </div>
+      <div
+        id="app-boot-chat"
+        role="status"
+        aria-label="Đang tải cuộc trò chuyện"
+      >
+        <div class="boot-rail" aria-hidden="true">
+          <img class="boot-rail-logo" src="%BASE_URL%logo-dung.png" alt="" />
+          <div class="boot-rail-item"></div>
+          <div class="boot-rail-item"></div>
+          <div class="boot-rail-item"></div>
+          <div class="boot-rail-item"></div>
+          <div class="boot-rail-item"></div>
+          <div class="boot-rail-item"></div>
+          <div class="boot-rail-spacer"></div>
+          <div class="boot-rail-item"></div>
+          <div class="boot-rail-item"></div>
+        </div>
+        <div class="boot-workspace" aria-hidden="true">
+          <aside class="boot-sidebar">
+            <div class="boot-sidebar-head">
+              <div class="boot-sk boot-line" style="width: 132px"></div>
+              <div class="boot-sk" style="height: 40px; margin-top: 18px"></div>
+            </div>
+            <div class="boot-filters">
+              <div class="boot-sk" style="height: 40px; flex: 1"></div>
+              <div class="boot-sk" style="height: 40px; flex: 1"></div>
+              <div class="boot-sk" style="height: 40px; flex: 1"></div>
+            </div>
+            <div class="boot-row">
+              <div class="boot-sk boot-circle"></div>
+              <div class="boot-row-copy">
+                <div class="boot-sk boot-line" style="width: 62%"></div>
+                <div class="boot-sk boot-line" style="width: 82%"></div>
+              </div>
+            </div>
+            <div class="boot-row">
+              <div class="boot-sk boot-circle"></div>
+              <div class="boot-row-copy">
+                <div class="boot-sk boot-line" style="width: 70%"></div>
+                <div class="boot-sk boot-line" style="width: 76%"></div>
+              </div>
+            </div>
+            <div class="boot-row">
+              <div class="boot-sk boot-circle"></div>
+              <div class="boot-row-copy">
+                <div class="boot-sk boot-line" style="width: 58%"></div>
+                <div class="boot-sk boot-line" style="width: 84%"></div>
+              </div>
+            </div>
+            <div class="boot-row">
+              <div class="boot-sk boot-circle"></div>
+              <div class="boot-row-copy">
+                <div class="boot-sk boot-line" style="width: 66%"></div>
+                <div class="boot-sk boot-line" style="width: 72%"></div>
+              </div>
+            </div>
+            <div class="boot-row">
+              <div class="boot-sk boot-circle"></div>
+              <div class="boot-row-copy">
+                <div class="boot-sk boot-line" style="width: 61%"></div>
+                <div class="boot-sk boot-line" style="width: 80%"></div>
+              </div>
+            </div>
+            <div class="boot-row">
+              <div class="boot-sk boot-circle"></div>
+              <div class="boot-row-copy">
+                <div class="boot-sk boot-line" style="width: 72%"></div>
+                <div class="boot-sk boot-line" style="width: 68%"></div>
+              </div>
+            </div>
+          </aside>
+          <main class="boot-main">
+            <div class="boot-header">
+              <div class="boot-sk boot-circle"></div>
+              <div class="boot-header-copy">
+                <div class="boot-sk boot-line" style="width: 180px"></div>
+                <div class="boot-sk boot-line" style="width: 112px"></div>
+              </div>
+              <div class="boot-sk boot-circle"></div>
+              <div class="boot-sk boot-circle"></div>
+              <div class="boot-sk boot-circle"></div>
+            </div>
+            <div class="boot-messages">
+              <div class="boot-message">
+                <div class="boot-sk boot-circle"></div>
+                <div class="boot-bubble">
+                  <div class="boot-sk boot-line" style="width: 88%"></div>
+                  <div class="boot-sk boot-line" style="width: 30%"></div>
+                </div>
+              </div>
+              <div class="boot-message me">
+                <div class="boot-bubble">
+                  <div class="boot-sk boot-line" style="width: 90%"></div>
+                  <div class="boot-sk boot-line" style="width: 24%"></div>
+                </div>
+              </div>
+              <div class="boot-message">
+                <div class="boot-sk boot-circle"></div>
+                <div class="boot-bubble" style="width: 56%">
+                  <div class="boot-sk boot-line" style="width: 96%"></div>
+                  <div class="boot-sk boot-line" style="width: 72%"></div>
+                </div>
+              </div>
+              <div class="boot-message me">
+                <div class="boot-bubble" style="width: 44%">
+                  <div class="boot-sk boot-line" style="width: 90%"></div>
+                  <div class="boot-sk boot-line" style="width: 36%"></div>
+                </div>
+              </div>
+            </div>
+            <div class="boot-composer">
+              <div class="boot-sk boot-circle"></div>
+              <div class="boot-sk" style="height: 44px; flex: 1"></div>
+              <div class="boot-sk boot-circle"></div>
+            </div>
+          </main>
+        </div>
+        <div class="boot-app-page" aria-hidden="true">
+          <div class="boot-app-head">
+            <div class="boot-app-head-copy">
+              <div class="boot-sk boot-line" style="width: 148px"></div>
+              <div class="boot-sk boot-line" style="width: 240px"></div>
+            </div>
+            <div class="boot-sk" style="width: 96px; height: 36px"></div>
+            <div class="boot-sk" style="width: 112px; height: 36px"></div>
+          </div>
+          <div class="boot-app-body">
+            <div class="boot-app-panel">
+              <div class="boot-app-tools">
+                <div class="boot-sk" style="height: 40px; flex: 1"></div>
+                <div class="boot-sk" style="width: 108px; height: 40px"></div>
+              </div>
+              <div class="boot-app-row">
+                <div class="boot-sk boot-circle"></div>
+                <div class="boot-app-row-copy">
+                  <div class="boot-sk boot-line" style="width: 34%"></div>
+                  <div class="boot-sk boot-line" style="width: 62%"></div>
+                </div>
+                <div class="boot-sk" style="width: 72px; height: 30px"></div>
+              </div>
+              <div class="boot-app-row">
+                <div class="boot-sk boot-circle"></div>
+                <div class="boot-app-row-copy">
+                  <div class="boot-sk boot-line" style="width: 42%"></div>
+                  <div class="boot-sk boot-line" style="width: 54%"></div>
+                </div>
+                <div class="boot-sk" style="width: 72px; height: 30px"></div>
+              </div>
+              <div class="boot-app-row">
+                <div class="boot-sk boot-circle"></div>
+                <div class="boot-app-row-copy">
+                  <div class="boot-sk boot-line" style="width: 30%"></div>
+                  <div class="boot-sk boot-line" style="width: 68%"></div>
+                </div>
+                <div class="boot-sk" style="width: 72px; height: 30px"></div>
+              </div>
+              <div class="boot-app-row">
+                <div class="boot-sk boot-circle"></div>
+                <div class="boot-app-row-copy">
+                  <div class="boot-sk boot-line" style="width: 38%"></div>
+                  <div class="boot-sk boot-line" style="width: 58%"></div>
+                </div>
+                <div class="boot-sk" style="width: 72px; height: 30px"></div>
+              </div>
+              <div class="boot-app-row">
+                <div class="boot-sk boot-circle"></div>
+                <div class="boot-app-row-copy">
+                  <div class="boot-sk boot-line" style="width: 36%"></div>
+                  <div class="boot-sk boot-line" style="width: 64%"></div>
+                </div>
+                <div class="boot-sk" style="width: 72px; height: 30px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

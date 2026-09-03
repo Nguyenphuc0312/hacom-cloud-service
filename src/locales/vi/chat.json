@@ -28,7 +28,7 @@
     "replyTargetMissing": "Tin nhắn gốc không còn khả dụng",
     "threadReplies": "{{count}} phản hồi",
     "unreadDivider": "Tin nhắn chưa đọc",
-    "edited": "đã chỉnh sửa",
+    "edited": "Đã chỉnh sửa",
     "forwardedFrom": "Chuyển tiếp từ {{name}}",
     "forwardedLabel": "Tin nhắn được chuyển tiếp",
     "forward": {
@@ -112,6 +112,37 @@
       "empty": "Chưa có lịch sử chỉnh sửa.",
       "loadError": "Không thể tải lịch sử chỉnh sửa.",
       "current": "hiện tại"
+    }
+  },
+  "shiftReference": {
+    "title": "Tra cứu ca làm việc",
+    "description": "Thông tin ca dùng chung từ hệ thống nhân sự.",
+    "selectedDescription": "{{code}} · {{name}}",
+    "open": "Xem thông tin ca {{code}}",
+    "searchLabel": "Tìm ca làm việc",
+    "searchPlaceholder": "Tìm theo mã, tên ca hoặc nhóm",
+    "workingTime": "Giờ làm việc",
+    "breakTime": "Nghỉ giữa ca",
+    "noBreakInfo": "Không có",
+    "ungrouped": "Chưa phân nhóm",
+    "loading": "Đang tải danh mục ca",
+    "loadErrorTitle": "Không tải được danh mục ca",
+    "loadErrorDescription": "Kết nối tới hệ thống nhân sự chưa sẵn sàng. Hãy thử lại.",
+    "retry": "Thử lại",
+    "viewing": "Đang xem",
+    "tableCaption": "Danh mục ca làm việc",
+    "emptyTitle": "Không tìm thấy ca phù hợp",
+    "emptyDescription": "Hãy thử mã ca hoặc từ khóa khác.",
+    "durationHours": "{{hours}} giờ",
+    "durationHoursMinutes": "{{hours}} giờ {{minutes}} phút",
+    "durationMinutes": "{{minutes}} phút",
+    "workdayValue": "{{value}} công",
+    "columns": {
+      "code": "Mã ca",
+      "name": "Tên ca",
+      "group": "Nhóm",
+      "time": "Giờ làm việc",
+      "workValue": "Thời lượng / Công"
     }
   },
   "composer": {
@@ -282,6 +313,7 @@
   "attachmentTray": {
     "queued": "Đang chờ",
     "uploading": "Đang tải",
+    "completing": "Đang hoàn tất…",
     "ready": "Sẵn sàng",
     "failed": "Thất bại",
     "blocked": "Bị chặn",
@@ -337,7 +369,13 @@
   },
   "file": {
     "unknown": "Tệp không xác định",
-    "download": "Tải tệp"
+    "download": "Tải tệp",
+    "savedOnDevice": "Đã có trên máy",
+    "alreadyDownloaded": "Đã tải xuống",
+    "downloadToKeep": "Tải về để xem lâu dài",
+    "clickToPreview": "Nhấn để xem trước",
+    "showInFolder": "Mở thư mục chứa file",
+    "openFile": "Mở {{name}}"
   },
   "voice": {
     "recordingError": "Không thể ghi âm. Vui lòng thử lại.",

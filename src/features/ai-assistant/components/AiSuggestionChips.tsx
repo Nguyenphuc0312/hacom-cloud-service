@@ -7,13 +7,14 @@ import {
   LightbulbIcon,
   HeartHandshakeIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
 
 export interface AiSuggestion {
   id: string;
   label: string;
   sublabel: string;
-  icon: any;
+  icon: LucideIcon;
   prompt: string;
   mode: "company" | "personal" | "any";
 }

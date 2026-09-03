@@ -1,5 +1,6 @@
 import React from "react";
 import clsx from "clsx";
+import { useClickOutside } from "../../hooks";
 
 interface TextColorPickerProps {
   activeColor: string | null;
@@ -32,15 +33,7 @@ export const TextColorPicker: React.FC<TextColorPickerProps> = ({
 }) => {
   const pickerRef = React.useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onClose]);
+  useClickOutside(pickerRef, onClose);
 
   return (
     <div

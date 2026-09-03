@@ -20,22 +20,18 @@ export default defineConfig([
       globals: globals.browser,
     },
     rules: {
-      // The current frontend uses established effect/ref patterns that are
-      // valid at runtime but are rejected by optional React Compiler
-      // diagnostics. Keep structural hook ordering checks enabled while
-      // treating compiler-only diagnostics as non-blocking.
-      "react-hooks/set-state-in-effect": "off",
-      "react-hooks/preserve-manual-memoization": "off",
-      "react-hooks/refs": "off",
-      "react-hooks/incompatible-library": "off",
-      "react-hooks/purity": "off",
-      "react-hooks/immutability": "off",
-      "react-hooks/use-memo": "off",
+      "react-hooks/immutability": "warn",
+      "react-hooks/incompatible-library": "warn",
+      "react-hooks/preserve-manual-memoization": "warn",
+      "react-hooks/purity": "warn",
+      "react-hooks/refs": "warn",
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/use-memo": "warn",
       "react-refresh/only-export-components": "warn",
       // Tiền tố `_` = "cố ý không dùng" (tham số giữ chỗ cho đúng chữ ký hàm,
       // biến destructure để loại field, catch không cần error).
       "@typescript-eslint/no-unused-vars": [
-        "error",
+        "warn",
         {
           argsIgnorePattern: "^_",
           varsIgnorePattern: "^_",
@@ -56,7 +52,7 @@ export default defineConfig([
       "src/components/modals/ShareContactModal.tsx",
     ],
     rules: {
-        "no-restricted-imports": [
+      "no-restricted-imports": [
         "warn",
         {
           patterns: ["**/services/api"],

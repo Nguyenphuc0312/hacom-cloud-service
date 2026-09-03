@@ -20,6 +20,11 @@ import {
   normalizeRoomType,
 } from "../../lib/conversationAdapter";
 import {
+  isPersonalCloudConversation,
+  personalCloudPresentation,
+} from "../../features/cloud/personalCloudPolicy";
+import { PersonalCloudAvatar } from "../../features/cloud/components/PersonalCloudAvatar";
+import {
   getConversationAvatar,
   getConversationDisplayName,
   getOtherParticipant,
@@ -78,6 +83,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     conversation.participants?.length,
   );
   const isDirect = isDirectConversation(conversation);
+  const isPersonalCloud = isPersonalCloudConversation(conversation);
   const otherUserId = otherUser?.id;
   const livePresence = usePresenceStore((s) =>
     otherUserId ? s.presenceMap[otherUserId] : undefined,
@@ -99,6 +105,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const isTyping = activeTypingStatuses.length > 0;
   const statusText = (() => {
     if (isTyping) return "";
+
+    // Cloud của tôi không có thành viên — nhánh group bên dưới sẽ hiện "0 thành viên".
+    if (isPersonalCloud) return personalCloudPresentation.subtitle;
 
     if (normalizedType === "group") {
       return t("chat:header.members", {
@@ -145,7 +154,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     if (isDirect && otherUserId) enrichUserProfile(otherUserId);
   }, [isDirect, otherUserId]);
 
-  const displayName = alias ?? enrichedName ?? rawDisplayName;
+  const displayName = isPersonalCloud
+    ? personalCloudPresentation.title
+    : alias ?? enrichedName ?? rawDisplayName;
   const avatarSrc = getConversationAvatar(conversation, currentUserId);
 
   return (
@@ -177,7 +188,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             )}
             aria-label={t("chat:header.viewInfo")}
           >
-            {avatarOverride ?? (isDirect ? (
+            {avatarOverride ?? (isPersonalCloud ? (
+              <PersonalCloudAvatar size="md" className="chat-header-avatar" />
+            ) : isDirect ? (
               <Avatar
                 src={avatarSrc}
                 alt={displayName}
@@ -257,7 +270,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               </button>
             )}
 
-            {onCallClick && (
+            {onCallClick && !isPersonalCloud && (
               <button
                 type="button"
                 onClick={onCallClick}
@@ -268,7 +281,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               </button>
             )}
 
-            {onVideoCallClick && (
+            {onVideoCallClick && !isPersonalCloud && (
               <button
                 type="button"
                 onClick={onVideoCallClick}

@@ -102,6 +102,8 @@ function replyExtBadgeClass(ext: string): string {
 
 interface MessageGroupProps {
   row: ConversationThreadGroupRow;
+  /** Compatibility hint used by the shared Chat timeline. */
+  isPersonalCloud?: boolean;
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onForward?: (message: Message) => void;

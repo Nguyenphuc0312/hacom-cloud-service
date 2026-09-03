@@ -1,10 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { FieldErrors, UseFormRegister } from "react-hook-form";
-import {
-  EyeIcon,
-  EyeSlashIcon,
-} from "@heroicons/react/24/outline";
+import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui";
 import type { LoginFormData } from "../../lib/validations";
@@ -54,7 +51,10 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
         )}
 
         <div className="space-y-1.5">
-          <label htmlFor="loginIdentifier" className="text-sm font-semibold text-text-primary">
+          <label
+            htmlFor="loginIdentifier"
+            className="text-sm font-semibold text-text-primary"
+          >
             {t("auth:login.loginIdentifier")}
           </label>
           <div className="relative">
@@ -73,13 +73,18 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
             />
           </div>
           {loginIdentifierError && (
-            <p className="mt-1 text-xs font-semibold text-danger">{loginIdentifierError}</p>
+            <p className="mt-1 text-xs font-semibold text-danger">
+              {loginIdentifierError}
+            </p>
           )}
         </div>
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label htmlFor="password" className="text-sm font-semibold text-text-primary">
+            <label
+              htmlFor="password"
+              className="text-sm font-semibold text-text-primary"
+            >
               {t("auth:login.password")}
             </label>
           </div>
@@ -96,9 +101,13 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
             />
             <button
               type="button"
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition-colors hover:text-text-secondary"
+              className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C41E3A]/30"
               onClick={() => setShowPassword(!showPassword)}
-              aria-label={showPassword ? t("auth:login.hidePassword") : t("auth:login.showPassword")}
+              aria-label={
+                showPassword
+                  ? t("auth:login.hidePassword")
+                  : t("auth:login.showPassword")
+              }
             >
               {showPassword ? (
                 <EyeSlashIcon className="h-5 w-5" />
@@ -108,33 +117,38 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
             </button>
           </div>
           {passwordError && (
-            <p className="mt-1 text-xs font-semibold text-danger">{passwordError}</p>
+            <p className="mt-1 text-xs font-semibold text-danger">
+              {passwordError}
+            </p>
           )}
         </div>
 
-        <div className="flex items-center justify-between py-1">
-          <label className="flex cursor-pointer items-center gap-2">
+        <div className="flex items-center justify-between gap-3">
+          <label className="flex min-h-10 cursor-pointer items-center gap-2 py-2">
             <input
               type="checkbox"
               {...register("rememberMe")}
               className="h-4 w-4 rounded border-border accent-[#C41E3A] focus:ring-2 focus:ring-[#C41E3A]/20"
             />
-            <span className="text-sm font-medium text-text-secondary">{t("auth:login.rememberMe")}</span>
+            <span className="text-sm font-medium text-text-secondary">
+              {t("auth:login.rememberMe")}
+            </span>
           </label>
           <button
             type="button"
-            onClick={() => navigate('/forgot-password')}
+            onClick={() => navigate("/forgot-password")}
             className="rounded text-sm font-semibold text-[#C41E3A] transition-colors hover:text-[#D32F2F] dark:text-[#FF6B7A] dark:hover:text-[#FF8A96]"
           >
             {t("auth:login.forgotPassword")}
           </button>
         </div>
 
-
         <Button
           type="submit"
           fullWidth
-          className={"h-12 rounded-xl bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] text-sm font-bold text-white transition-all hover:brightness-105 active:scale-95 shadow-lg shadow-[#C41E3A]/25"}
+          className={
+            "h-12 rounded-xl bg-gradient-to-r from-[#C41E3A] via-[#D32F2F] to-[#FFC857] text-sm font-bold text-white transition-all hover:brightness-105 active:scale-95 shadow-lg shadow-[#C41E3A]/25"
+          }
           isLoading={isBusy}
           disabled={isBusy}
           aria-busy={isBusy}

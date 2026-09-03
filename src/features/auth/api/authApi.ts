@@ -54,6 +54,8 @@ export interface NormalizedAuthResponse {
     accessToken?: string;
     refreshToken?: string;
   };
+  requiresPasswordChange?: boolean;
+  passwordChangeContinuation?: string;
 }
 
 
@@ -105,10 +107,19 @@ const normalizeUser = (value: unknown): Record<string, unknown> => {
     fullName: asString(hrProfile?.fullName) || asString(user.fullName) || undefined,
     fullNameFromHr:
       asString(hrProfile?.fullName) || asString(user.fullNameFromHr) || undefined,
+    // `displayName` is the name the user typed and saved themselves; the HR
+    // legal name is NOT a fallback for it here. Preferring `hrProfile.fullName`
+    // overwrote the saved name on every `/me`, so a rename showed a success
+    // toast and then snapped back to the HR name after refresh. HR remains
+    // reachable (and still wins when displayName is empty) via `fullNameFromHr`,
+    // which every consumer resolves through `resolveUserDisplayName`.
     displayName:
-      asString(hrProfile?.fullName) || asString(user.displayName) || undefined,
+      asString(user.displayName) || asString(hrProfile?.fullName) || undefined,
     effectiveDisplayName:
-      asString(hrProfile?.fullName) || asString(user.effectiveDisplayName) || undefined,
+      asString(user.displayName) ||
+      asString(user.effectiveDisplayName) ||
+      asString(hrProfile?.fullName) ||
+      undefined,
     departmentName:
       asString(organization?.departmentName) || asString(user.departmentName) || undefined,
     orgUnit:
@@ -151,6 +162,8 @@ export const normalizeAuthResponse = (
             refreshToken,
           }
         : undefined,
+    requiresPasswordChange: asBoolean(record.requiresPasswordChange) ?? false,
+    passwordChangeContinuation: asString(record.passwordChangeContinuation) || undefined,
   };
 };
 
@@ -231,7 +244,6 @@ export const loginAuthApi = {
       AUTH_ENDPOINTS.login,
       {
         loginIdentifier: payload.loginIdentifier,
-        email: payload.email,
         password: payload.password,
         rememberMe: payload.rememberMe,
       },

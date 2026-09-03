@@ -13,6 +13,10 @@ import {
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../common/Avatar";
 import { SafeImage } from "../common/SafeImage";
+import {
+  afterNextPaint,
+  markImagePerformanceMilestone,
+} from "../../utils/imagePerformanceTelemetry";
 
 export interface GalleryImage {
   url: string;
@@ -40,6 +44,8 @@ export interface ImagePreviewModalProps {
   sentAt?: Date | string;
   /** Open the full "Kho lưu trữ" panel — shown as the last filmstrip cell when the gallery exceeds the strip cap */
   onViewAll?: () => void;
+  /** Internal trace key only; never emitted in the telemetry payload. */
+  telemetryConversationKey?: string;
 }
 
 /** How many recent thumbnails the filmstrip shows before deferring to "Kho lưu trữ" */
@@ -138,6 +144,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   senderAvatar,
   sentAt,
   onViewAll,
+  telemetryConversationKey,
 }) => {
   const { t } = useTranslation();
   const [zoom, setZoom] = useState<ZoomState>(DEFAULT_ZOOM);
@@ -149,6 +156,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   const dragStartRef = useRef({ x: 0, y: 0 });
   const thumbnailRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
 
   // Normalise to gallery array regardless of which props were used
   const gallery = useMemo<GalleryImage[]>(() => {
@@ -180,6 +188,46 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
     } else {
       setMounted(false);
     }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement;
+    const focusTimer = window.requestAnimationFrame(() => dialogRef.current?.focus());
+    return () => {
+      window.cancelAnimationFrame(focusTimer);
+      if (previous instanceof HTMLElement) previous.focus();
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          "button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])",
+        ),
+      );
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
   }, [isOpen]);
 
   // Keep the card within the viewport when the window shrinks
@@ -285,7 +333,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch {
-      if (current?.url) window.open(current.url, "_blank");
+      window.open(current.url, "_blank", "noopener,noreferrer");
     }
   }, [current]);
 
@@ -390,6 +438,11 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
         )}
         style={cardSize ? { width: cardSize.w, height: cardSize.h } : undefined}
         onClick={(e) => e.stopPropagation()}
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={resolvedAlt}
+        tabIndex={-1}
       >
         {/* Corner resize handles — drag to grow/shrink (card stays centered) */}
         {(["nw", "ne", "sw", "se"] as Corner[]).map((corner) => (
@@ -457,6 +510,19 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
             )}
             style={{
               transform: `scale(${scale}) translate(${x / scale}px, ${y / scale}px) rotate(${rotation}deg)`,
+            }}
+            onLoad={(_event, _source, meta) => {
+              if (!telemetryConversationKey) return;
+              afterNextPaint(() => {
+                markImagePerformanceMilestone(
+                  telemetryConversationKey,
+                  "T10",
+                  {
+                    decodeDurationMs: meta?.decodeDurationMs,
+                    outcome: "success",
+                  },
+                );
+              });
             }}
             draggable={false}
             fallback={

@@ -8,6 +8,9 @@ import { getMessageSeq } from "../domain/messageMerge";
 import type { Message } from "../../../types";
 import { markChatPerformance } from "../../../utils/chatPerformance";
 import { logScrollTrace } from "../../../utils/scrollTrace";
+import { markImagePerformanceMilestone } from "../../../utils/imagePerformanceTelemetry";
+import { useChatStore } from "../../../stores";
+import { buildHydratedEditedLastMessagePreviewPatch } from "../../../stores/conversationSummaryState";
 
 const INITIAL_MESSAGES_LIMIT = 50;
 const OLDER_MESSAGES_LIMIT = 50;
@@ -115,6 +118,30 @@ export const useConversationMessagesRTK = (
     skip,
   ]);
 
+  React.useEffect(() => {
+    if (skip || query.messages.length === 0) return;
+
+    const chatState = useChatStore.getState();
+    const conversation = chatState.conversationById[conversationId];
+    if (!conversation) return;
+
+    const previewPatch = buildHydratedEditedLastMessagePreviewPatch(
+      conversation,
+      query.messages,
+    );
+    if (!previewPatch?.lastMessage) return;
+
+    const currentLastMessage = conversation.lastMessage;
+    if (
+      currentLastMessage?.content === previewPatch.lastMessage.content &&
+      currentLastMessage.isEdited
+    ) {
+      return;
+    }
+
+    chatState.updateConversation(conversationId, previewPatch);
+  }, [conversationId, query.messages, skip]);
+
   const loadOlder = React.useCallback(async () => {
     if (
       skip ||
@@ -177,6 +204,14 @@ export const useConversationMessagesRTK = (
       !query.isLoading &&
       !query.isError,
   );
+
+  React.useLayoutEffect(() => {
+    if (hasLoaded) {
+      markImagePerformanceMilestone(conversationId, "T1", {
+        outcome: "success",
+      });
+    }
+  }, [conversationId, hasLoaded]);
 
   return {
     messages: query.messages,

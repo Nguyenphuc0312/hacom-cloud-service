@@ -20,6 +20,18 @@ export interface UserIdentityCandidate {
 
 export interface ResolveUserDisplayNameOptions {
   allowLegacyFallback?: boolean;
+  /**
+   * Trust `displayName` even when it looks like a system identifier.
+   *
+   * The identifier heuristic exists to hide inherited machine values (employee
+   * code "HC888892" projected into displayName). That reasoning does not hold
+   * for the signed-in user's own profile: a name they just typed and saved is
+   * an intentional choice, so discarding it makes the edit look like it silently
+   * failed — the name simply snaps back to the HR legal name.
+   *
+   * Only set this where the value is known to be self-authored.
+   */
+  trustDisplayName?: boolean;
 }
 
 const asString = (value: unknown): string => {
@@ -37,14 +49,15 @@ const joinName = (parts: Array<string | null | undefined>): string =>
     .join(" ");
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const looksLikeEmail = (value: string): boolean => EMAIL_PATTERN.test(value);
+export const looksLikeEmail = (value: string): boolean =>
+  EMAIL_PATTERN.test(value);
 
 // Matches employee codes / system usernames: no whitespace, purely alphanumeric,
 // AND containing at least one digit (e.g. "HC888892", "manual000001"). The digit
 // requirement is what distinguishes a system identifier from a single-word human
 // name like "David"/"Lisa" — those are plain letters and must NOT be discarded.
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9_.@-]+$/;
-const looksLikeIdentifier = (value: string): boolean =>
+export const looksLikeIdentifier = (value: string): boolean =>
   IDENTIFIER_PATTERN.test(value) && !value.includes(" ") && /\d/.test(value);
 
 // Matches a canonical UUID (e.g. senderId "d530b738-ca1d-42d0-b8e5-a07112a529c3").
@@ -84,7 +97,7 @@ export const resolveUserDisplayName = (
     displayName &&
     !looksLikeEmail(displayName) &&
     !looksLikeUuid(displayName) &&
-    !looksLikeIdentifier(displayName);
+    (options.trustDisplayName || !looksLikeIdentifier(displayName));
 
   if (displayNameIsUsable) {
     return displayName;

@@ -15,12 +15,15 @@ import { enrichUserProfile } from "../../services/enrichUserProfile";
 import { dispatchMentionProfileView } from "../../features/chat/events/chatUiEvents";
 import { buildMentionSegments } from "../../utils/mentionSegments";
 import { useResolvedDisplayName } from "../../stores/useResolvedDisplayName";
+import {
+  type WorkShiftCodeMatcher,
+  useWorkShiftCatalog,
+} from "../../hooks/useWorkShiftCatalog";
+import { renderShiftCodeText, ShiftCatalogModal } from "./ShiftCodeReference";
 
 // Lazy-load the markdown renderer so the entire react-markdown + unified
 // ecosystem is split into a separate async chunk (~100 kB).
-const MarkdownContent = React.lazy(
-  () => import("./MarkdownContent"),
-);
+const MarkdownContent = React.lazy(() => import("./MarkdownContent"));
 
 interface TextMessageProps {
   content: string;
@@ -92,7 +95,6 @@ interface MentionTokenProps {
   /** The tag exactly as it appears in the message body, including '@'. */
   rawText: string;
   mention?: Mention;
-  isOwn: boolean;
   isSelfMention: boolean;
   isMentionAll: boolean;
 }
@@ -109,7 +111,6 @@ interface MentionTokenProps {
 const MentionToken: React.FC<MentionTokenProps> = ({
   rawText,
   mention,
-  isOwn,
   isSelfMention,
   isMentionAll,
 }) => {
@@ -126,12 +127,15 @@ const MentionToken: React.FC<MentionTokenProps> = ({
         isMentionAll
           ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
           : isSelfMention
-            ? isOwn
-              ? "bg-[hsl(var(--chat-bubble-sent-text))/0.2] text-[hsl(var(--chat-bubble-sent-text))]"
-              : "bg-[#1976D2]/10 text-[#1565C0]"
-            : isOwn
-              ? "text-[hsl(var(--chat-bubble-sent-text))/0.95]"
-              : "text-[#1565C0]/80",
+            ? // Bị tag chính mình: cùng hệ xanh, nhưng nền đậm hơn tag thường để
+              // liếc qua là thấy. Không phân biệt gửi/nhận nữa — cùng lý do bên dưới.
+              "bg-[#1976D2]/20 text-[#1565C0] dark:bg-[#60A5FA]/25 dark:text-[#BFDBFE]"
+            : // Tag thường: bong bóng GỬI và NHẬN nổi BẰNG NHAU, cùng một màu xanh
+              // brand. Trước đây bên gửi ăn theo `--chat-bubble-sent-text` (light
+              // mode là gray-900 → tag ra ĐEN) và còn bị hạ alpha nên chìm hẳn vào
+              // nền bong bóng. Dark mode nền bong bóng tối nên phải dùng xanh sáng
+              // hơn, không thì chữ chìm ngược lại.
+              "bg-[#1976D2]/10 text-[#1565C0] dark:bg-[#60A5FA]/15 dark:text-[#93C5FD]",
         isClickable && "cursor-pointer hover:underline",
       )}
       title={mention?.employeeCode || undefined}
@@ -153,21 +157,42 @@ const MentionToken: React.FC<MentionTokenProps> = ({
   );
 };
 
+// isOwn đã bỏ: tag nay dùng CHUNG một bảng màu cho cả bong bóng gửi và nhận.
 const renderWithMentions = (
   text: string,
-  isOwn: boolean,
   options: {
     currentUserId?: string;
     mentions?: Mention[];
     currentUsername?: string;
+    isOwn: boolean;
+    onShiftCodeSelect: (code: string) => void;
+    shiftCodeLabel: (code: string) => string;
+    shiftCodeMatcher: WorkShiftCodeMatcher;
   },
 ): React.ReactNode[] => {
-  const { currentUserId, mentions, currentUsername } = options;
+  const {
+    currentUserId,
+    mentions,
+    currentUsername,
+    isOwn,
+    onShiftCodeSelect,
+    shiftCodeLabel,
+    shiftCodeMatcher,
+  } = options;
+  const renderPlain = (value: string, key: string) =>
+    renderShiftCodeText(
+      value,
+      isOwn,
+      onShiftCodeSelect,
+      shiftCodeLabel,
+      shiftCodeMatcher,
+      key,
+    );
 
   // No metadata at all: style bare `@token`s so legacy messages still look like
   // mentions, but they stay inert.
   if (!mentions || mentions.length === 0) {
-    if (!currentUsername) return [text];
+    if (!currentUsername) return renderPlain(text, "plain");
     const out: React.ReactNode[] = [];
     let lastIndex = 0;
     let match: RegExpExecArray | null;
@@ -176,9 +201,7 @@ const renderWithMentions = (
     while ((match = FALLBACK_MENTION_REGEX.exec(text)) !== null) {
       if (match.index > lastIndex) {
         out.push(
-          <React.Fragment key={`t-${key++}`}>
-            {text.slice(lastIndex, match.index)}
-          </React.Fragment>,
+          ...renderPlain(text.slice(lastIndex, match.index), `t-${key++}`),
         );
       }
       const token = match[0];
@@ -187,7 +210,6 @@ const renderWithMentions = (
         <MentionToken
           key={`m-${key++}`}
           rawText={token}
-          isOwn={isOwn}
           isSelfMention={
             candidate.toLowerCase() === currentUsername.toLowerCase()
           }
@@ -197,13 +219,9 @@ const renderWithMentions = (
       lastIndex = match.index + token.length;
     }
     if (lastIndex < text.length) {
-      out.push(
-        <React.Fragment key={`t-${key++}`}>
-          {text.slice(lastIndex)}
-        </React.Fragment>,
-      );
+      out.push(...renderPlain(text.slice(lastIndex), `t-${key++}`));
     }
-    return out.length > 0 ? out : [text];
+    return out.length > 0 ? out : renderPlain(text, "plain");
   }
 
   const byUserId = new Map(mentions.map((m) => [m.userId, m] as const));
@@ -212,7 +230,9 @@ const renderWithMentions = (
   return segments.map((segment, index) => {
     if (!segment.userId && !segment.isAll) {
       return (
-        <React.Fragment key={`t-${index}`}>{segment.text}</React.Fragment>
+        <React.Fragment key={`t-${index}`}>
+          {renderPlain(segment.text, `t-${index}`)}
+        </React.Fragment>
       );
     }
     const mention = segment.userId ? byUserId.get(segment.userId) : undefined;
@@ -221,7 +241,6 @@ const renderWithMentions = (
         key={`m-${index}`}
         rawText={segment.text}
         mention={mention}
-        isOwn={isOwn}
         isSelfMention={Boolean(
           currentUserId && segment.userId === currentUserId,
         )}
@@ -266,6 +285,14 @@ const TextMessageComponent: React.FC<TextMessageProps> = ({
 
   const isMarkdown = contentFormat === "markdown";
   const { t } = useTranslation();
+  const { matcher: shiftCodeMatcher } = useWorkShiftCatalog();
+  const [selectedShiftCode, setSelectedShiftCode] = React.useState<
+    string | null
+  >(null);
+  const shiftCodeLabel = React.useCallback(
+    (code: string) => t("chat:shiftReference.open", { code }),
+    [t],
+  );
   const displayContent =
     isCollapsible && renderMode === "collapsed"
       ? getCollapsedTextPreview(content)
@@ -285,7 +312,11 @@ const TextMessageComponent: React.FC<TextMessageProps> = ({
   if (isMarkdown && !structuredBlockContent) {
     return (
       <div className="space-y-2">
-        <React.Suspense fallback={<span className="opacity-50 text-sm">{displayContent}</span>}>
+        <React.Suspense
+          fallback={
+            <span className="opacity-50 text-sm">{displayContent}</span>
+          }
+        >
           <MarkdownContent content={displayContent} isOwn={isOwn} />
         </React.Suspense>
         {isCollapsible && onToggleExpand ? (
@@ -294,7 +325,9 @@ const TextMessageComponent: React.FC<TextMessageProps> = ({
             onClick={onToggleExpand}
             className={clsx(
               "text-xs font-semibold underline-offset-2 hover:underline",
-              isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-[#1565C0]",
+              isOwn
+                ? "text-[hsl(var(--chat-bubble-sent-text))]"
+                : "text-[#1565C0]",
             )}
           >
             {renderMode === "collapsed"
@@ -319,7 +352,9 @@ const TextMessageComponent: React.FC<TextMessageProps> = ({
             <button
               type="button"
               onClick={async () => {
-                const copied = await copyTextToClipboard(fullStructuredBlockContent);
+                const copied = await copyTextToClipboard(
+                  fullStructuredBlockContent,
+                );
                 if (copied) {
                   toast.success(
                     t("chat:message.copyFullSuccess", {
@@ -377,7 +412,9 @@ const TextMessageComponent: React.FC<TextMessageProps> = ({
               ? "leading-tight text-3xl"
               : clsx(
                   "text-[14px] leading-[21px]",
-                  isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-text-primary",
+                  isOwn
+                    ? "text-[hsl(var(--chat-bubble-sent-text))]"
+                    : "text-text-primary",
                 ),
             className,
           )}
@@ -405,10 +442,14 @@ const TextMessageComponent: React.FC<TextMessageProps> = ({
 
             return (
               <React.Fragment key={index}>
-                {renderWithMentions(part, isOwn, {
+                {renderWithMentions(part, {
                   currentUserId,
                   currentUsername,
                   mentions,
+                  isOwn,
+                  onShiftCodeSelect: setSelectedShiftCode,
+                  shiftCodeLabel,
+                  shiftCodeMatcher,
                 })}
               </React.Fragment>
             );
@@ -422,13 +463,22 @@ const TextMessageComponent: React.FC<TextMessageProps> = ({
           onClick={onToggleExpand}
           className={clsx(
             "text-xs font-semibold underline-offset-2 hover:underline",
-            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-[#1565C0]",
+            isOwn
+              ? "text-[hsl(var(--chat-bubble-sent-text))]"
+              : "text-[#1565C0]",
           )}
         >
           {renderMode === "collapsed"
             ? t("chat:message.expandLong", { defaultValue: "Xem them" })
             : t("chat:message.collapseLong", { defaultValue: "Thu gon" })}
         </button>
+      ) : null}
+
+      {selectedShiftCode ? (
+        <ShiftCatalogModal
+          code={selectedShiftCode}
+          onClose={() => setSelectedShiftCode(null)}
+        />
       ) : null}
     </div>
   );

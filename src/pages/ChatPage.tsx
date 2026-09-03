@@ -21,7 +21,7 @@ import { AppShell, ModuleSidebar } from "../shared/layout";
 import {
   ConfirmDialog,
   NotificationListSkeleton,
-  PageSkeleton,
+  ChatWorkspaceSkeleton,
   ProfileSkeleton,
   Skeleton,
 } from "../components/ui";
@@ -1322,7 +1322,7 @@ export const ChatPage: React.FC = () => {
 
   if (!currentUserSummary) {
     if (!isAuthInitialized || isAuthLoading) {
-      return <PageSkeleton />;
+      return <ChatWorkspaceSkeleton />;
     }
 
     return (

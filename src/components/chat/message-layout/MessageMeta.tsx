@@ -1,10 +1,7 @@
 import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import {
-  CheckIcon,
-  PencilIcon,
-} from "@heroicons/react/24/solid";
+import { CheckIcon } from "@heroicons/react/24/solid";
 import {
   ClockIcon,
   ExclamationCircleIcon,
@@ -162,7 +159,7 @@ export const MessageMeta: React.FC<MessageMetaProps> = React.memo(
         className={clsx(
           "flex min-h-4 max-w-full min-w-0 items-center text-[11px] leading-4",
           contract.cluster.meta,
-          layout === "inline" ? "gap-1.5" : "flex-wrap gap-2",
+          layout === "inline" ? "gap-1" : "flex-wrap gap-1",
           isOwn ? "justify-end text-text-muted/92" : "text-text-muted/84",
           className,
         )}
@@ -172,7 +169,7 @@ export const MessageMeta: React.FC<MessageMetaProps> = React.memo(
           onViewEditHistory ? (
             <button
               type="button"
-              className="inline-flex items-center gap-1 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:rounded-sm"
+              className="inline-flex shrink-0 items-center rounded-sm underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
               title={t("chat:message.editHistory.viewTitle", {
                 defaultValue: "Xem lịch sử chỉnh sửa",
               })}
@@ -181,19 +178,22 @@ export const MessageMeta: React.FC<MessageMetaProps> = React.memo(
               })}
               onClick={() => onViewEditHistory(message.id)}
             >
-              <PencilIcon className="h-3 w-3" />
               <span>{editedLabel}</span>
             </button>
           ) : (
             <span
-              className="inline-flex items-center gap-1"
+              className="inline-flex shrink-0 items-center"
               title={editedTitle}
               aria-label={editedTitle}
             >
-              <PencilIcon className="h-3 w-3" />
               <span>{editedLabel}</span>
             </span>
           )
+        )}
+        {message.isEdited && (
+          <span className="select-none opacity-60" aria-hidden="true">
+            ·
+          </span>
         )}
         <span className="shrink-0">{timeStr}</span>
         {isFailed && (

@@ -37,18 +37,10 @@ const MULTI_DAY_END_COLOR = {
 } as const;
 import { useNowMinute } from "../hooks/useNowMinute";
 
-interface AttendanceDay {
-  date: string;
-  firstPunch?: string | null;
-  lastPunch?: string | null;
-  totalTime?: string | null;
-}
-
 interface WeekViewProps {
   /** Ngày bất kỳ trong tuần cần hiển thị. */
   weekDate: Date;
   events: CalendarEvent[];
-  attendanceData: AttendanceDay[];
   onDateClick: (date: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
   /** Click ô khung giờ trống → tạo lịch tại thời điểm đó (phút từ nửa đêm). */
@@ -72,15 +64,11 @@ const fmtMin = (min: number): string => {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 };
 
-const dateKey = (date: Date): string =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-
 // memo: parent (CalendarPage) re-renders on every modal toggle; props are
 // stable (useCallback handlers) so memo lets Week view skip those re-renders.
 const WeekViewImpl: React.FC<WeekViewProps> = ({
   weekDate,
   events,
-  attendanceData,
   onDateClick,
   onEventClick,
   onSlotClick,
@@ -105,9 +93,6 @@ const WeekViewImpl: React.FC<WeekViewProps> = ({
 
   const hasAllDay = eventsByDay.some((d) => d.allDay.length > 0);
 
-  const getAttendanceForDay = (date: Date): AttendanceDay | undefined =>
-    attendanceData.find((a) => a.date === dateKey(date));
-
   // Auto-scroll tới giờ hiện tại khi mở/đổi tuần.
   useEffect(() => {
     const el = scrollRef.current;
@@ -127,7 +112,6 @@ const WeekViewImpl: React.FC<WeekViewProps> = ({
       <div className="flex border-b border-border bg-surface">
         <div className="w-16 shrink-0 border-r border-border" />
         {weekDays.map((date, index) => {
-          const attendance = getAttendanceForDay(date);
           const isWeekend = index >= 5;
           return (
             <button
@@ -161,15 +145,6 @@ const WeekViewImpl: React.FC<WeekViewProps> = ({
                 )}
               >
                 {date.getDate()}
-              </div>
-              {/* Luôn giữ chỗ cho vùng chấm công để các cột cao bằng nhau (cân đối header) */}
-              <div className="mt-0.5 h-[22px] space-y-px text-[9px] leading-tight text-emerald-600 dark:text-emerald-400">
-                {attendance?.firstPunch || attendance?.lastPunch ? (
-                  <>
-                    <div className="truncate">Giờ đến {attendance?.firstPunch ?? "--:--"}</div>
-                    <div className="truncate">Giờ về {attendance?.lastPunch ?? "--:--"}</div>
-                  </>
-                ) : null}
               </div>
             </button>
           );

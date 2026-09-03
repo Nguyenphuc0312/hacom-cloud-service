@@ -101,7 +101,9 @@ const ReportIssuePage: React.FC = () => {
   const [previewIndex, setPreviewIndex] = React.useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [uploadingCount, setUploadingCount] = React.useState(0);
-  const [submittedTicket, setSubmittedTicket] = React.useState<string | null>(null);
+  const [submittedTicket, setSubmittedTicket] = React.useState<string | null>(
+    null,
+  );
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const imageFiles = React.useMemo(() => files.filter(isImageFile), [files]);
@@ -206,7 +208,10 @@ const ReportIssuePage: React.FC = () => {
     await uploadClient.uploadToSignedUrl({
       signedUrl: signed.uploadUrl,
       method: signed.uploadMethod || "PUT",
-      headers: { ...(signed.uploadHeaders || {}), "Content-Type": validated.mimeType },
+      headers: {
+        ...(signed.uploadHeaders || {}),
+        "Content-Type": validated.mimeType,
+      },
       file,
     });
 
@@ -229,7 +234,8 @@ const ReportIssuePage: React.FC = () => {
     const form = e.currentTarget as HTMLFormElement;
     const data = new FormData(form);
     const priority =
-      (data.get("priority") as SupportIssuePriority | null) ?? SupportIssuePriority.MEDIUM;
+      (data.get("priority") as SupportIssuePriority | null) ??
+      SupportIssuePriority.MEDIUM;
 
     setIsSubmitting(true);
     try {
@@ -245,7 +251,8 @@ const ReportIssuePage: React.FC = () => {
         await supportApi.createIssue({
           title: String(data.get("title") ?? "").trim(),
           stepsToReproduce: String(data.get("stepsToReproduce") ?? "").trim(),
-          expectedResult: String(data.get("expectedResult") ?? "").trim() || null,
+          expectedResult:
+            String(data.get("expectedResult") ?? "").trim() || null,
           actualResult: String(data.get("actualResult") ?? "").trim() || null,
           priority,
           attachmentFileIds,
@@ -265,7 +272,8 @@ const ReportIssuePage: React.FC = () => {
     } catch (error) {
       const apiError = extractApiError(error);
       toast.error(
-        apiError.message || "Không gửi được báo cáo. Vui lòng thử lại hoặc liên hệ đội ngũ IT.",
+        apiError.message ||
+          "Không gửi được báo cáo. Vui lòng thử lại hoặc liên hệ đội ngũ IT.",
       );
     } finally {
       setIsSubmitting(false);
@@ -327,18 +335,23 @@ const ReportIssuePage: React.FC = () => {
               required
               rows={5}
               maxLength={5000}
-              placeholder={"1. Mở nhóm chat \"Kỹ thuật\"\n2. Bấm nút đính kèm, chọn 1 ảnh\n3. Bấm Gửi"}
+              placeholder={
+                '1. Mở nhóm chat "Kỹ thuật"\n2. Bấm nút đính kèm, chọn 1 ảnh\n3. Bấm Gửi'
+              }
               className="w-full resize-none rounded-2xl border border-border/60 bg-surface px-5 py-4 text-sm text-text-primary focus:border-primary/60 focus:outline-none focus:ring-4 focus:ring-primary/5"
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4">
             <div className="space-y-2">
               <label
                 htmlFor="issue-expected"
                 className="text-sm font-bold text-text-primary"
               >
-                Kết quả mong đợi
+                Kết quả mong đợi{" "}
+                <span className="font-normal text-text-muted">
+                  (không bắt buộc)
+                </span>
               </label>
               <textarea
                 id="issue-expected"
@@ -354,7 +367,10 @@ const ReportIssuePage: React.FC = () => {
                 htmlFor="issue-actual"
                 className="text-sm font-bold text-text-primary"
               >
-                Kết quả thực tế
+                Kết quả thực tế{" "}
+                <span className="font-normal text-text-muted">
+                  (không bắt buộc)
+                </span>
               </label>
               <textarea
                 id="issue-actual"
@@ -369,7 +385,10 @@ const ReportIssuePage: React.FC = () => {
 
           <div className="space-y-2">
             <label className="text-sm font-bold text-text-primary">
-              Ảnh chụp màn hình / tệp đính kèm
+              Ảnh chụp màn hình / tệp đính kèm{" "}
+              <span className="font-normal text-text-muted">
+                (không bắt buộc)
+              </span>
             </label>
             <p className="text-xs text-text-muted">
               Chụp màn hình rồi nhấn{" "}
@@ -467,7 +486,8 @@ const ReportIssuePage: React.FC = () => {
                       onClick={() =>
                         setFiles((current) =>
                           current.filter(
-                            (f) => !(f.name === file.name && f.size === file.size),
+                            (f) =>
+                              !(f.name === file.name && f.size === file.size),
                           ),
                         )
                       }

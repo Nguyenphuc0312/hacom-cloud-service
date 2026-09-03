@@ -4,6 +4,7 @@ import { ClockIcon, CheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import type { ReminderInfo } from "@hacom/chat-shared-types/chat";
 import type { Message } from "../../types";
 import { formatReminderWhen, reminderDateBadge } from "../message/reminderFormat";
+import { dedupeByReminderId } from "./reminderHistory";
 
 interface ReminderHistoryListProps {
   reminders: Message[];
@@ -23,32 +24,6 @@ interface ReminderHistoryListProps {
  * theo `reminder.id` và chỉ giữ card GỐC (không phải fire notice) — đó cũng là
  * card mang truth hủy/sửa, nên bấm vào là nhảy đúng chỗ.
  */
-export const dedupeByReminderId = (messages: Message[]): Message[] => {
-  const byId = new Map<string, Message>();
-  for (const msg of messages) {
-    const reminder = (msg.metadata as { reminder?: ReminderInfo } | null | undefined)?.reminder;
-    if (!reminder) continue;
-    const existing = byId.get(reminder.id);
-    if (!existing) {
-      byId.set(reminder.id, msg);
-      continue;
-    }
-    // Card gốc thắng fire notice. Dữ liệu cũ (trước khi có isFireNotice) không có
-    // cờ này ⇒ fallback: giữ card cũ nhất, vì bản gốc luôn được tạo trước.
-    const existingReminder = (existing.metadata as { reminder?: ReminderInfo }).reminder!;
-    const existingIsNotice = existingReminder.isFireNotice ?? false;
-    const currentIsNotice = reminder.isFireNotice ?? false;
-    if (existingIsNotice && !currentIsNotice) {
-      byId.set(reminder.id, msg);
-    } else if (existingIsNotice === currentIsNotice) {
-      // messageSeq là thứ tự chuẩn duy nhất — bản gốc luôn có seq nhỏ nhất.
-      const older = (msg.messageSeq ?? Infinity) < (existing.messageSeq ?? Infinity) ? msg : existing;
-      byId.set(reminder.id, older);
-    }
-  }
-  return [...byId.values()];
-};
-
 export const ReminderHistoryList: React.FC<ReminderHistoryListProps> = ({
   reminders: allReminders,
   loading,
@@ -61,9 +36,9 @@ export const ReminderHistoryList: React.FC<ReminderHistoryListProps> = ({
     return (
       <div className="space-y-2 p-3">
         {[1, 2].map((i) => (
-          <div key={i} className="animate-pulse rounded-xl bg-surface-overlay p-3">
-            <div className="mb-2 h-3 w-3/4 rounded bg-surface-active" />
-            <div className="h-2 w-1/3 rounded bg-surface-active/70" />
+          <div key={i} className="skeleton-stage rounded-xl bg-surface-overlay p-3">
+            <div className="skeleton mb-2 h-3 w-3/4 rounded" />
+            <div className="skeleton h-2 w-1/3 rounded" />
           </div>
         ))}
       </div>

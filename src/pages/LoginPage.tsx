@@ -104,6 +104,10 @@ export const LoginPage: React.FC = () => {
         navigate(ROUTE_PATHS.PENDING_HR_LINK, { replace: true });
         return;
       }
+      if (typeof result === "object" && result.status === "password_change_required") {
+        navigate(ROUTE_PATHS.FORCE_CHANGE_PASSWORD, { replace: true });
+        return;
+      }
       if (result === "activation_required") {
         toast.info(t("auth:activation.required.redirecting"));
         // GuestRoute handles redirect with from state
@@ -238,7 +242,11 @@ export const LoginPage: React.FC = () => {
               <QrLoginPanel
                 key="qr-panel"
                 rememberMe={rememberMe}
-                onSuccess={() => {
+                onSuccess={(payload) => {
+                  if ("requiresPasswordChange" in payload && payload.requiresPasswordChange) {
+                    navigate(ROUTE_PATHS.FORCE_CHANGE_PASSWORD, { replace: true });
+                    return;
+                  }
                   toast.success("Đăng nhập bằng QR thành công.");
                   const from = (location.state as { from?: string })?.from ?? "/chat";
                   navigate(from, { replace: true });

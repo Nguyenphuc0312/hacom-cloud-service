@@ -10,14 +10,15 @@ API_UPSTREAM ?= http://host.docker.internal:3001
 AUTH_UPSTREAM ?= http://host.docker.internal:3101
 WS_UPSTREAM ?= http://host.docker.internal:8001
 
-.PHONY: help install dev build start lint typecheck clean docker-build docker-run docker-stop docker-logs docker-shell
+.PHONY: help install kill-port dev build start lint typecheck clean docker-build docker-run docker-stop docker-logs docker-shell
 
 .DEFAULT_GOAL := help
 
 help:
 	@printf "Available targets for %s:\n" "$(APP_NAME)"
 	@printf "  %-14s %s\n" "install" "Install dependencies with npm ci"
-	@printf "  %-14s %s\n" "dev" "Run Vite dev server"
+	@printf "  %-14s %s\n" "kill-port" "Dừng tiến trình đang giữ port $(HOST_PORT)"
+	@printf "  %-14s %s\n" "dev" "Run Vite dev server (tự dọn port $(HOST_PORT) trước)"
 	@printf "  %-14s %s\n" "build" "Create the production bundle"
 	@printf "  %-14s %s\n" "start" "Preview the production bundle"
 	@printf "  %-14s %s\n" "lint" "Run ESLint"
@@ -32,8 +33,23 @@ help:
 install:
 	npm ci
 
-dev:
-	npm run dev -- --host 0.0.0.0 --port 5100
+# Vite chạy strictPort (vite.config.ts) — port 5100 hardcode ở Dockerfile,
+# nginx và các config Playwright, nên fail còn hơn âm thầm nhảy sang 5101.
+# Hệ quả: dev server cũ còn sống là lần chạy sau chết. Dọn trước khi start.
+kill-port:
+	@pid=$$(ss -ltnpH "sport = :$(HOST_PORT)" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | head -1); \
+	if [ -n "$$pid" ]; then \
+		echo "Port $(HOST_PORT) đang bị pid $$pid giữ — dừng nó."; \
+		kill $$pid 2>/dev/null || true; \
+		for i in 1 2 3 4 5 6 7 8 9 10; do \
+			kill -0 $$pid 2>/dev/null || break; \
+			sleep 0.3; \
+		done; \
+		kill -0 $$pid 2>/dev/null && { echo "Không tự thoát — kill -9."; kill -9 $$pid 2>/dev/null || true; sleep 0.3; } || true; \
+	fi
+
+dev: kill-port
+	npm run dev -- --host 0.0.0.0 --port $(HOST_PORT)
 
 build:
 	npm run build

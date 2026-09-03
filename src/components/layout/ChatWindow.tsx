@@ -57,11 +57,15 @@ import { isDirectConversation } from "../../lib/conversationAdapter";
 import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
 import { useChatUiStore } from "../../features/chat/state/chatUiStore";
 import { useMessageJumpTargetRTK } from "../../features/chat/hooks/useMessageJumpTargetRTK";
-import { chatApi as rtkChatApi } from "../../features/api/chatApi";
+import {
+  chatApi as rtkChatApi,
+  type MentionSendInput,
+} from "../../features/api/chatApi";
 import { store } from "../../store";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 import { FeatureErrorBoundary } from "../error";
 import type { LinkPreviewMeta } from "../message/linkPreviewUtils";
+import type { SendTextMessageOptions } from "../../features/chat/hooks/useSendMessage";
 
 const SearchPanel = React.lazy(() => import("../chat/SearchPanel"));
 const PinnedMessagesPanel = React.lazy(
@@ -97,6 +101,11 @@ const DRAFT_PERSIST_DEBOUNCE_MS = 450;
 /** Extract mentions with full display name info for optimistic message rendering.
  * Returns array of { userId, displayName } objects to be passed to the send mutation.
  * Uses the same smart regex matching as extractMentionUserIds to handle @fullName with spaces.
+ *
+ * ⚠️ Đây là đường DỰ PHÒNG (dò tên bằng regex), chỉ chạy khi editor không cho được
+ * range — dán chữ "@Tên" thô, hoặc draft khôi phục lại thành text phẳng. Có chip
+ * thật thì `handleSend` dùng `getMentionRanges()`, chính xác tuyệt đối.
+ * Vì sao không bỏ hẳn: bỏ đi thì hai ca trên mất tag hoàn toàn.
  */
 function extractMentionDetails(
   content: string,
@@ -127,6 +136,39 @@ function extractMentionDetails(
     register(candidate.displayName);
     register(candidate.resolvedName || candidate.fullName);
     register(candidate.username);
+  }
+
+  // Người Việt gọi nhau bằng phần ĐUÔI của tên đầy đủ: "Nguyễn Thế Huy Hoàng" →
+  // gõ tay "@Huy Hoàng". Thiếu các hậu tố này thì tag gõ tay không resolve ra
+  // ai: không highlight, và người được nhắc KHÔNG nhận thông báo.
+  //
+  // Đăng ký sau tên chính (tên chính luôn thắng) và bỏ hẳn hậu tố nào trỏ về
+  // hai người — thà trượt highlight còn hơn tag nhầm sang người khác. Chỉ nhận
+  // hậu tố ≥ 2 từ: một từ ("@Hoàng") trùng quá dễ.
+  const suffixToId = new Map<string, string | null>();
+  for (const candidate of candidates) {
+    const seenHere = new Set<string>();
+    for (const surface of [candidate.mentionInsertName, candidate.resolvedName]) {
+      const words = (surface || "").trim().split(/\s+/).filter(Boolean);
+      for (let i = 1; i <= words.length - 2; i++) {
+        const suffix = words.slice(i).join(" ");
+        const token = suffix.toLowerCase();
+        if (tokenToInfo.has(token) || seenHere.has(token)) continue;
+        seenHere.add(token);
+        suffixToId.set(
+          token,
+          suffixToId.has(token) && suffixToId.get(token) !== candidate.id
+            ? null
+            : candidate.id,
+        );
+        if (suffixToId.get(token)) {
+          tokenToInfo.set(token, { id: candidate.id, displayName: suffix });
+        }
+      }
+    }
+  }
+  for (const [token, id] of suffixToId) {
+    if (id === null) tokenToInfo.delete(token);
   }
 
   if (tokenToInfo.size === 0) return [];
@@ -173,8 +215,9 @@ interface ChatWindowProps {
     replyTo?: Message,
     fileMeta?: Attachment | Attachment[],
     type?: MessageType,
-    /** Array of mention objects with userId and displayName for optimistic rendering */
-    mentions?: { userId: string; displayName: string }[],
+    /** Array of mention objects with userId and displayName for optimistic rendering.
+     *  `offset`/`length` (code point, gồm '@') có khi editor cho được range. */
+    mentions?: MentionSendInput[],
     contentFormat?: "plain_text" | "rich_text",
     contentJson?: Record<string, unknown>,
     plainText?: string,
@@ -185,6 +228,8 @@ interface ChatWindowProps {
   onEditMessage?: (messageId: string, content: string) => void | Promise<void>;
   onDeleteMessage?: (messageId: string, mode?: "FOR_ME" | "FOR_EVERYONE", context?: "ADMIN_DELETE") => void | Promise<void>;
   onToggleInfoPanel: () => void;
+  /** Đóng panel thông tin (do ChatPage sở hữu) khi mở tìm kiếm/ghim. */
+  onCloseInfoPanel?: () => void;
   onBack?: () => void;
   onTyping?: (isTyping: boolean) => void;
   hasMoreMessages?: boolean;
@@ -249,6 +294,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onEditMessage,
   onDeleteMessage,
   onToggleInfoPanel,
+  onCloseInfoPanel,
   onBack,
   onTyping,
   hasMoreMessages,
@@ -518,7 +564,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, []);
 
   const handleSend = React.useCallback(
-    (content?: string, fileMeta?: unknown, type?: string) => {
+    (
+      content?: string,
+      fileMeta?: unknown,
+      type?: string,
+      textOptions?: SendTextMessageOptions,
+    ) => {
       if (inputMode === "edit" && editingMessage && onEditMessage) {
         const nextContent = (content || "").trim();
         if (
@@ -577,7 +628,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             : allAttachments
           : undefined;
 
-      const mentionDetails = extractMentionDetails(outgoingContent, mentionCandidatesRef.current);
+      // Đường CHUẨN: editor biết chính xác chip nằm ở đâu → gửi kèm offset/length,
+      // BE lưu lại, mọi client render theo range thay vì dò tên. Hết hẳn ca "tag
+      // mất highlight vì FE/BE resolve tên khác nhau".
+      // Rỗng (dán chữ thô / draft phẳng) → lùi về dò tên như cũ.
+      const mentionRanges = messageInputRef.current?.getMentionRanges() ?? [];
+      const nameByUserId = new Map(
+        mentionCandidatesRef.current.map((c) => [
+          c.id,
+          c.mentionInsertName || c.resolvedName || c.displayName || c.username,
+        ]),
+      );
+      const mentionDetails = mentionRanges.length
+        ? mentionRanges.map((range) => ({
+            userId: range.userId,
+            displayName: nameByUserId.get(range.userId) || range.userId,
+            offset: range.offset,
+            length: range.length,
+          }))
+        : extractMentionDetails(outgoingContent, mentionCandidatesRef.current);
 
       logMessageDebug("ChatWindow", "send_requested", {
         conversationId: conversation.id,
@@ -596,6 +665,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           attachmentArg,
           messageType,
           mentionDetails,
+          textOptions?.contentFormat,
+          textOptions?.contentJson,
+          textOptions?.plainText,
+          textOptions?.linkPreview,
         );
         const sendPromise = Promise.resolve(sendResult);
         return sendPromise
@@ -829,13 +902,30 @@ const [composerHeight, setComposerHeight] = React.useState(0);
     slowModeUntil,
   ]);
 
-  const handleSearchClick = React.useCallback(() => {
-    setOverlayMode((prev) => (prev === "search" ? null : "search"));
-  }, []);
+  // Chỉ một panel bên phải được mở tại một thời điểm. overlayMode sống ở đây còn
+  // info panel sống ở ChatPage, nên phải chủ động đóng bên kia — nếu không cả hai
+  // cùng mở và bóp khung chat lại còn một dải hẹp.
+  const openOverlay = React.useCallback(
+    (mode: "search" | "pinned") => {
+      setOverlayMode((prev) => {
+        const next = prev === mode ? null : mode;
+        if (next) onCloseInfoPanel?.();
+        return next;
+      });
+    },
+    [onCloseInfoPanel],
+  );
 
-  const handlePinnedClick = React.useCallback(() => {
-    setOverlayMode((prev) => (prev === "pinned" ? null : "pinned"));
-  }, []);
+  const handleSearchClick = React.useCallback(() => openOverlay("search"), [openOverlay]);
+  const handlePinnedClick = React.useCallback(() => openOverlay("pinned"), [openOverlay]);
+
+  // Ngược lại: bấm nút Thông tin thì overlay phải nhường chỗ. Đóng ngay tại chỗ bấm
+  // thay vì đồng bộ qua effect — effect sẽ setState trong lúc render (lint chặn) và
+  // gây thêm một lượt render thừa.
+  const handleToggleInfoPanelExclusive = React.useCallback(() => {
+    setOverlayMode(null);
+    onToggleInfoPanel();
+  }, [onToggleInfoPanel]);
 
   const handlePin = React.useCallback(
     async (messageId: string) => {
@@ -1017,6 +1107,14 @@ const [composerHeight, setComposerHeight] = React.useState(0);
   >({});
 
   const mentionCandidates = React.useMemo<MentionCandidate[]>(() => {
+    // Chat 1-1 KHÔNG có tag @ — giống Zalo. Chỉ có hai người, tag người đang
+    // nói chuyện trực tiếp chẳng để làm gì: họ nhận thông báo mọi tin rồi.
+    // Trả mảng rỗng là panel không bao giờ bung, nên gõ "@" trong chat 1-1
+    // (email, giá "50@kg"…) không còn bị chắn phím Enter.
+    if (isDirectConversation(conversation)) {
+      return [];
+    }
+
     const participants = Array.isArray(conversation.participants)
       ? conversation.participants
       : [];
@@ -1056,10 +1154,14 @@ const [composerHeight, setComposerHeight] = React.useState(0);
             allowLegacyFallback: false,
           }) || undefined;
 
-        // Primary name: fullNameFromHR > displayName > username
+        // `displayName` above is already the fully-resolved name (it applies the
+        // shared displayName > fullNameFromHr > username ordering internally),
+        // so it must not be overridden by a raw `fullNameFromHR ||` prefix —
+        // that made @mentions insert the HR legal name while the member list and
+        // timeline showed the user's chosen name.
         const resolvedName =
-          fullNameFromHR ||
           displayName ||
+          fullNameFromHR ||
           participant.username?.trim() ||
           employeeCode ||
           participant.id;
@@ -1090,8 +1192,8 @@ const [composerHeight, setComposerHeight] = React.useState(0);
         };
       });
 
-    // Add @all candidate for group conversations (non-direct/private)
-    if (!isDirectConversation(conversation) && individualCandidates.length >= 1) {
+    // Tới đây chắc chắn là nhóm (chat 1-1 đã return rỗng ở trên) → có "@all".
+    if (individualCandidates.length >= 1) {
       return [
         {
           id: "all",
@@ -1277,7 +1379,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
         typingStatus={typingStatus}
         typingStatuses={typingStatuses}
         onBack={onBack}
-        onInfoClick={onToggleInfoPanel}
+        onInfoClick={handleToggleInfoPanelExclusive}
         onSearchClick={handleSearchClick}
         onPinnedClick={handlePinnedClick}
         onSelectionMode={enterSelectionMode}
@@ -1453,9 +1555,9 @@ const [composerHeight, setComposerHeight] = React.useState(0);
           scrim), matching the info panel behaviour */}
       <div
         className={clsx(
-          "h-full shrink-0 overflow-hidden border-border/60 transition-[width] duration-300 ease-out",
+          "h-full shrink-0 overflow-hidden bg-surface transition-[width] duration-300 ease-out",
           overlayMode === "search" || overlayMode === "pinned"
-            ? "w-full max-w-[var(--app-inspector-width)] border-l"
+            ? "w-full max-w-[var(--app-inspector-width)] border-l border-border/70"
             : "w-0 border-l-0",
         )}
         aria-hidden={
@@ -1471,7 +1573,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
               onSelectMessage={handleJumpToMessage}
               onNavigateToMessageId={handleNavigateToMessage}
               onClose={() => setOverlayMode(null)}
-              className="h-full w-[var(--app-inspector-width)]"
+              className="h-full w-full"
             />
           </React.Suspense>
         )}
@@ -1486,7 +1588,7 @@ const [composerHeight, setComposerHeight] = React.useState(0);
               onClose={() => setOverlayMode(null)}
               onJumpToMessage={handleJumpToMessage}
               onUnpin={(message) => togglePin({ ...message, isPinned: true })}
-              className="h-full w-[var(--app-inspector-width)]"
+              className="h-full w-full"
             />
           </React.Suspense>
         )}

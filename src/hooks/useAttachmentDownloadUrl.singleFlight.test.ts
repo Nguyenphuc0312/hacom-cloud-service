@@ -1,5 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { dedupeSignedUrlRequest } from "./useAttachmentDownloadUrl";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;

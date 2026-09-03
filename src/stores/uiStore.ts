@@ -118,8 +118,14 @@ interface UIState {
     labels: ConversationLabel[],
     assignments?: Record<string, string[]>,
   ) => void;
+  setConversationLabelAssignment: (conversationId: string, labelIds: string[]) => void;
   setSelectedConversationLabelIds: (labelIds: string[]) => void;
   clearSelectedConversationLabels: () => void;
+  toggleConversationLabel: (conversationId: string, labelId: string) => void;
+  addConversationLabel: (name: string, color: string) => void;
+  updateConversationLabel: (labelId: string, patch: Partial<Pick<ConversationLabel, "name" | "color">>) => void;
+  deleteConversationLabel: (labelId: string) => void;
+  restoreDefaultConversationLabels: () => void;
 }
 
 // ============================================
@@ -135,8 +141,16 @@ export const DEFAULT_CONVERSATION_LABELS: ConversationLabel[] = [
   { id: "colleague", name: "Đồng nghiệp", color: "#0b74ff" },
 ];
 
+const createLabelId = (): string => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `label-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+};
+
 const uniqueLabelIds = (labelIds: string[]): string[] =>
-  Array.from(new Set((labelIds ?? []).filter(Boolean)));
+  Array.from(new Set(labelIds.filter(Boolean)));
 
 export const useUIStore = create<UIState>()(
   persist(
@@ -329,10 +343,6 @@ export const useUIStore = create<UIState>()(
       // ============================================
       // CONVERSATION LABELS
       // ============================================
-      // These defaults are intentionally present even when an older persisted
-      // ui-storage payload is loaded.  The latest Sidebar renders this state
-      // during the first paint, so undefined arrays would otherwise crash the
-      // whole chat route before the API response arrives.
       conversationLabels: DEFAULT_CONVERSATION_LABELS,
       conversationLabelsByConversationId: {},
       selectedConversationLabelIds: [],
@@ -347,24 +357,38 @@ export const useUIStore = create<UIState>()(
       },
 
       setConversationLabelState: (labels, assignments = {}) => {
-        const safeLabels = Array.isArray(labels) ? labels : [];
-        const validIds = new Set(safeLabels.map((label) => label.id));
-        const safeAssignments = Object.fromEntries(
-          Object.entries(assignments ?? {})
-            .map(([conversationId, labelIds]) => [
-              conversationId,
-              uniqueLabelIds(labelIds).filter((labelId) => validIds.has(labelId)),
-            ])
-            .filter(([, labelIds]) => labelIds.length > 0),
-        );
-
+        const labelIdSet = new Set(labels.map((label) => label.id));
         set((state) => ({
-          conversationLabels: safeLabels,
-          conversationLabelsByConversationId: safeAssignments,
+          conversationLabels: labels,
+          conversationLabelsByConversationId: Object.fromEntries(
+            Object.entries(assignments)
+              .map(([conversationId, labelIds]) => [
+                conversationId,
+                uniqueLabelIds(labelIds).filter((labelId) =>
+                  labelIdSet.has(labelId),
+                ),
+              ])
+              .filter(([, labelIds]) => labelIds.length > 0),
+          ),
           selectedConversationLabelIds: state.selectedConversationLabelIds.filter(
-            (labelId) => validIds.has(labelId),
+            (labelId) => labelIdSet.has(labelId),
           ),
         }));
+      },
+
+      setConversationLabelAssignment: (conversationId, labelIds) => {
+        set((state) => {
+          const nextAssignments = {
+            ...state.conversationLabelsByConversationId,
+          };
+          const nextLabelIds = uniqueLabelIds(labelIds);
+          if (nextLabelIds.length > 0) {
+            nextAssignments[conversationId] = nextLabelIds;
+          } else {
+            delete nextAssignments[conversationId];
+          }
+          return { conversationLabelsByConversationId: nextAssignments };
+        });
       },
 
       setSelectedConversationLabelIds: (labelIds) => {
@@ -375,19 +399,120 @@ export const useUIStore = create<UIState>()(
         set({ selectedConversationLabelIds: [] });
       },
 
+      toggleConversationLabel: (conversationId, labelId) => {
+        set((state) => {
+          const current = state.conversationLabelsByConversationId[conversationId] ?? [];
+          const next = current.includes(labelId)
+            ? current.filter((id) => id !== labelId)
+            : [...current, labelId];
+          const conversationLabelsByConversationId = {
+            ...state.conversationLabelsByConversationId,
+          };
+
+          if (next.length > 0) {
+            conversationLabelsByConversationId[conversationId] = next;
+          } else {
+            delete conversationLabelsByConversationId[conversationId];
+          }
+
+          return { conversationLabelsByConversationId };
+        });
+      },
+
+      addConversationLabel: (name, color) => {
+        const trimmedName = name.trim();
+        if (!trimmedName) return;
+
+        set((state) => ({
+          conversationLabels: [
+            ...state.conversationLabels,
+            {
+              id: createLabelId(),
+              name: trimmedName,
+              color,
+            },
+          ],
+        }));
+      },
+
+      updateConversationLabel: (labelId, patch) => {
+        set((state) => ({
+          conversationLabels: state.conversationLabels.map((label) =>
+            label.id === labelId
+              ? {
+                  ...label,
+                  name: patch.name?.trim() || label.name,
+                  color: patch.color ?? label.color,
+                }
+              : label,
+          ),
+        }));
+      },
+
+      deleteConversationLabel: (labelId) => {
+        set((state) => {
+          const conversationLabelsByConversationId = Object.fromEntries(
+            Object.entries(state.conversationLabelsByConversationId)
+              .map(([conversationId, labelIds]) => [
+                conversationId,
+                labelIds.filter((id) => id !== labelId),
+              ])
+              .filter(([, labelIds]) => labelIds.length > 0),
+          );
+
+          return {
+            conversationLabels: state.conversationLabels.filter(
+              (label) => label.id !== labelId,
+            ),
+            selectedConversationLabelIds:
+              state.selectedConversationLabelIds.filter((id) => id !== labelId),
+            conversationLabelsByConversationId,
+          };
+        });
+      },
+
+      restoreDefaultConversationLabels: () => {
+        set((state) => {
+          const existingLabelIds = new Set(
+            state.conversationLabels.map((label) => label.id),
+          );
+          const missingLabels = DEFAULT_CONVERSATION_LABELS.filter(
+            (label) => !existingLabelIds.has(label.id),
+          );
+
+          if (missingLabels.length === 0) {
+            return state;
+          }
+
+          return {
+            conversationLabels: [...state.conversationLabels, ...missingLabels],
+          };
+        });
+      },
+
     }),
     {
       name: "ui-storage",
+      version: 2,
       storage: createJSONStorage(() => localStorage),
+      migrate: (persistedState) => {
+        if (!persistedState || typeof persistedState !== "object") {
+          return persistedState;
+        }
+        const state = persistedState as Partial<UIState>;
+        return {
+          ...state,
+          pinnedConversationIds: [],
+          conversationLabels: DEFAULT_CONVERSATION_LABELS,
+          conversationLabelsByConversationId: {},
+          selectedConversationLabelIds: [],
+        };
+      },
       partialize: (state) => ({
         theme: state.theme,
         brand: state.brand,
         isSidebarCollapsed: state.isSidebarCollapsed,
         chatDensity: state.chatDensity,
-        pinnedConversationIds: state.pinnedConversationIds,
-        conversationLabels: state.conversationLabels,
-        conversationLabelsByConversationId: state.conversationLabelsByConversationId,
-        selectedConversationLabelIds: state.selectedConversationLabelIds,
       }),
     },
   ),

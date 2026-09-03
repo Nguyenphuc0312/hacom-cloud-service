@@ -74,6 +74,17 @@ describe("filterHrNotifications", () => {
     expect(filterHrNotifications(rows, "all", "changed", NOW)).toHaveLength(2);
   });
 
+  it('"timesheet" chi lay thong bao cong', () => {
+    const rows: FilterableNotification[] = [
+      { type: "timesheet.period.opened", createdAt: at(5) },
+      { type: "timesheet.confirmation.disputed", createdAt: at(5) },
+      { type: "calendar.meeting.invited", createdAt: at(5) },
+    ];
+    expect(filterHrNotifications(rows, "all", "timesheet", NOW)).toHaveLength(
+      2,
+    );
+  });
+
   it("hai trục giao nhau chứ không cộng dồn", () => {
     // Hôm nay AND từ chối → DECLINED của hôm qua không được lọt.
     expect(filterHrNotifications(items, "today", "declined", NOW)).toHaveLength(

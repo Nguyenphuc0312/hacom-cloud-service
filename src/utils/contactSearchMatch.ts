@@ -3,9 +3,11 @@
  *
  * Lý do tồn tại: hai tab trước đây khớp khác nhau. Tab Bạn bè lọc client-side
  * bằng `includes()` có dấu; tab Khám phá nhận thẳng kết quả `/users/search` —
- * mà endpoint đó khớp bằng `subsequence_match` (LIKE '%c%h%i%ê%n%'), nghĩa là
- * các ký tự chỉ cần đúng THỨ TỰ chứ không cần liền nhau. Với từ khóa tiếng Việt
- * phổ biến, gõ "chiến" ra cả "Trần Chung", "Nguyễn Thị Nhung", "Bùi Văn Đức".
+ * mà endpoint đó khớp gần đúng bằng trigram, nên gõ "chiến" ra cả "Trần Chung",
+ * "Nguyễn Thị Nhung", "Bùi Văn Đức" (similarity('nhung','hung') = 0.375).
+ *
+ * Ngưỡng phía BE đã siết lên 0.5 (user-directory.service.ts). Lớp lọc này vẫn
+ * giữ để hai tab khớp CÙNG một luật và để UI không phụ thuộc ngưỡng của BE.
  *
  * Module này là hàm thuần, KHÔNG import store/service — nếu không sẽ tạo import
  * vòng (xem CLAUDE.md mục 13: services → utils → stores → services làm trắng app).

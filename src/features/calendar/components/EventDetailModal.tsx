@@ -50,6 +50,7 @@ import { CalendarAttachmentList } from "../../../components/ui/CalendarAttachmen
 import { Avatar } from "../../../components/common/Avatar";
 import { loadUserProfiles, type UserProfileSummary } from "../../../services/userBatchLoader";
 import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
+import { useFriendshipStore } from "../../../stores/friendshipStore";
 import { useFriendship } from "../../../hooks/useFriendship";
 import {
   extractSearchRows,
@@ -295,6 +296,9 @@ export const EventDetailModal: React.FC<{
   // Tên gợi nhớ (alias) đã được friendshipStore inject vào enrichedProfileStore
   // theo userId (= authUserId). Ưu tiên alias hơn tên thật khi hiển thị.
   const aliasByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
+  // Nguồn alias CHUẨN của người xem — nameByUserId có thể bị enrichUserProfile
+  // ghi đè bằng tên thật (last-writer-wins), friendByUserId thì không.
+  const friendByUserId = useFriendshipStore((s) => s.friendByUserId);
   const handleRespondClick = async (response: "ACCEPTED" | "DECLINED", reason?: string) => {
     if (!onRespond) return;
     // Bấm lại đúng trạng thái đang có = no-op: không gọi BE, không toast lặp.
@@ -381,17 +385,19 @@ export const EventDetailModal: React.FC<{
   // Get status badge info
   const statusInfo = "status" in event ? getStatusBadge(event.status) : null;
 
-  // Time display — convert ISO (UTC) to local wall-clock
-  const startTime = isExtended && "startAt" in event ? toLocalTimeString(event.startAt) : event.time;
-  const endTime = isExtended && "endAt" in event ? toLocalTimeString(event.endAt) : null;
+  // Giờ hiển thị theo múi giờ CỦA SỰ KIỆN (không phải giờ máy người xem);
+  // thiếu thì helper rơi về giờ VN.
+  const eventZone = hrEvent?.timezone;
+  const startTime = isExtended && "startAt" in event ? toLocalTimeString(event.startAt, eventZone) : event.time;
+  const endTime = isExtended && "endAt" in event ? toLocalTimeString(event.endAt, eventZone) : null;
   const duration = isExtended && "startAt" in event && "endAt" in event && event.startAt && event.endAt
     ? calculateDuration(event.startAt, event.endAt)
     : null;
   // Sự kiện kéo dài nhiều ngày (qua đêm / công tác) → bắt đầu & kết thúc khác ngày local.
   const startAtIso = isExtended && "startAt" in event ? event.startAt : null;
   const endAtIso = isExtended && "endAt" in event ? event.endAt : null;
-  const startDateLocal = startAtIso ? toLocalDateString(startAtIso) : null;
-  const endDateLocal = endAtIso ? toLocalDateString(endAtIso) : null;
+  const startDateLocal = startAtIso ? toLocalDateString(startAtIso, eventZone) : null;
+  const endDateLocal = endAtIso ? toLocalDateString(endAtIso, eventZone) : null;
   const isMultiDay = !!(startDateLocal && endDateLocal && startDateLocal !== endDateLocal);
 
   // Location + meeting extras (chairman/format lưu trong metadata của HR event)
@@ -491,6 +497,28 @@ export const EventDetailModal: React.FC<{
   // Avatar của người dò được nằm ở participantProfiles (effect batch-load ở trên
   // đã nạp theo id này).
   const chairmanResolvedUserId = chairmanUserId ?? chairmanLookupUserId;
+
+  // Nhãn chủ trì: metadata.meetingChairman là TEXT chụp lúc TẠO lịch — dữ liệu
+  // cũ có thể chứa "tên gợi nhớ" riêng của NGƯỜI TẠO, đem hiện nguyên xi là lộ
+  // alias riêng tư cho mọi người xem. Khi đã biết identity → alias CỦA NGƯỜI
+  // XEM ?? tên thật (roster/profile); metadata chỉ còn là đường chót cho lịch
+  // cũ không có identity.
+  const chairmanAlias =
+    (chairmanResolvedUserId
+      ? friendByUserId[chairmanResolvedUserId]?.alias
+      : undefined) ?? undefined;
+  const chairmanRealName =
+    chairmanRow?.fullName ??
+    chairmanRow?.employee?.fullName ??
+    (chairmanResolvedUserId
+      ? (participantProfiles[chairmanResolvedUserId]?.displayName ?? undefined)
+      : undefined);
+  const chairmanDisplayName = chairmanAlias ?? chairmanRealName ?? chairman ?? "";
+  // Người tạo: cùng quy tắc alias ?? tên thật (creatorName từ HR luôn là tên thật).
+  const creatorDisplayName =
+    (creatorUserId ? friendByUserId[creatorUserId]?.alias : undefined) ??
+    creatorName ??
+    "";
 
   // Hành động nhanh trên dòng Người tạo / Chủ trì: đã là bạn → Nhắn tin (mở DM);
   // chưa là bạn → Kết bạn (có lời mời đến từ họ thì "Kết bạn" = chấp nhận luôn).
@@ -817,10 +845,10 @@ export const EventDetailModal: React.FC<{
                   <div className="mt-0.5 flex items-center gap-2">
                     <Avatar
                       src={avatarForRow(creatorRow, creatorUserId)}
-                      alt={creatorName}
+                      alt={creatorDisplayName}
                       size="sm"
                     />
-                    <p className="truncate text-sm text-text-primary">{creatorName}</p>
+                    <p className="truncate text-sm text-text-primary">{creatorDisplayName}</p>
                     {renderPersonAction(creatorUserId)}
                   </div>
                 </div>
@@ -838,10 +866,10 @@ export const EventDetailModal: React.FC<{
                   <div className="mt-0.5 flex items-center gap-2">
                     <Avatar
                       src={avatarForRow(chairmanRow, chairmanResolvedUserId)}
-                      alt={chairman}
+                      alt={chairmanDisplayName}
                       size="sm"
                     />
-                    <p className="truncate text-sm text-text-primary">{chairman}</p>
+                    <p className="truncate text-sm text-text-primary">{chairmanDisplayName}</p>
                     {renderPersonAction(chairmanResolvedUserId)}
                   </div>
                 </div>
@@ -969,7 +997,10 @@ export const EventDetailModal: React.FC<{
                   const profile = p.authUserId
                     ? participantProfiles[p.authUserId]
                     : null;
-                  const alias = p.authUserId ? aliasByUserId[p.authUserId] : undefined;
+                  // friendByUserId trước (alias chuẩn), nameByUserId chỉ là dự phòng.
+                  const alias = p.authUserId
+                    ? (friendByUserId[p.authUserId]?.alias ?? aliasByUserId[p.authUserId])
+                    : undefined;
                   const name =
                     alias ?? p.fullName ?? p.employee?.fullName ?? "N/A";
                   // Dòng phụ: phòng ban + công ty (từ /users/batch). Fallback phòng

@@ -21,6 +21,7 @@ import {
   isPendingMessage,
 } from "../../../utils/messageTimeline";
 import { logScrollTrace } from "../../../utils/scrollTrace";
+import { isPersonalCloudConversation } from "../../../features/cloud/personalCloudPolicy";
 import { resolveUserDisplayName } from "../../../features/chat/identity/resolveUserDisplayName";
 import { useResolvedDisplayName } from "../../../stores/useResolvedDisplayName";
 import { enrichUserProfile } from "../../../services/enrichUserProfile";
@@ -38,6 +39,8 @@ import { ReactionBar } from "../ReactionBar";
 import { dispatchStartDirectMessage } from "../../../features/chat/events/chatUiEvents";
 import { copyTextToClipboard } from "../../../utils/clipboard";
 import { getCopyableMessageText } from "../../../utils/messageCopy";
+import { downloadResourceWithName } from "../../../utils/downloadFile";
+import { useAttachmentDownloadUrl } from "../../../hooks/useAttachmentDownloadUrl";
 import { toast } from "../../ui";
 import { logger } from "../../../utils/logger";
 
@@ -260,6 +263,15 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     void retrySendMessage(message).catch(() => undefined);
   }, [message, retrySendMessage]);
 
+  const firstAttachment = React.useMemo(
+    () => message.attachments?.[0],
+    [message.attachments],
+  );
+  const { resolveUrl: resolveAttachmentDownloadUrl } = useAttachmentDownloadUrl(
+    message.conversationId,
+    firstAttachment,
+  );
+
   const openActions = React.useCallback(
     (event?: React.MouseEvent<HTMLButtonElement>) => {
       if (event) {
@@ -277,6 +289,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     setIsActionsOpen(false);
     hideRail(true);
   }, [hideRail]);
+
 
   const handleCopy = React.useCallback(async () => {
     const text = getCopyableMessageText(message);
@@ -313,6 +326,27 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     closeActions();
   }, [closeActions, message, t]);
 
+  const handleAttachmentDownload = React.useCallback(async () => {
+    if (!firstAttachment) {
+      closeActions();
+      return;
+    }
+    const downloadUrl = await resolveAttachmentDownloadUrl(true);
+    if (!downloadUrl) {
+      toast.error(
+        t("chat:file.downloadError", {
+          defaultValue: "Không thể tải file",
+        }),
+      );
+      closeActions();
+      return;
+    }
+    await downloadResourceWithName(downloadUrl, firstAttachment.fileName);
+    closeActions();
+  }, [closeActions, firstAttachment, resolveAttachmentDownloadUrl, t]);
+
+  const isPersonalCloud = isPersonalCloudConversation({ type: conversationType });
+
   const actionPolicy = React.useMemo(
     () =>
       resolveMessageActions({
@@ -331,10 +365,12 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         canDelete: Boolean(onDelete),
         canEdit: Boolean(onEdit),
         canRecallOthers: viewerCanRecallOthers,
+        isPersonalCloud,
       }),
     [
       coarsePointer,
       isOwn,
+      isPersonalCloud,
       isSelectionMode,
       message,
       onDelete,
@@ -363,6 +399,9 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
           break;
         case "copy":
           void handleCopy();
+          break;
+        case "downloadAttachment":
+          void handleAttachmentDownload();
           break;
         case "retry":
           handleRetry();
@@ -421,6 +460,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     [
       closeActions,
       handleCopy,
+      handleAttachmentDownload,
       handleRetry,
       isActionsOpen,
       message,
@@ -434,6 +474,44 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       onReply,
       openActions,
     ],
+  );
+
+  /**
+   * Chuột phải vào tin → mở đúng menu hành động, neo tại con trỏ. Đây là cách
+   * người dùng Zalo quen dùng nhất để Sao chép / Trả lời / Thu hồi; trước đây
+   * web chỉ có nút "…" hiện khi rê chuột, nên chuột phải rơi vào menu mặc định
+   * của trình duyệt và mọi thao tác quen tay đều trượt.
+   *
+   * Ba trường hợp CỐ Ý nhường lại cho trình duyệt:
+   *  - Đang bôi đen chữ: người dùng cần "Copy" của trình duyệt để chép đúng
+   *    phần đã chọn (Zalo cũng nhường).
+   *  - Bấm vào link/ảnh/video/audio: menu gốc có "Lưu ảnh", "Mở tab mới"…
+   *  - Không còn hành động nào khả dụng: `MessageActions` tự render null khi
+   *    danh sách rỗng, chặn ở đây thì nuốt phím chuột mà chẳng mở được gì.
+   */
+  const handleContextMenu = React.useCallback(
+    (event: React.MouseEvent<HTMLElement>) => {
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed && selection.toString().trim()) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("a, img, video, audio")) {
+        return;
+      }
+      if (actionPolicy.menuActions.length === 0) {
+        return;
+      }
+
+      event.preventDefault();
+      setMenuAnchorRect({
+        left: event.clientX,
+        top: event.clientY,
+        bottom: event.clientY,
+      });
+      setIsActionsOpen(true);
+    },
+    [actionPolicy.menuActions.length],
   );
 
   const handlePointerDown = React.useCallback(
@@ -481,6 +559,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       className={clsx("group/message-cluster w-full", className)}
       onMouseEnter={handleClusterMouseEnter}
       onMouseLeave={handleClusterMouseLeave}
+      onContextMenu={handleContextMenu}
       onFocusCapture={() => setIsHovered(true)}
       onBlurCapture={(event) => {
         const nextFocused = event.relatedTarget as Node | null;
@@ -664,6 +743,11 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         anchorRect={menuAnchorRect ?? undefined}
         onAction={handleAction}
         onClose={closeActions}
+        actionLabelOverrides={
+          isPersonalCloud
+            ? { deleteForMe: t("chat:message.actions.delete", { defaultValue: "Xóa" }) }
+            : undefined
+        }
       />
 
       {editHistoryMessageId && (

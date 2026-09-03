@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useUIStore } from "../../../stores/uiStore";
 import type { Conversation, UserSummary } from "../../../types";
 import { isDirectConversation } from "../../../lib/conversationAdapter";
 import {
@@ -7,6 +8,7 @@ import {
 } from "../../../utils/messageHelpers";
 import type { SidebarConversationFilter } from "../state/chatSidebarStore";
 import { useSidebarConversationSummaries } from "./useSidebarConversationSummaries";
+import { isPersonalCloudConversation, personalCloudPresentation } from "../../cloud/personalCloudPolicy";
 
 interface SidebarConversationListResult {
   conversationIds: string[];
@@ -23,6 +25,10 @@ const includesQuery = (
   currentUserId: string,
 ): boolean => {
   if (!normalizedQuery) return true;
+
+  if (isPersonalCloudConversation(conversation)) {
+    return personalCloudPresentation.title.toLowerCase().includes(normalizedQuery);
+  }
 
   const resolvedConversationName = getConversationDisplayName(
     conversation,
@@ -80,10 +86,20 @@ const matchesFilter = (
   }
 
   if (filter === "groups") {
-    return !isDirectConversation(conversation);
+    return !isDirectConversation(conversation) && !isPersonalCloudConversation(conversation);
   }
 
   return true;
+};
+
+const matchesLabels = (
+  conversation: Conversation,
+  selectedLabelIds: string[],
+): boolean => {
+  if (selectedLabelIds.length === 0) return true;
+
+  const labelIds = conversation.labelIds ?? [];
+  return selectedLabelIds.some((labelId) => labelIds.includes(labelId));
 };
 
 export const useSidebarConversationList = (
@@ -94,11 +110,15 @@ export const useSidebarConversationList = (
   },
 ): SidebarConversationListResult => {
   const { orderedConversations, counts } = useSidebarConversationSummaries();
+  const selectedLabelIds = useUIStore(
+    (state) => state.selectedConversationLabelIds,
+  );
 
   return useMemo(() => {
     const normalizedQuery = options.query.trim().toLowerCase();
     const conversationIds = orderedConversations
       .filter((conversation) => matchesFilter(conversation, options.filter))
+      .filter((conversation) => matchesLabels(conversation, selectedLabelIds))
       .filter((conversation) =>
         includesQuery(conversation, normalizedQuery, currentUser.id),
       )
@@ -113,6 +133,7 @@ export const useSidebarConversationList = (
     options.filter,
     options.query,
     orderedConversations,
+    selectedLabelIds,
   ]);
 };
 

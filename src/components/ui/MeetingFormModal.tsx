@@ -21,6 +21,8 @@ import { conversationApi } from "../../services/api";
 import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
 import { unwrapApiSuccess } from "../../lib/apiContract";
 import { RoomType, type Conversation } from "../../types";
+import { DateFieldVN } from "./DateFieldVN";
+import { isValidIsoDate, isoToVn as formatDateVN, useIsoDateField } from "./dateFieldVNUtils";
 
 export interface MeetingParticipant {
   name: string;
@@ -116,16 +118,9 @@ const today = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-const formatDateVN = (iso: string): string => {
-  if (!iso) return "";
-  const [y, m, d] = iso.split("-");
-  if (!y || !m || !d) return "";
-  return `${d}/${m}/${y}`;
-};
-
 const WEEKDAY_VN = ["Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"];
 const formatWeekdayVN = (iso: string): string => {
-  if (!iso) return "";
+  if (!isValidIsoDate(iso)) return "";
   const d = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(d.getTime())) return "";
   return WEEKDAY_VN[d.getDay()];
@@ -178,7 +173,8 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
   const isEditMode = !!initialData;
   const [title, setTitle] = React.useState("");
   const [date, setDate] = React.useState(defaultDate ?? today());
-  const [dateText, setDateText] = React.useState(formatDateVN(defaultDate ?? today()));
+  const meetingDateField = useIsoDateField(date, setDate);
+  const resetMeetingDate = meetingDateField.reset;
   const [startTime, setStartTime] = React.useState("08:00");
   const [endTime, setEndTime] = React.useState("09:00");
   const [chairman, setChairman] = React.useState("");
@@ -481,10 +477,13 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
   // Reset / pre-fill form khi mở modal
   React.useEffect(() => {
     if (!isOpen) return;
+    // Mở lại đúng ngày cũ thì `date` không đổi, effect trong useIsoDateField
+    // không chạy — phải tự bỏ nháp, nếu không ngày gõ hỏng dở của lần trước
+    // ("31/04/2026") còn nguyên trên ô.
+    resetMeetingDate();
     if (initialData) {
       setTitle(initialData.title);
       setDate(initialData.date);
-      setDateText(formatDateVN(initialData.date));
       setStartTime(initialData.startTime);
       setEndTime(initialData.endTime);
       setChairman(initialData.chairman);
@@ -511,7 +510,6 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       const d0 = defaultDate ?? today();
       setTitle("");
       setDate(d0);
-      setDateText(formatDateVN(d0));
       setStartTime(defaultStartTime ?? "08:00");
       setEndTime(defaultEndTime ?? "09:00");
       setChairman("");
@@ -528,7 +526,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       setAttachments([]);
       setErrors({});
     }
-  }, [isOpen, defaultDate, defaultStartTime, defaultEndTime, initialData]);
+  }, [isOpen, defaultDate, defaultStartTime, defaultEndTime, initialData, resetMeetingDate]);
 
   // Kiểm tra xung đột lịch theo tên người tham gia
   const checkConflict = React.useCallback(
@@ -597,6 +595,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
     const errs: Record<string, string> = {};
     if (!title.trim()) errs.title = "Vui lòng nhập nội dung cuộc họp";
     if (!date) errs.date = "Vui lòng chọn ngày họp";
+    else if (!isValidIsoDate(date)) errs.date = "Ngày họp không hợp lệ";
     if (!startTime) errs.startTime = "Vui lòng chọn giờ bắt đầu";
     if (!endTime) errs.endTime = "Vui lòng chọn giờ kết thúc";
     if (startTime && endTime && startTime >= endTime) errs.endTime = "Giờ kết thúc phải sau giờ bắt đầu";
@@ -729,46 +728,12 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                 errors.date ? "border-danger" : "border-border",
               )}
             >
-              <input
-                type="text"
-                inputMode="numeric"
-                value={dateText}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  // Cho phép gõ số + dấu /, tự thêm dấu / sau 2 và 4 số
-                  const digits = raw.replace(/\D/g, "").slice(0, 8);
-                  let formatted = digits;
-                  if (digits.length > 4) {
-                    formatted = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
-                  } else if (digits.length > 2) {
-                    formatted = `${digits.slice(0, 2)}/${digits.slice(2)}`;
-                  }
-                  setDateText(formatted);
-                  // Parse khi đủ 8 số
-                  if (digits.length === 8) {
-                    const dd = digits.slice(0, 2);
-                    const mm = digits.slice(2, 4);
-                    const yyyy = digits.slice(4, 8);
-                    setDate(`${yyyy}-${mm}-${dd}`);
-                  }
-                }}
-                onBlur={() => {
-                  // Đồng bộ lại text từ date hợp lệ; nếu không parse được thì giữ nguyên để user thấy lỗi
-                  if (date) setDateText(formatDateVN(date));
-                }}
-                placeholder="dd/mm/yyyy"
-                aria-label="Ngày họp"
-                className="flex-1 bg-transparent px-1 font-mono text-sm tabular-nums text-text-primary placeholder:text-text-muted focus:outline-none"
-              />
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => {
-                  setDate(e.target.value);
-                  setDateText(formatDateVN(e.target.value));
-                }}
-                aria-label="Chọn ngày từ lịch"
-                className="ml-auto w-7 cursor-pointer bg-transparent text-text-secondary focus:outline-none [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-datetime-edit]:hidden"
+              <DateFieldVN
+                value={meetingDateField.value}
+                onChange={meetingDateField.onChange}
+                ariaLabel="Ngày họp"
+                className="min-w-0 flex-1 bg-transparent px-1 font-mono text-sm tabular-nums text-text-primary placeholder:text-text-muted focus:outline-none"
+                wrapClassName="min-w-0 flex-1"
               />
             </div>
             <p className="mt-1 text-[11px] text-text-muted">Tự gõ dd/mm/yyyy hoặc bấm icon lịch để chọn.</p>

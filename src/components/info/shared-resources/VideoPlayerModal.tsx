@@ -22,12 +22,31 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   url,
   fileName,
 }) => {
+  const dialogRef = React.useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!isOpen) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
+      if (e.key === "Tab" && dialogRef.current) {
+        const focusable = Array.from(
+          dialogRef.current.querySelectorAll<HTMLElement>(
+            "button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])",
+          ),
+        );
+        if (focusable.length > 0) {
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
     };
     document.addEventListener("keydown", handler);
     return () => {
@@ -35,6 +54,16 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       document.removeEventListener("keydown", handler);
     };
   }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement;
+    const timer = window.requestAnimationFrame(() => dialogRef.current?.focus());
+    return () => {
+      window.cancelAnimationFrame(timer);
+      if (previous instanceof HTMLElement) previous.focus();
+    };
+  }, [isOpen]);
 
   if (!isOpen || !url || typeof document === "undefined") return null;
 
@@ -49,6 +78,11 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           "relative flex max-h-[90dvh] max-w-[90vw] flex-col overflow-hidden rounded-2xl bg-[#1a1a1a] shadow-2xl",
         )}
         onClick={(e) => e.stopPropagation()}
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={fileName ?? "Video"}
+        tabIndex={-1}
       >
         <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4">
           <span

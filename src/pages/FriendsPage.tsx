@@ -462,14 +462,17 @@ export const FriendsPage: React.FC = () => {
   // command palette), so `q` filters the Bạn bè list instead of searching Khám
   // phá — which hides existing friends and would show "không tìm thấy".
   const wantsFriendsTab = searchParams.get("tab") === "friends";
+  const wantsDiscoverTab = searchParams.get("tab") === "discover";
   const [activeTab, setActiveTab] = useState<TabKey>(
     initialQrCode.trim().length > 0
       ? "qr"
       : wantsFriendsTab
         ? "friends"
-        : initialQuery.trim().length >= 2
+        : wantsDiscoverTab
           ? "discover"
-          : "friends",
+          : initialQuery.trim().length >= 2
+            ? "discover"
+            : "friends",
   );
   const [requestTab, setRequestTab] = useState<RequestTabKey>("incoming");
   const [friendFilter, setFriendFilter] = useState(
@@ -535,6 +538,7 @@ export const FriendsPage: React.FC = () => {
     const nextQuery = searchParams.get("q") || "";
     const nextQrCode = shareCode || searchParams.get("code") || "";
     const nextWantsFriendsTab = searchParams.get("tab") === "friends";
+    const nextWantsDiscoverTab = searchParams.get("tab") === "discover";
 
     if (nextWantsFriendsTab) {
       if (friendFilter !== nextQuery) setFriendFilter(nextQuery);
@@ -547,6 +551,8 @@ export const FriendsPage: React.FC = () => {
       if (activeTab !== "qr") setActiveTab("qr");
     } else if (nextWantsFriendsTab) {
       if (activeTab !== "friends") setActiveTab("friends");
+    } else if (nextWantsDiscoverTab) {
+      if (activeTab !== "discover") setActiveTab("discover");
     } else if (nextQuery.trim().length >= 2) {
       if (activeTab !== "discover") setActiveTab("discover");
     }
@@ -880,6 +886,15 @@ export const FriendsPage: React.FC = () => {
     [friends, enrichedNameMap, enrichedHrMap],
   );
 
+  const previewDisplayName = useMemo(() => {
+    if (!previewTarget) return null;
+
+    const currentFriend = friendItems.find(
+      (friend) => friend.id === previewTarget.userId,
+    );
+    return toDisplayName(currentFriend ?? previewTarget.initialUser);
+  }, [friendItems, previewTarget]);
+
   // ponytail: lọc client-side trong số bạn ĐÃ tải. Nếu cần tìm bạn ở trang chưa
   // tải (list rất dài), nâng lên gọi API /friends?q= khi backend hỗ trợ.
   // Khớp qua `matchesContactQuery` để CÙNG luật với tab Khám phá (bỏ dấu).
@@ -1101,8 +1116,8 @@ export const FriendsPage: React.FC = () => {
       if (friendIdSet.has(user.id)) return false;
       if (user.isFriend === true) return false;
       if (isAcceptedFriendshipStatus(user.friendshipStatus)) return false;
-      // `/users/search` khớp cả subsequence (c-h-i-ê-n rời rạc) nên trả về
-      // người không liên quan. Lọc lại theo cùng luật với tab Bạn bè.
+      // `/users/search` khớp gần đúng (trigram) nên vẫn lẫn người không liên quan.
+      // Lọc lại theo cùng luật với tab Bạn bè.
       return matchesContactQuery(debouncedQuery, [
         toDisplayName(user),
         user.username,
@@ -1314,7 +1329,7 @@ export const FriendsPage: React.FC = () => {
                   {activeTab === "qr"
                     ? t("friends:tabs.qr")
                     : previewTarget
-                      ? toDisplayName(previewTarget.initialUser)
+                      ? previewDisplayName
                       : t("friends:previewTitle")}
                 </h2>
                 <p className="mt-1 text-sm text-text-secondary">

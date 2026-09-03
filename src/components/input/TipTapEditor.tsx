@@ -6,7 +6,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
 import { Color, TextStyle } from "@tiptap/extension-text-style";
 import type { Editor } from "@tiptap/react";
-import { MentionChip } from "./mentionNode";
+import { MentionChip, collectMentionRanges } from "./mentionNode";
 
 /**
  * How TipTap's `getText()` joins block nodes. Any offset computed with
@@ -43,6 +43,18 @@ export interface TipTapEditorHandle {
   /** Ids of every mention chip currently in the document (to hide already-tagged
    *  people from the suggestion list, Zalo-style). */
   getMentionedIds: () => string[];
+  /**
+   * Vị trí từng chip trong chuỗi `getText()` sẽ trả về — đơn vị **code point**,
+   * tính cả ký tự '@' (contract `FE__mention-structured-ranges__contract__30-07-26`).
+   *
+   * Đây là đường DUY NHẤT lấy được vị trí chắc chắn: editor biết chính xác chip
+   * nằm đâu, không phải dò tên ngược trong chữ như trước.
+   */
+  getMentionRanges: () => {
+    userId: string;
+    offset: number;
+    length: number;
+  }[];
   getEditor: () => Editor | null;
 }
 
@@ -137,15 +149,24 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
     //  - leafText: must match renderText in mentionNode.ts, i.e. `sendLabel || label`.
     //    A chip is one ProseMirror position but many characters of text, and with an
     //    alias label/sendLabel differ in length.
+    //  - hardBreak: Shift+Enter chèn <br> NẰM TRONG cùng một <p>, nên nó không
+    //    phải ranh giới block và `blockSeparator` không áp dụng. `getText()` vẫn
+    //    serialise nó thành "\n", còn `textBetween` mặc định đếm 0 → caret thiếu
+    //    đúng 1 ký tự cho MỖI lần Shift+Enter. Hệ quả: gõ "@" ở dòng thứ hai trở
+    //    đi thì caret trỏ lệch, `buildMentionMatch` không thấy '@' và panel tag
+    //    KHÔNG BAO GIỜ bung. Kiểm chứng 13-08-26: "k1 dòng một\ndòng hai@" dài 21
+    //    nhưng caret báo 20, ký tự tại caret-1 là "i" thay vì "@".
     const emitSelection = React.useCallback((e: Editor) => {
       if (!onSelectionChangeRef.current) return;
       const text = e.getText();
       const anchor = e.state.selection.anchor;
-      const before = e.state.doc.textBetween(0, anchor, GET_TEXT_BLOCK_SEPARATOR, (leaf) =>
-        leaf.type.name === MentionChip.name
-          ? `@${leaf.attrs.sendLabel || leaf.attrs.label}`
-          : "",
-      );
+      const before = e.state.doc.textBetween(0, anchor, GET_TEXT_BLOCK_SEPARATOR, (leaf) => {
+        if (leaf.type.name === MentionChip.name) {
+          return `@${leaf.attrs.sendLabel || leaf.attrs.label}`;
+        }
+        if (leaf.type.name === "hardBreak") return "\n";
+        return "";
+      });
       const caretOffset = Math.max(0, Math.min(before.length, text.length));
       onSelectionChangeRef.current(text, caretOffset);
     }, []);
@@ -283,6 +304,8 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
           ])
           .run();
       },
+      getMentionRanges: () =>
+        editor ? collectMentionRanges(editor, GET_TEXT_BLOCK_SEPARATOR) : [],
       getMentionedIds: () => {
         if (!editor) return [];
         const ids: string[] = [];

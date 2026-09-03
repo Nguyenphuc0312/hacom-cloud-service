@@ -22,10 +22,12 @@ import {
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import { AUTH_CONFIG } from "../config";
 import {
+  bindAuthSessionIdentity,
   compareIdentity,
   reportAuthIdentityMismatch,
   resetAuthIdentityGuard,
   setAuthIdentityMismatchHandler,
+  validateBoundAuthSessionIdentity,
 } from "../services/authIdentityGuard";
 import { toast } from "../components/ui";
 import {
@@ -34,6 +36,7 @@ import {
   redirectToLogin,
   requestServerLogout,
   runClientLogoutCleanup,
+  runCurrentTabIdentityMismatchCleanup,
 } from "../services/authService";
 import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 // api.ts imports User from here type-only, so this value import is not a cycle.
@@ -99,6 +102,8 @@ export interface User {
   backgroundFileId?: string | null;
   status?: "online" | "offline" | "away" | "dnd" | string;
   role?: string;
+  roles?: string[];
+  permissions?: string[];
   isVerified?: boolean;
   createdAt?: string;
   accountState?: string;
@@ -159,6 +164,7 @@ export interface RegisterFlowResult {
 export type LoginResult =
   | { status: "authenticated"; message?: string }
   | { status: "pending_hr_link"; message?: string }
+  | { status: "password_change_required"; message?: string }
   | "activation_required"
   | "locked"
   | "disabled";
@@ -179,6 +185,7 @@ interface AuthState {
   error: string | null;
   /** Mốc thời gian (epoch ms) được phép thử đăng nhập lại sau khi bị rate-limit. */
   rateLimitedUntil: number | null;
+  passwordChangeContinuation: string | null;
 
   login: (data: LoginFormData) => Promise<LoginResult>;
   applyLoginResponse: (payload: unknown, rememberMe?: boolean) => void;
@@ -245,6 +252,32 @@ const resolveTokens = (
   return { accessToken, refreshToken };
 };
 
+const establishExplicitAuthSession = (
+  accessToken: string,
+  refreshToken: string | null,
+  rememberMe: boolean,
+  user: User,
+): void => {
+  storeTokens(accessToken, refreshToken ?? undefined, rememberMe);
+  if (bindAuthSessionIdentity(accessToken, user)) return;
+
+  runClientLogoutCleanup("login_identity_mismatch");
+  throw new Error(i18n.t("error:auth.loginFailed"));
+};
+
+const validateBootstrapIdentity = (
+  accessToken: string,
+  user: User,
+): "match" | "missing" | "mismatch" => {
+  const status = validateBoundAuthSessionIdentity(accessToken, user);
+  if (status !== "missing" || !import.meta.env.PROD) return status;
+
+  // Safe rollout migration: production sessions established before this guard
+  // have no binding yet. Canonical /auth/me may seed it once; dev remains
+  // fail-closed so the reported localhost Admin cookie is removed immediately.
+  return bindAuthSessionIdentity(accessToken, user) ? "match" : "mismatch";
+};
+
 /**
  * Resolve the current user's avatar URL from chat-api.
  *
@@ -258,15 +291,34 @@ const resolveTokens = (
  * The signed URL expires in ~15m, which is why it is never persisted (see
  * `partialize`) — it is re-resolved on each bootstrap/refresh.
  */
-const fetchOwnAvatarUrl = async (): Promise<string | undefined> => {
+const fetchOwnAvatarUrl = async (): Promise<string | undefined> =>
+  (await fetchOwnChatProfile())?.avatar ?? undefined;
+
+/**
+ * Self-profile fields that live in chat-api, not auth.
+ *
+ * `displayName` (the name the user sets in "Chỉnh sửa hồ sơ") is stored in
+ * chat-api `public.user_profiles.display_name`. The public `/auth/me` contract
+ * deliberately strips `displayName` and exposes HR data only under `hrProfile`
+ * (see auth-identity.service.ts `toPublicCurrentAuthUser`), so a rename is
+ * simply NOT REACHABLE from `/auth/me` — after a reload the UI fell back to the
+ * HR legal name and the rename looked like it had been discarded, even though
+ * the PATCH had succeeded.
+ *
+ * `GET /users/profile` is the authoritative read for these self-owned fields.
+ */
+const fetchOwnChatProfile = async (): Promise<
+  { avatar?: string | null; displayName?: string | null } | null
+> => {
   try {
     const response = await userApi.getProfile();
-    const avatar = (unwrapApiSuccess(response) as { avatar?: string | null })
-      ?.avatar;
-    return avatar ?? undefined;
-    // ponytail: avatar is cosmetic — on failure the UI falls back to initials
+    return unwrapApiSuccess(response) as {
+      avatar?: string | null;
+      displayName?: string | null;
+    };
+    // ponytail: cosmetic/self fields — on failure the UI falls back to auth data
   } catch {
-    return undefined;
+    return null;
   }
 };
 
@@ -283,10 +335,22 @@ const fetchCurrentUser = async (): Promise<User> => {
   user.mustChangePassword = accessToken
     ? parseMustChangePasswordFromToken(accessToken)
     : false;
-  // /auth/me reports `avatarFileId` but never a URL; skip the extra chat-api
-  // round-trip for accounts that have no avatar set at all.
-  if (!user.avatar && user.avatarFileId) {
-    user.avatar = await fetchOwnAvatarUrl();
+
+  // `/auth/me` cannot carry the self-chosen `displayName` (see
+  // `fetchOwnChatProfile`), and it reports `avatarFileId` but never an avatar
+  // URL. One chat-api read backfills both. Skip it only when there is nothing
+  // to gain: no avatar to resolve AND auth already produced a display name.
+  const needsAvatar = !user.avatar && Boolean(user.avatarFileId);
+  const chatProfile = await fetchOwnChatProfile();
+  if (chatProfile) {
+    const chatDisplayName = chatProfile.displayName?.trim();
+    if (chatDisplayName) {
+      user.displayName = chatDisplayName;
+      user.effectiveDisplayName = chatDisplayName;
+    }
+    if (needsAvatar && chatProfile.avatar) {
+      user.avatar = chatProfile.avatar;
+    }
   }
   return user;
 };
@@ -511,6 +575,7 @@ export const useAuthStore = create<AuthState>()(
             pendingVerificationEmail: null,
             pendingVerificationSource: null,
             emailVerificationChallenge: null,
+            passwordChangeContinuation: null,
             isAuthenticated: false,
             isLoading: false,
             error: null,
@@ -547,6 +612,7 @@ export const useAuthStore = create<AuthState>()(
         registrationStatus: "idle",
         error: null,
         rateLimitedUntil: null,
+        passwordChangeContinuation: null,
 
         applyLoginResponse: (payload, rememberMe = false) => {
           const normalizedPayload = normalizeLoginPayload(payload);
@@ -585,7 +651,12 @@ export const useAuthStore = create<AuthState>()(
           }
 
           if (isPendingHrLinkUser(user)) {
-            storeTokens(accessToken, refreshToken ?? undefined, rememberMe);
+            establishExplicitAuthSession(
+              accessToken,
+              refreshToken,
+              rememberMe,
+              user,
+            );
             resetAuthFailureState();
             resetAuthIdentityGuard();
 
@@ -607,7 +678,12 @@ export const useAuthStore = create<AuthState>()(
             return;
           }
 
-          storeTokens(accessToken, refreshToken ?? undefined, rememberMe);
+          establishExplicitAuthSession(
+            accessToken,
+            refreshToken,
+            rememberMe,
+            user,
+          );
           resetAuthFailureState();
           // A fresh, validated token+user pair is now in sync — re-arm the
           // one-shot identity guard so a future account switch is detectable.
@@ -687,6 +763,19 @@ export const useAuthStore = create<AuthState>()(
               password: data.password,
               rememberMe: data.rememberMe,
             });
+            if (payload.requiresPasswordChange && payload.passwordChangeContinuation) {
+              set({
+                user: null,
+                authStatus: "password_change_required",
+                passwordChangeContinuation: payload.passwordChangeContinuation,
+                isAuthenticated: false,
+                isInitialized: true,
+                isBootstrappingAuth: false,
+                isLoading: false,
+                error: null,
+              });
+              return { status: "password_change_required", message: payload.message };
+            }
             get().applyLoginResponse(payload, data.rememberMe);
             const canonicalUser = await get().refreshUser();
             if (get().authStatus === "pending_hr_link") {
@@ -919,6 +1008,8 @@ export const useAuthStore = create<AuthState>()(
 
         refreshUser: async (): Promise<User | null> => {
           const token = getAccessToken();
+          const isCompletingRequiredPasswordChange =
+            get().authStatus === "password_change_required";
 
           if (!token) {
             set({
@@ -942,6 +1033,21 @@ export const useAuthStore = create<AuthState>()(
 
           try {
             const user = await fetchCurrentUser();
+            if (
+              isCompletingRequiredPasswordChange &&
+              !bindAuthSessionIdentity(token, user)
+            ) {
+              runClientLogoutCleanup("password_change_identity_mismatch");
+              set({
+                user: null,
+                authStatus: "anonymous",
+                isAuthenticated: false,
+                isLoading: false,
+                isInitialized: true,
+                isBootstrappingAuth: false,
+              });
+              return null;
+            }
             const blockedStatus = resolveBlockedStatusFromUser(user);
 
             if (blockedStatus) {
@@ -1144,6 +1250,31 @@ export const useAuthStore = create<AuthState>()(
             if (accessToken) {
               try {
                 const user = await fetchCurrentUser();
+                const identityStatus = validateBootstrapIdentity(
+                  accessToken,
+                  user,
+                );
+                if (identityStatus !== "match") {
+                  runCurrentTabIdentityMismatchCleanup(
+                    `bootstrap_identity_${identityStatus}`,
+                  );
+                  set({
+                    user: null,
+                    authStatus: "anonymous",
+                    isBootstrappingAuth: false,
+                    activationContext: null,
+                    lockedAccount: null,
+                    pendingVerificationEmail: null,
+                    pendingVerificationSource: null,
+                    emailVerificationChallenge: null,
+                    isAuthenticated: false,
+                    isLoading: false,
+                    isInitialized: true,
+                    registrationStatus: "idle",
+                    error: null,
+                  });
+                  return;
+                }
                 const blockedStatus = resolveBlockedStatusFromUser(user);
 
                 if (blockedStatus) {
@@ -1212,7 +1343,6 @@ export const useAuthStore = create<AuthState>()(
               } catch (error: unknown) {
                 const apiError = extractApiError(error);
                 if (apiError.statusCode !== 401) {
-                  runClientLogoutCleanup("bootstrap_me_failed");
                   set({
                     user: null,
                     authStatus: "bootstrap_error",
@@ -1252,6 +1382,31 @@ export const useAuthStore = create<AuthState>()(
               if (bootstrapToken) {
                 try {
                   const user = await fetchCurrentUser();
+                  const identityStatus = validateBootstrapIdentity(
+                    bootstrapToken,
+                    user,
+                  );
+                  if (identityStatus !== "match") {
+                    runCurrentTabIdentityMismatchCleanup(
+                      `bootstrap_refresh_identity_${identityStatus}`,
+                    );
+                    set({
+                      user: null,
+                      authStatus: "anonymous",
+                      isBootstrappingAuth: false,
+                      activationContext: null,
+                      lockedAccount: null,
+                      pendingVerificationEmail: null,
+                      pendingVerificationSource: null,
+                      emailVerificationChallenge: null,
+                      isAuthenticated: false,
+                      isLoading: false,
+                      isInitialized: true,
+                      registrationStatus: "idle",
+                      error: null,
+                    });
+                    return;
+                  }
                   const blockedStatus = resolveBlockedStatusFromUser(user);
 
                   if (blockedStatus) {
@@ -1325,26 +1480,25 @@ export const useAuthStore = create<AuthState>()(
                     profileApiErr.statusCode !== 401 &&
                     profileApiErr.statusCode !== 403
                   ) {
-                    // Network/server error on profile fetch, but we have a fresh
-                    // token — restore from persisted user rather than logging out.
-                    const cachedUser = get().user;
-                    const cachedPending = isPendingHrLinkUser(cachedUser);
+                    // Never turn a persisted profile into authority. The fresh
+                    // token may belong to a different account after rotation.
                     set({
-                      user: cachedUser,
-                      authStatus: cachedPending ? "pending_hr_link" : "authenticated",
+                      user: null,
+                      authStatus: "bootstrap_error",
                       isBootstrappingAuth: false,
                       activationContext: null,
                       lockedAccount: null,
                       pendingVerificationEmail: null,
                       pendingVerificationSource: null,
                       emailVerificationChallenge: null,
-                      isAuthenticated: !cachedPending,
+                      isAuthenticated: false,
                       isLoading: false,
                       isInitialized: true,
                       registrationStatus: "idle",
-                      error: null,
+                      error:
+                        profileApiErr.message ||
+                        i18n.t("error:auth.profileRetryHint"),
                     });
-                    resetAuthFailureState();
                     return;
                   }
                   // 401/403 with a fresh token = genuine session invalidation,
@@ -1366,7 +1520,7 @@ export const useAuthStore = create<AuthState>()(
                 ) {
                   set({
                     user: null,
-                    authStatus: "anonymous",
+                    authStatus: "bootstrap_error",
                     isBootstrappingAuth: false,
                     activationContext: null,
                     lockedAccount: null,
@@ -1377,7 +1531,9 @@ export const useAuthStore = create<AuthState>()(
                     isLoading: false,
                     isInitialized: true,
                     registrationStatus: "idle",
-                    error: null,
+                    error:
+                      refreshApiErr.message ||
+                      i18n.t("error:auth.profileRetryHint"),
                   });
                   return;
                 }
@@ -1445,10 +1601,13 @@ export const useAuthStore = create<AuthState>()(
       name: "auth-storage",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        // Strip avatar: presigned S3 URLs expire before the next session;
-        // bootstrap always revalidates the canonical auth principal via /auth/me.
-        user: state.user ? { ...state.user, avatar: undefined } : state.user,
-        authStatus: state.authStatus,
+        // Authority is memory-only and is always rebuilt from /auth/me.
+        // Persisting a profile risks showing the previous account after a
+        // refresh-token rotation while the canonical profile read is down.
+        authStatus:
+          state.authStatus === "password_change_required"
+            ? "anonymous"
+            : state.authStatus,
         activationContext: state.activationContext,
         lockedAccount: state.lockedAccount,
         pendingVerificationEmail: state.pendingVerificationEmail,
@@ -1467,6 +1626,8 @@ export const useAuthStore = create<AuthState>()(
 
         return {
           ...merged,
+          // Ignore `user` left by older app versions in auth-storage.
+          user: null,
           authStatus: normalizePersistedAuthStatus(
             persisted.authStatus,
             persisted.lockedAccount ?? null,

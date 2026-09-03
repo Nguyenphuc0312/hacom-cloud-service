@@ -5,13 +5,22 @@ import {
   LevelReportScopeRequiredError,
   uploadLevelReport,
   normalizeCalendarEvents,
+  normalizeWorkReportAiDraft,
+  uploadPersonalAttachment,
+  listPersonalAttachments,
+  AiStreamError,
+  stripDraftExportLinks,
+  isAttachmentGoneError,
 } from "../api/personalAiApi";
+import { isReportSubmissionText } from "../permissions/reportTags";
 import {
   uploadPersonalWeeklyReport,
   AiApiError,
   fetchPersonalSessionMessages,
+  PERSONAL_HISTORY_PAGE_SIZE,
 } from "../../ai-assistant/services/aiChatApi";
-import { usePersonalAiStore } from "../stores/personalAiStore";
+import type { PersonalSessionMessage } from "../../ai-assistant/services/aiChatApi";
+import { usePersonalAiStore, flushPersonalStreamBuffer } from "../stores/personalAiStore";
 import {
   getScopeToken,
   handleScopeErrorStatus,
@@ -26,9 +35,17 @@ import {
   ScopeFeatureDisabledError,
   ScopeFetchError,
 } from "../api/workReportScopeApi";
+import {
+  fallbackUploadMessage,
+  UPLOAD_CONNECTION_ERROR,
+  withRetryAfterHint,
+} from "../../../services/ai-chat/uploadFailure";
+import { handleDraftRetry } from "../services/workReportDraftPoller";
+import type { DraftPollHandle } from "../services/workReportDraftPoller";
 import { useAuthStore } from "../../../stores/authStore";
 import { logger } from "../../../utils/logger";
-import type { PersonalChatMessage, PersonalDocument } from "../types";
+import type { PersonalAttachment, PersonalChatMessage, PersonalDocument } from "../types";
+import { PERSONAL_ATTACHMENT_MODE, isAttachmentExpired } from "../types";
 
 const BAOCAOCV_TRIGGER = /^#baocaocv\s*$/i;
 const BAOCAOCONGVIEC_TRIGGER = /^#baocaocongviec\s*$/i;
@@ -52,6 +69,67 @@ function resolveBackendDocumentIds(
   return Array.from(new Set(candidates));
 }
 
+/**
+ * Chuẩn hoá một trang lịch sử từ BE thành message hiển thị được.
+ *
+ * Dùng chung cho trang đầu và các trang cũ hơn (§5) — nếu chỉ trang đầu chuẩn
+ * hoá thì bảng báo cáo / hộp #baocaocv / nút tải bản nháp sẽ mất khi cuộn lên.
+ */
+function normalizeHistoryMessages(
+  fetched: PersonalSessionMessage[],
+): PersonalChatMessage[] {
+  // Backend trả thêm các role nội bộ của tool-calling:
+  // "assistant_tool_call" (content rỗng) và "tool" (kết quả tool). Đây
+  // KHÔNG phải tin nhắn hiển thị — nếu giữ lại, kết quả tool hiện nhầm
+  // thành tin nhắn và sinh bong bóng rỗng sau khi tải lại. Chỉ lấy
+  // user/assistant có nội dung thực.
+  const visible = fetched.filter(
+    (m) =>
+      (m.role === "user" || m.role === "assistant") &&
+      (m.content ?? "").trim().length > 0,
+  );
+  return visible.map((m, idx) => {
+    // Khôi phục hộp "Xem báo cáo công việc" (ReportTextBox) sau khi tải
+    // lịch sử: câu trả lời của #baocaocv (user thường) là text báo cáo,
+    // không có cờ trong metadata. Nhận diện bằng tin user liền trước là
+    // "#baocaocv". Loại trừ báo cáo dạng bảng của admin (có exportable_table).
+    const prev = visible[idx - 1];
+    const isReportRequest =
+      m.role === "assistant" &&
+      m.metadata?.exportable_table !== true &&
+      prev?.role === "user" &&
+      BAOCAOCV_TRIGGER.test((prev.content ?? "").trim());
+    // Render lại bảng lịch + nút "Xem chi tiết" sau khi F5 (tải lịch sử).
+    // Chỉ khôi phục được nếu BE-AI lưu `calendar_events` (kèm event_id) vào
+    // metadata — markdown text không chứa event_id nên không parse ngược được.
+    const calendarEvents = normalizeCalendarEvents(m.metadata?.calendar_events);
+    // Nút "Tải bản nháp AI" phải sống qua F5 / mở lại hội thoại / tải thêm
+    // trang lịch sử. BE trả lại cùng shape với SSE ở
+    // `metadata.work_report_ai_draft` nên dựng lại y hệt, không parse link
+    // trong markdown (link đó cần Authorization, bấm thẳng không tải được).
+    const aiDraft = normalizeWorkReportAiDraft(m.metadata?.work_report_ai_draft);
+    return {
+      id: m.id || crypto.randomUUID(),
+      role: m.role as "user" | "assistant",
+      // Có nút tải rồi thì cắt link thô trong transcript: link cần
+      // Authorization nên bấm thẳng ra 401, để lại chỉ là lối tải hỏng
+      // nằm cạnh nút chạy được (request: đúng MỘT nút, không link thô).
+      content: aiDraft ? stripDraftExportLinks(m.content) : m.content,
+      timestamp: new Date(m.timestamp),
+      isStreaming: false as const,
+      thinkingPhase: null as null,
+      // Render lại nút "In" cho câu trả lời bảng sau khi tải lịch sử.
+      ...(m.metadata?.exportable_table === true && { exportableTable: true }),
+      // Render lại hộp báo cáo công việc của #baocaocv.
+      ...(isReportRequest && { reportRequest: true as const }),
+      // Render lại bảng lịch (khi BE trả metadata.calendar_events).
+      ...(calendarEvents && { calendarEvents }),
+      // Render lại nút tải bản nháp AI (khi BE trả metadata.work_report_ai_draft).
+      ...(aiDraft && { aiDraft }),
+    };
+  });
+}
+
 export function usePersonalChat() {
   const user = useAuthStore((s) => s.user);
   const {
@@ -68,10 +146,38 @@ export function usePersonalChat() {
     patchMessage,
     updateServerSessionId,
     loadMessagesForConversation,
+    addAttachment,
+    setAttachments,
+    removeAttachment,
+    markAttachmentsConsumed,
   } = usePersonalAiStore();
 
   const [isStreaming, setIsStreaming] = useState(false);
+  /**
+   * Khóa "đang xử lý một lượt gửi", đặt ĐỒNG BỘ ngay khi vào `sendMessage`.
+   *
+   * `isStreaming` là state nên trong closure của `useCallback` nó là giá trị của
+   * lần render trước, và giữa lúc kiểm tra với lúc `setIsStreaming(true)` còn có
+   * `await fetchWorkReportScopes(...)`. Bấm Gửi liên tiếp (hoặc Enter giữ) trong
+   * khoảng đó thì MỌI lượt đều thấy `isStreaming === false` và chạy tiếp — sinh
+   * ra n bong bóng hỏi, n thẻ "Chọn phạm vi" và n request y hệt, máy đơ dần.
+   * Ref cập nhật tức thì nên lượt thứ hai trở đi bị chặn ngay.
+   */
+  const isSendingRef = useRef(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  /**
+   * Còn lịch sử cũ hơn ở server (§5), LƯU KÈM hội thoại mà cờ này thuộc về.
+   * Không tách thành boolean rời + effect reset: đổi hội thoại giữa chừng sẽ có
+   * một nhịp cờ của cuộc CŨ còn hiệu lực ở cuộc MỚI → tải nhầm trang cũ của
+   * cuộc khác. Gắn liền id thì đọc ra là tự khớp, không cần dọn.
+   */
+  const [olderHistory, setOlderHistory] = useState<{
+    conversationId: string;
+    hasMore: boolean;
+  } | null>(null);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  /** Chặn hai lượt tải trang cũ chồng nhau. */
+  const loadOlderAbortRef = useRef<AbortController | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const fetchedSessionIds = useRef(new Set<string>());
   /**
@@ -79,10 +185,65 @@ export function usePersonalChat() {
    * nộp lại đúng lượt đó sau khi chọn — không bắt người dùng đính lại tệp.
    */
   const pendingLevelReportFile = useRef<{ question: string; file: File } | null>(null);
+  /**
+   * Vòng poll job dựng bản nháp đang chạy, khoá theo `job_id` để hai SSE liên
+   * tiếp của CÙNG một job (`..._waiting` rồi `..._job`) không dựng hai vòng poll
+   * song song cho cùng một job.
+   */
+  const draftPollers = useRef(new Map<string, DraftPollHandle>());
+
+  // Rời màn hình giữa lúc đang poll → huỷ hết, tránh timer chạy tiếp sau unmount.
+  useEffect(() => {
+    const pollers = draftPollers.current;
+    return () => {
+      pollers.forEach((p) => p.cancel());
+      pollers.clear();
+    };
+  }, []);
 
   const activeConversation =
     conversations.find((c) => c.id === activeConversationId) ?? null;
   const messages = activeConversation?.messages ?? [];
+
+  /** Dừng mọi vòng poll bản nháp đang chạy (đã có kết quả, hoặc job hỏng). */
+  const stopDraftPolling = useCallback(() => {
+    draftPollers.current.forEach((p) => p.cancel());
+    draftPollers.current.clear();
+  }, []);
+
+  /**
+   * Bắt đầu (hoặc tiếp tục) poll một job dựng bản nháp.
+   *
+   * Cùng `job_id` gọi lại → bỏ qua, vì `..._waiting` rồi `..._job` của cùng một
+   * job đều dẫn tới đây và không được dựng hai vòng poll song song.
+   */
+  const startDraftPolling = useCallback(
+    (
+      waiting: { job_id: string; period_start?: string; period_end?: string },
+      conversationId: string,
+      messageId: string,
+    ) => {
+      if (draftPollers.current.has(waiting.job_id)) return;
+
+      // Dùng chung đường với nút "Kiểm tra lại" ở bubble: cùng patch trạng thái,
+      // cùng kết cục (ready / failed / timeout → giữ job_id, không tạo job mới).
+      const handle = handleDraftRetry(
+        { ...waiting, state: "polling" },
+        conversationId,
+        messageId,
+        (cid, mid, patch) => {
+          // Vòng poll kết thúc (mọi nhánh đều xoá `aiDraftPending.state=polling`)
+          // → bỏ khoá job để lượt "Kiểm tra lại" sau còn dựng lại được.
+          if (patch.aiDraftPending?.state !== "polling") {
+            draftPollers.current.delete(waiting.job_id);
+          }
+          patchMessage(cid, mid, patch);
+        },
+      );
+      if (handle) draftPollers.current.set(waiting.job_id, handle);
+    },
+    [patchMessage],
+  );
 
   // Fetch messages từ server khi user chọn conversation có serverSessionId nhưng chưa có messages
   useEffect(() => {
@@ -103,50 +264,28 @@ export function usePersonalChat() {
 
     const userId = user?.id ?? "";
     fetchPersonalSessionMessages(serverSessionId, { signal: ac.signal, employeeCode, userId })
-      .then((fetched) => {
-        if (ac.signal.aborted || !fetched.length) return;
-        // Backend trả thêm các role nội bộ của tool-calling:
-        // "assistant_tool_call" (content rỗng) và "tool" (kết quả tool). Đây
-        // KHÔNG phải tin nhắn hiển thị — nếu giữ lại, kết quả tool hiện nhầm
-        // thành tin nhắn và sinh bong bóng rỗng sau khi tải lại. Chỉ lấy
-        // user/assistant có nội dung thực.
-        const visible = fetched.filter(
-          (m) =>
-            (m.role === "user" || m.role === "assistant") &&
-            (m.content ?? "").trim().length > 0,
-        );
-        const normalized = visible.map((m, idx) => {
-          // Khôi phục hộp "Xem báo cáo công việc" (ReportTextBox) sau khi tải
-          // lịch sử: câu trả lời của #baocaocv (user thường) là text báo cáo,
-          // không có cờ trong metadata. Nhận diện bằng tin user liền trước là
-          // "#baocaocv". Loại trừ báo cáo dạng bảng của admin (có exportable_table).
-          const prev = visible[idx - 1];
-          const isReportRequest =
-            m.role === "assistant" &&
-            m.metadata?.exportable_table !== true &&
-            prev?.role === "user" &&
-            BAOCAOCV_TRIGGER.test((prev.content ?? "").trim());
-          // Render lại bảng lịch + nút "Xem chi tiết" sau khi F5 (tải lịch sử).
-          // Chỉ khôi phục được nếu BE-AI lưu `calendar_events` (kèm event_id) vào
-          // metadata — markdown text không chứa event_id nên không parse ngược được.
-          const calendarEvents = normalizeCalendarEvents(m.metadata?.calendar_events);
-          return {
-            id: m.id || crypto.randomUUID(),
-            role: m.role as "user" | "assistant",
-            content: m.content,
-            timestamp: new Date(m.timestamp),
-            isStreaming: false as const,
-            thinkingPhase: null as null,
-            // Render lại nút "In" cho câu trả lời bảng sau khi tải lịch sử.
-            ...(m.metadata?.exportable_table === true && { exportableTable: true }),
-            // Render lại hộp báo cáo công việc của #baocaocv.
-            ...(isReportRequest && { reportRequest: true as const }),
-            // Render lại bảng lịch (khi BE trả metadata.calendar_events).
-            ...(calendarEvents && { calendarEvents }),
-          };
-        });
+      .then((page) => {
+        if (ac.signal.aborted || !page.messages.length) return;
+        setOlderHistory({ conversationId: activeConversationId, hasMore: page.hasMore });
+        const normalized = normalizeHistoryMessages(page.messages);
         if (normalized.length === 0) return;
         loadMessagesForConversation(activeConversationId, normalized);
+      })
+      .then(() => {
+        // Khôi phục chip tệp tạm CHƯA hết hạn khi mở lại hội thoại. Lỗi ở đây
+        // không được làm hỏng việc tải lịch sử — chỉ là không có chip.
+        if (ac.signal.aborted) return;
+        return listPersonalAttachments(serverSessionId, { signal: ac.signal })
+          .then((list) => {
+            if (ac.signal.aborted) return;
+            // KHÔNG ghi đè bằng danh sách RỖNG. Effect này chạy lại ngay sau lượt
+            // hỏi đầu tiên (lúc `serverSessionId` vừa có), và nếu BE chưa kịp
+            // liệt kê tệp vừa upload thì `[]` sẽ xoá đúng cái chip user vừa đính
+            // — chip biến mất ngay trước mắt dù tệp vẫn dùng được.
+            if (list.length === 0) return;
+            setAttachments(activeConversationId, list);
+          })
+          .catch(() => { /* không có chip cũng không sao */ });
       })
       .catch(() => { /* Silent — hiển thị empty state làm fallback */ })
       .finally(() => { if (!ac.signal.aborted) setIsLoadingHistory(false); });
@@ -155,21 +294,107 @@ export function usePersonalChat() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversationId, activeConversation?.serverSessionId, user?.employeeCode, user?.employee_code]);
 
-  const sendMessage = useCallback(
-    async (promptText: string, scopePromptId?: string) => {
-      const trimmed = promptText.trim();
-      if (!trimmed || isStreaming) return;
+  // Cờ chỉ có hiệu lực với ĐÚNG hội thoại đã ghi nó ra.
+  const hasOlderHistory =
+    !!olderHistory &&
+    !!activeConversationId &&
+    olderHistory.conversationId === activeConversationId &&
+    olderHistory.hasMore;
 
-      let conversationId = activeConversationId;
+  /**
+   * Tải trang lịch sử CŨ HƠN và prepend (§5). `offset` = số message đang có,
+   * đúng semantics của BE (`offset=0` là trang mới nhất).
+   */
+  const loadOlderHistory = useCallback(() => {
+    const serverSessionId = activeConversation?.serverSessionId;
+    const conversationId = activeConversationId;
+    if (!serverSessionId || !conversationId) return;
+    if (!hasOlderHistory || loadOlderAbortRef.current) return;
+
+    const offset = activeConversation?.messages.length ?? 0;
+    if (offset === 0) return;
+
+    const ac = new AbortController();
+    loadOlderAbortRef.current = ac;
+    setIsLoadingOlder(true);
+
+    fetchPersonalSessionMessages(serverSessionId, {
+      signal: ac.signal,
+      limit: PERSONAL_HISTORY_PAGE_SIZE,
+      offset,
+    })
+      .then((page) => {
+        if (ac.signal.aborted) return;
+        // Hội thoại đã đổi trong lúc chờ → bỏ kết quả, không ghi nhầm cuộc khác.
+        if (usePersonalAiStore.getState().activeConversationId !== conversationId) return;
+        const normalized = normalizeHistoryMessages(page.messages);
+        // Trang rỗng (BE hết dữ liệu) → chốt hết lịch sử, đừng gọi lại vô hạn.
+        setOlderHistory({
+          conversationId,
+          hasMore: normalized.length > 0 && page.hasMore,
+        });
+        if (normalized.length === 0) return;
+        loadMessagesForConversation(conversationId, normalized);
+      })
+      .catch(() => { /* Silent — giữ nguyên phần đang hiển thị */ })
+      .finally(() => {
+        if (loadOlderAbortRef.current === ac) loadOlderAbortRef.current = null;
+        if (!ac.signal.aborted) setIsLoadingOlder(false);
+      });
+  }, [
+    activeConversation?.serverSessionId,
+    activeConversation?.messages.length,
+    activeConversationId,
+    hasOlderHistory,
+    loadMessagesForConversation,
+  ]);
+
+  const sendMessage = useCallback(
+    async (
+      promptText: string,
+      scopePromptId?: string,
+      // Tệp đính kèm CỦA RIÊNG lượt này — chỉ `sendWithFile` truyền vào, để bong
+      // bóng user hiện chip tệp (kiểu ChatGPT). Các chip khác đang treo ở
+      // composer không thuộc lượt này nên không suy từ store.
+      attachedFile?: PersonalChatMessage["attachedFile"],
+    ) => {
+      const trimmed = promptText.trim();
+      if (!trimmed || isStreaming || isSendingRef.current) return;
+      // Khóa NGAY, trước mọi `await`: xem chú thích ở `isSendingRef`.
+      isSendingRef.current = true;
+      try {
+
+      // Đọc TƯƠI: `sendWithFile` có thể vừa tạo hội thoại + ghi chip xong rồi gọi
+      // thẳng vào đây trong CÙNG một lượt, lúc đó `activeConversationId` của
+      // closure vẫn là null → tạo thêm hội thoại thứ hai, và chip nằm ở hội thoại
+      // thứ nhất nên `attachment_ids` rỗng ("vui lòng gửi file" dù chip đã hiện).
+      let conversationId =
+        usePersonalAiStore.getState().activeConversationId ?? activeConversationId;
       if (!conversationId) {
         conversationId = createConversation();
       }
+
+      // Tệp hiện trong bong bóng user = tệp THỰC SỰ gửi kèm lượt này. Suy từ
+      // chip còn hiệu lực của hội thoại chứ không chỉ nhận từ `sendWithFile`:
+      // câu hỏi thứ hai trở đi vẫn gửi `attachment_ids` nhưng không đi qua
+      // `sendWithFile`, nếu chỉ dựa vào tham số thì bong bóng trống trơn —
+      // user không biết AI đang đọc tệp nào (ảnh "hỏi xong mất file").
+      const liveForBubble = (
+        usePersonalAiStore.getState().conversations.find((c) => c.id === conversationId)
+          ?.attachments ?? []
+      ).filter((a) => !isAttachmentExpired(a));
+      const bubbleFile =
+        attachedFile ??
+        (liveForBubble.length === 1
+          ? { name: liveForBubble[0].filename, pages: liveForBubble[0].pages }
+          : undefined);
 
       const userMessage: PersonalChatMessage = {
         id: crypto.randomUUID(),
         role: "user",
         content: trimmed,
         timestamp: new Date(),
+        ...(bubbleFile && { attachedFile: bubbleFile }),
       };
       addMessage(conversationId, userMessage);
 
@@ -306,13 +531,46 @@ export function usePersonalChat() {
       setIsStreaming(true);
 
       const convIdSnapshot = conversationId;
-      // Lấy serverSessionId của conversation hiện tại (null = chưa có session trên backend)
-      const targetConv = conversations.find((c) => c.id === conversationId);
+      // Đọc TƯƠI từ store, không dùng `conversations` của closure: `sendWithFile`
+      // gọi `addAttachment` rồi `await sendMessage(...)` ngay trong cùng một lượt,
+      // nên closure vẫn giữ snapshot TRƯỚC lúc có chip → `attachment_ids` rỗng và
+      // BE trả "vui lòng gửi file" dù chip đã hiện. Cùng lý do với serverSessionId.
+      const targetConv = usePersonalAiStore
+        .getState()
+        .conversations.find((c) => c.id === conversationId);
       const serverSessionId = targetConv?.serverSessionId ?? null;
       // Gửi new_conversation: true nếu conversation được tạo mới bằng nút "+"
       // (pendingNew) HOẶC chưa có serverSessionId — belt-and-suspenders đảm bảo
       // backend luôn tạo session riêng biệt thay vì redirect vào session cũ nhất.
       const isNewConversation = (targetConv?.pendingNew ?? false) || !serverSessionId;
+      // Chip tệp tạm của ĐÚNG hội thoại này (không mang sang hội thoại khác).
+      // Bỏ tệp đã hết hạn: gửi ID chết làm BE từ chối cả lượt hỏi, còn user thì
+      // vẫn thấy chip nên tưởng tệp còn dùng được (nghiệm thu mục 6).
+      const liveAttachments = (targetConv?.attachments ?? []).filter(
+        (a) => !isAttachmentExpired(a),
+      );
+      const attachmentIds = liveAttachments.map((a) => a.attachment_id);
+      if (liveAttachments.length < (targetConv?.attachments ?? []).length) {
+        // Dùng chính bong bóng vừa tạo, đừng thêm cái thứ hai — bỏ lửng nó sẽ
+        // để lại một bong bóng rỗng quay mãi.
+        patchMessage(convIdSnapshot, assistantMessage.id, {
+          content: "Tệp đính kèm đã hết hạn. Vui lòng tải lại tệp rồi hỏi lại.",
+          isStreaming: false,
+          thinkingPhase: null,
+          isError: true,
+        });
+        setIsStreaming(false);
+        abortRef.current = null;
+        return;
+      }
+
+      // Tệp đã thuộc về lượt hỏi này → ẩn chip khỏi ô nhập ngay (tệp "đi luôn"
+      // sau khi hỏi). Đánh dấu TRƯỚC khi chờ stream để chip biến mất ngay lúc
+      // bấm gửi, không nán lại suốt lúc đang trả lời. Chỉ ẩn, không xoá: lượt
+      // hỏi sau vẫn gửi `attachment_ids` như hợp đồng.
+      if (attachmentIds.length > 0) {
+        markAttachmentsConsumed(convIdSnapshot);
+      }
 
       try {
         const response = await streamPersonalChat(
@@ -331,7 +589,13 @@ export function usePersonalChat() {
             org_unit: user?.orgUnit ?? "",
             // Luôn gửi document_ids (mảng rỗng khi bỏ tick hết) để backend
             // chuyển sang chitchat mode thay vì dùng lại RAG context của session.
-            document_ids: selectedBackendDocumentIds,
+            document_ids: attachmentIds.length ? [] : selectedBackendDocumentIds,
+            // Hỏi đáp tệp tạm: gửi attachment_ids và TẮT Sources. Hai nguồn không
+            // bao giờ đi cùng nhau — trộn là điều request cấm thẳng.
+            ...(attachmentIds.length > 0 && {
+              attachment_ids: attachmentIds,
+              sources_enabled: false,
+            }),
           },
           {
             onToken: (token) => {
@@ -371,6 +635,32 @@ export function usePersonalChat() {
                 thinkingPhase: null,
               });
             },
+            // Bản nháp AI dựng xong → gắn vào message để render nút tải. Chỉ
+            // patch `aiDraft`, KHÔNG đụng `content`: luồng dựng ngầm theo câu
+            // hỏi thường vẫn phải giữ nguyên bảng tổng hợp tất định đang stream.
+            onDraftReady: (draft) => {
+              // Về được ngay trên stream → không cần poll nữa.
+              stopDraftPolling();
+              patchMessage(convIdSnapshot, assistantMessage.id, {
+                aiDraft: draft,
+                aiDraftPending: undefined,
+              });
+            },
+            // Bản nháp cần nhiều lượt LLM, vượt hạn chờ của SSE → BE chỉ kịp gửi
+            // `job_id`. Tự poll đúng job đó; contract cấm bắt TBP gõ lại tag.
+            onDraftWaiting: (waiting) => {
+              startDraftPolling(waiting, convIdSnapshot, assistantMessage.id);
+            },
+            onDraftFailed: (errorMessage) => {
+              stopDraftPolling();
+              patchMessage(convIdSnapshot, assistantMessage.id, {
+                aiDraftPending: {
+                  job_id: "",
+                  state: "failed",
+                  error_message: errorMessage,
+                },
+              });
+            },
             onSelectionRequest: (selectionData) => {
               patchMessage(convIdSnapshot, assistantMessage.id, {
                 content: "",
@@ -387,7 +677,21 @@ export function usePersonalChat() {
           },
         );
 
-        finalizeMessage(convIdSnapshot, response.answer, response.sources);
+        // Cắt link tải bản nháp khỏi câu trả lời: link cần Authorization nên
+        // bấm thẳng luôn 401. Cắt vô điều kiện — link hỏng thì hỏng dù nút tải
+        // có hiện hay không (nút do `onDraftReady`/metadata dựng, không phải từ
+        // link này). Không có link thì hàm trả nguyên chuỗi.
+        finalizeMessage(
+          convIdSnapshot,
+          stripDraftExportLinks(response.answer),
+          response.sources,
+        );
+
+        // Trả lời dựa trên tệp đính kèm tạm → hiện nhãn nói rõ không dùng dữ liệu
+        // Công ty/Sources, để user không hiểu nhầm nguồn của câu trả lời.
+        if (response.mode === PERSONAL_ATTACHMENT_MODE) {
+          patchMessage(convIdSnapshot, assistantMessage.id, { attachmentMode: true });
+        }
 
         // Câu trả lời lịch: BE trả `calendar_events` ở SSE done → render bảng
         // lịch 5 cột + nút "Xem chi tiết" thay markdown thuần (xem
@@ -438,6 +742,21 @@ export function usePersonalChat() {
         // handleScopeErrorStatus(403) đã clearSelection (xóa token lỗi) nên
         // `selected` null → effect gửi-lại-sau-khi-chọn KHÔNG chạy tới khi user
         // chủ động chọn lại. Câu hỏi giữ trong pendingQuestion để gửi sau khi chọn.
+        // BE từ chối giữa stream và đã nói rõ lý do → hiện đúng câu của BE.
+        // Với ATTACHMENT_MODE_REJECTED, GIỮ NGUYÊN chip tệp và ô nhập để user tự
+        // chọn lại luồng; FE không tự chuyển tệp sang Sources hay báo cáo.
+        if (err instanceof AiStreamError) {
+          // NGOẠI LỆ: tệp không còn trên BE thì chip đang trỏ vào ID chết. Giữ nó
+          // lại là mọi câu hỏi sau trong hội thoại đều hỏng đúng kiểu này, user
+          // không hiểu vì sao và cũng không có cách nào thoát ngoài xoá tay.
+          if (isAttachmentGoneError(err)) {
+            attachmentIds.forEach((id) => removeAttachment(convIdSnapshot, id));
+          }
+          finalizeMessage(convIdSnapshot, err.message);
+          markMessageError(convIdSnapshot);
+          return;
+        }
+
         if (
           err instanceof PersonalAiError &&
           err.kind === "http" &&
@@ -475,6 +794,11 @@ export function usePersonalChat() {
         setIsStreaming(false);
         abortRef.current = null;
       }
+      } finally {
+        // Nhả khóa ở MỌI lối ra, kể cả các nhánh `return` sớm của pre-flight
+        // (deny / pick / lỗi mạng) — không nhả thì ô nhập chết cứng.
+        isSendingRef.current = false;
+      }
     },
     [
       isStreaming,
@@ -491,6 +815,10 @@ export function usePersonalChat() {
       markMessageError,
       patchMessage,
       updateServerSessionId,
+      startDraftPolling,
+      stopDraftPolling,
+      removeAttachment,
+      markAttachmentsConsumed,
     ],
   );
 
@@ -517,14 +845,113 @@ export function usePersonalChat() {
     void sendMessage(scopePendingQuestion, tokenPromptId ?? undefined);
   }, [scopeSelected, scopeIsPicking, scopePendingQuestion, isStreaming, sendMessage]);
 
+  /**
+   * Trả `true` khi BE đã nhận file (HTTP 2xx) — contract 07/08/26 §7.10: caller
+   * CHỈ được xoá tệp đang chờ sau khi biết chắc đã nộp được. Trước đây trang gọi
+   * xoá tệp ngay lúc bấm Gửi, nên mọi lỗi (sai form, sai tuần, hết phiên) đều
+   * bắt user đi tìm và đính lại file.
+   */
   const sendWithFile = useCallback(
-    async (question: string, file: File) => {
+    async (question: string, file: File): Promise<boolean> => {
       const trimmed = question.trim();
-      if (!trimmed || isStreaming) return;
+      // Cùng lý do với `sendMessage`: chặn bấm Gửi liên tiếp trong lúc còn
+      // `await` upload. Nhánh uỷ thác cho `sendMessage` bên dưới tự nhả khóa
+      // trước khi gọi, nên không tự chặn chính mình.
+      if (!trimmed || isStreaming || isSendingRef.current) return false;
+      isSendingRef.current = true;
 
       let conversationId = activeConversationId;
       if (!conversationId) {
         conversationId = createConversation();
+      }
+
+      const convIdSnapshot = conversationId;
+      const fileServerSessionId =
+        usePersonalAiStore.getState().conversations.find((c) => c.id === conversationId)
+          ?.serverSessionId ?? null;
+
+      // Tệp KHÔNG kèm lệnh nộp báo cáo → hỏi đáp tệp tạm, không đụng endpoint
+      // báo cáo lẫn Sources. Định tuyến bằng parser lệnh chứ không dò `#` thô.
+      //
+      // Nhánh này KHÔNG tự dựng bong bóng: nó uỷ thác cho `sendMessage`, mà
+      // `sendMessage` tự thêm cặp user+assistant của nó. Dựng thêm ở đây thì câu
+      // hỏi hiện HAI lần và bong bóng đầu kẹt mãi ở "Đang tìm kiếm trong tài
+      // liệu..." (không ai finalize nó).
+      if (!isReportSubmissionText(trimmed)) {
+        // Sources đang bật + tệp thường = hai nguồn tranh nhau. Bắt user chọn rõ
+        // MODE thay vì tự tắt Sources giúp họ: tắt ngầm đúng thứ request cấm, và
+        // user sẽ không hiểu vì sao câu trả lời bỏ qua nguồn họ đã tick.
+        if (selectedDocumentIds.length > 0) {
+          addMessage(conversationId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content:
+              "Bạn đang chọn nguồn trong Sources. Hỏi đáp tệp đính kèm không dùng " +
+              "chung với Sources — vui lòng bỏ chọn nguồn trong Sources, hoặc mở " +
+              "hội thoại mới rồi gửi lại tệp.",
+            timestamp: new Date(),
+            isError: true,
+          });
+          // Giữ nguyên tệp + câu hỏi để user chọn lại luồng, không nuốt mất file.
+          isSendingRef.current = false;
+          return false;
+        }
+
+        setIsStreaming(true);
+        const uploadController = new AbortController();
+        abortRef.current = uploadController;
+        let uploaded: PersonalAttachment;
+        try {
+          uploaded = await uploadPersonalAttachment(
+            file,
+            fileServerSessionId ?? convIdSnapshot,
+            { signal: uploadController.signal },
+          );
+          // Chỉ sau 2xx có attachment_id mới ghi chip, và ghi theo ĐÚNG hội thoại.
+          addAttachment(convIdSnapshot, uploaded);
+          // Gắn hội thoại vào ĐÚNG session BE đã cất tệp. Hội thoại mới chưa có
+          // serverSessionId nên tệp được upload dưới id cục bộ; không nhận session
+          // thật về đây thì lượt hỏi ngay sau gửi `new_conversation: true` → BE mở
+          // session KHÁC → "Không tìm thấy tệp đính kèm" ngay câu hỏi ĐẦU TIÊN.
+          if (uploaded.session_id && uploaded.session_id !== fileServerSessionId) {
+            updateServerSessionId(convIdSnapshot, uploaded.session_id);
+          }
+        } catch (err) {
+          addMessage(convIdSnapshot, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content:
+              err instanceof PersonalAiError && err.kind === "http"
+                ? err.message
+                : UPLOAD_CONNECTION_ERROR,
+            timestamp: new Date(),
+            isError: true,
+          });
+          setIsStreaming(false);
+          abortRef.current = null;
+          isSendingRef.current = false;
+          return false;
+        }
+        // Nhả cờ TRƯỚC khi gửi: `sendMessage` bỏ qua lượt gửi khi `isStreaming`
+        // còn bật (guard đầu hàm) — quên nhả là câu hỏi biến mất không dấu vết.
+        setIsStreaming(false);
+        abortRef.current = null;
+        // Nhả luôn khóa chống bấm-liên-tiếp, vì `sendMessage` cũng kiểm tra nó.
+        isSendingRef.current = false;
+        // Chip đã vào store; `sendMessage` đọc TƯƠI từ store nên thấy được
+        // `attachment_ids` của lượt này. Kèm tên tệp để bong bóng user hiện chip.
+        //
+        // Chip Ở LẠI composer sau khi hỏi — đúng request mục 5: chip chỉ mất khi
+        // user bấm xoá (DELETE trả 2xx) hoặc tệp hết hạn, và được khôi phục qua
+        // GET .../attachments khi mở lại hội thoại. Tệp tạm là NGỮ CẢNH của cả
+        // hội thoại, không phải đính kèm dùng một lần: bỏ chip đi thì câu hỏi thứ
+        // hai không còn gửi `attachment_ids`, chỉ chạy đúng nhờ BE tự nhớ theo
+        // session — tức FE dựa vào hành vi không có trong hợp đồng.
+        await sendMessage(trimmed, undefined, {
+          name: uploaded.filename,
+          pages: uploaded.pages,
+        });
+        return true;
       }
 
       const userMessage: PersonalChatMessage = {
@@ -549,10 +976,6 @@ export function usePersonalChat() {
       const controller = new AbortController();
       abortRef.current = controller;
       setIsStreaming(true);
-
-      const convIdSnapshot = conversationId;
-      const targetConvForFile = conversations.find((c) => c.id === conversationId);
-      const fileServerSessionId = targetConvForFile?.serverSessionId ?? null;
 
       try {
         const response = await uploadPersonalWeeklyReport(
@@ -593,37 +1016,40 @@ export function usePersonalChat() {
         if (response.session_id && response.session_id !== fileServerSessionId) {
           updateServerSessionId(convIdSnapshot, response.session_id);
         }
+        return true;
       } catch (err) {
+        // Contract 07/08/26 §4: có HTTP response → hiện NGUYÊN VĂN lý do BE trả
+        // (err.failure.message đã ưu tiên detail.message → detail → message →
+        // error → fallback theo status). Chỉ mất mạng/timeout mới dùng câu
+        // "không kết nối được" — và câu đó phải nói rõ báo cáo CHƯA được ghi nhận.
         const content =
           err instanceof AiApiError
-            ? err.kind === "timeout"
-              ? "Yêu cầu quá thời gian. Vui lòng thử lại."
-              : err.kind === "network"
-                ? "Lỗi kết nối. Vui lòng kiểm tra mạng và thử lại."
-                : err.status === 413
-                  ? "Tệp vượt quá dung lượng cho phép của máy chủ."
-                  : err.status === 415
-                    ? "Định dạng tệp không được hỗ trợ."
-                    : "Đã xảy ra lỗi. Vui lòng thử lại."
-            : "Đã xảy ra lỗi không xác định.";
+            ? err.kind === "http" && err.failure
+              ? withRetryAfterHint(err.failure)
+              : UPLOAD_CONNECTION_ERROR
+            : UPLOAD_CONNECTION_ERROR;
 
         finalizeMessage(convIdSnapshot, content);
         markMessageError(convIdSnapshot);
+        return false;
       } finally {
         setIsStreaming(false);
         abortRef.current = null;
+        isSendingRef.current = false;
       }
     },
     [
       isStreaming,
       activeConversationId,
-      conversations,
       user,
       createConversation,
       addMessage,
       finalizeMessage,
       markMessageError,
       updateServerSessionId,
+      selectedDocumentIds,
+      addAttachment,
+      sendMessage,
     ],
   );
 
@@ -638,9 +1064,13 @@ export function usePersonalChat() {
    * danh sách phạm vi để FE mở dropdown mà không mất file.
    */
   const sendLevelReportWithFile = useCallback(
-    async (question: string, file: File, scopeToken?: string) => {
+    async (question: string, file: File, scopeToken?: string): Promise<boolean> => {
       const trimmed = question.trim();
-      if (!trimmed || isStreaming) return;
+      // Chặn bấm Gửi liên tiếp trong lúc còn `await` pre-flight/upload — xem
+      // chú thích ở `isSendingRef`.
+      if (!trimmed || isStreaming || isSendingRef.current) return false;
+      isSendingRef.current = true;
+      try {
 
       let conversationId = activeConversationId;
       if (!conversationId) {
@@ -676,7 +1106,7 @@ export function usePersonalChat() {
               timestamp: new Date(),
               isStreaming: false,
             });
-            return;
+            return false;
           }
           if (decision.kind === "pick") {
             // ≥2 phạm vi → hỏi TRƯỚC khi tốn băng thông. Giữ file trong memory;
@@ -698,7 +1128,10 @@ export function usePersonalChat() {
               isStreaming: false,
               scopeRequired: true,
             });
-            return;
+            // Chưa nộp được — file đang giữ trong `pendingLevelReportFile` để
+            // effect nộp-lại lo. Trả false để trang KHÔNG xoá chip tệp: user còn
+            // thấy mình đang nộp cái gì trong lúc chọn phạm vi.
+            return false;
           }
           // `auto`: đúng MỘT phạm vi → BE tự bind, gửi thẳng KHÔNG kèm token (§2.4).
         } catch (err) {
@@ -726,7 +1159,7 @@ export function usePersonalChat() {
           timestamp: new Date(),
           isStreaming: false,
         });
-        return;
+        return false;
       }
 
       addMessage(conversationId, {
@@ -760,6 +1193,7 @@ export function usePersonalChat() {
         finalizeMessage(convIdSnapshot, response.message);
         // §4: token chỉ sống trong đúng vòng "BE hỏi → user chọn → nộp lại".
         if (scopeToken) useWorkReportScopeStore.getState().releaseScopeToken();
+        return true;
       } catch (err) {
         // §2.5: lỗi mang sẵn danh sách phạm vi → mở dropdown NGAY, giữ file trong
         // memory (`pendingLevelReportFile`) để effect bên dưới nộp lại chính lượt
@@ -776,7 +1210,7 @@ export function usePersonalChat() {
             isStreaming: false,
             thinkingPhase: null,
           });
-          return;
+          return false;
         }
 
         // BE bản cũ (chưa ship 2.5) hoặc đường lùi khi không ký được token:
@@ -791,34 +1225,36 @@ export function usePersonalChat() {
             convIdSnapshot,
             "Phạm vi báo cáo không còn hiệu lực. Vui lòng chọn lại phạm vi rồi nộp lại tệp.",
           );
-          return;
+          return false;
         }
 
+        // Contract 07/08/26 §4: HTTP lỗi → hiện NGUYÊN VĂN lý do BE trả.
+        // `PersonalAiError.message` đã là `detail.message`/`detail` đọc từ body
+        // (xem `parseHttpErrorMessage`); các câu cứng theo status trước đây đè
+        // mất lý do thật ("File này là BẢN NHÁP AI…", "Bạn chưa có quyền nộp
+        // #TBP_baocao cho bộ phận này." → chỉ còn "Bạn không có quyền…").
+        //
+        // Riêng 401 giữ câu của FE: tới đây là 401 SAU khi `uploadLevelReport`
+        // đã tự làm mới token và gửi lại (§2.6) — tức hết phiên thật. Câu của BE
+        // không nói được điều đó, và user cần biết tệp CHƯA được nộp.
         const content =
           err instanceof PersonalAiError
-            ? err.kind === "timeout"
-              ? "Yêu cầu quá thời gian. Vui lòng thử lại."
-              : err.kind === "network"
-                ? "Lỗi kết nối. Vui lòng kiểm tra mạng và thử lại."
-                : err.status === 413
-                  ? "Tệp vượt quá dung lượng cho phép (tối đa 25MB)."
-                  : err.status === 403
-                    ? "Bạn không có quyền nộp báo cáo cấp này."
-                    : // §2.6: tới đây là 401 SAU khi `uploadLevelReport` đã tự làm
-                      // mới token và gửi lại — tức hết phiên thật, không phải
-                      // token cũ kẹt lại. Nói rõ để user đăng nhập lại, và báo
-                      // tệp chưa được nhận để họ biết phải nộp lại.
-                      err.status === 401
-                      ? "Phiên đăng nhập đã hết hạn. Tệp CHƯA được nộp — vui lòng đăng nhập lại rồi nộp lại tệp."
-                      : err.status === 400
-                        ? err.message || "File không hợp lệ hoặc thiếu tag báo cáo."
-                        : err.message || "Đã xảy ra lỗi. Vui lòng thử lại."
-            : "Đã xảy ra lỗi không xác định.";
+            ? err.kind !== "http"
+              ? UPLOAD_CONNECTION_ERROR
+              : err.status === 401
+                ? "Phiên đăng nhập đã hết hạn. Tệp CHƯA được nộp — vui lòng đăng nhập lại rồi nộp lại tệp."
+                : err.message?.trim() || fallbackUploadMessage(err.status)
+            : UPLOAD_CONNECTION_ERROR;
         finalizeMessage(convIdSnapshot, content);
         markMessageError(convIdSnapshot);
+        return false;
       } finally {
         setIsStreaming(false);
         abortRef.current = null;
+      }
+      } finally {
+        // Nhả khóa ở MỌI lối ra, kể cả các nhánh `return` sớm của pre-flight.
+        isSendingRef.current = false;
       }
     },
     [
@@ -861,6 +1297,9 @@ export function usePersonalChat() {
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    // Bấm Dừng phải GIỮ phần đã stream: token của frame cuối còn treo trong
+    // buffer, không xả là mất chữ ngay trước mắt người dùng.
+    flushPersonalStreamBuffer();
     setIsStreaming(false);
   }, []);
 
@@ -868,9 +1307,16 @@ export function usePersonalChat() {
     messages,
     isStreaming,
     isLoadingHistory,
+    /** Còn lịch sử cũ hơn ở server (§5). */
+    hasOlderHistory,
+    /** Đang tải trang cũ hơn (khác `isLoadingHistory` của trang đầu). */
+    isLoadingOlder,
+    loadOlderHistory,
     sendMessage,
     sendWithFile,
     sendLevelReportWithFile,
     stopStreaming,
+    /** Nút "Kiểm tra lại" sau khi hết hạn chờ — poll tiếp ĐÚNG job cũ. */
+    resumeDraftPolling: startDraftPolling,
   };
 }

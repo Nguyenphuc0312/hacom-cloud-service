@@ -73,7 +73,11 @@ describe("friendshipStore alias sync into enrichedProfileStore", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useEnrichedProfileStore.getState().clear();
-    useFriendshipStore.setState({ friends: [], hasHydrated: false });
+    useFriendshipStore.setState({
+      friends: [],
+      friendByUserId: {},
+      hasHydrated: false,
+    });
   });
 
   it("setLocalAlias sets then clears the enriched name", () => {
@@ -83,6 +87,48 @@ describe("friendshipStore alias sync into enrichedProfileStore", () => {
 
     setLocalAlias("u1", null);
     expect(useEnrichedProfileStore.getState().nameByUserId["u1"]).toBeUndefined();
+  });
+
+  it("keeps an alias saved while an older directory request is in flight", async () => {
+    mocks.getFriends.mockResolvedValueOnce(page([makeRelation("u1", "Tên cũ")]));
+    await useFriendshipStore.getState().fetchFriends();
+
+    let resolveStaleResponse!: (response: ReturnType<typeof page>) => void;
+    mocks.getFriends.mockImplementationOnce(
+      () =>
+        new Promise<ReturnType<typeof page>>((resolve) => {
+          resolveStaleResponse = resolve;
+        }),
+    );
+
+    const staleFetch = useFriendshipStore.getState().fetchFriends();
+    useFriendshipStore.getState().setLocalAlias("u1", "Sếp Nam");
+    resolveStaleResponse(page([makeRelation("u1", "Tên cũ")]));
+    await staleFetch;
+
+    expect(useFriendshipStore.getState().friendByUserId.u1?.alias).toBe("Sếp Nam");
+    expect(useEnrichedProfileStore.getState().nameByUserId.u1).toBe("Sếp Nam");
+  });
+
+  it("keeps an alias removal while an older directory request is in flight", async () => {
+    mocks.getFriends.mockResolvedValueOnce(page([makeRelation("u1", "Sếp Nam")]));
+    await useFriendshipStore.getState().fetchFriends();
+
+    let resolveStaleResponse!: (response: ReturnType<typeof page>) => void;
+    mocks.getFriends.mockImplementationOnce(
+      () =>
+        new Promise<ReturnType<typeof page>>((resolve) => {
+          resolveStaleResponse = resolve;
+        }),
+    );
+
+    const staleFetch = useFriendshipStore.getState().fetchFriends();
+    useFriendshipStore.getState().setLocalAlias("u1", null);
+    resolveStaleResponse(page([makeRelation("u1", "Sếp Nam")]));
+    await staleFetch;
+
+    expect(useFriendshipStore.getState().friendByUserId.u1?.alias).toBeNull();
+    expect(useEnrichedProfileStore.getState().nameByUserId.u1).toBeUndefined();
   });
 
   it("fetchFriends clears a stale alias removed server-side", async () => {

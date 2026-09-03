@@ -57,6 +57,7 @@ import { useDelayedLoading } from "../../../hooks/useDelayedLoading";
 import { EventDetailModal } from "./EventDetailModal";
 import { useCalendarEventMutations } from "../hooks/useCalendarEventMutations";
 import { type HRCalendarEvent } from "../../api/hrCalendarApi";
+import { reportError } from "../../../utils/errorReporter";
 
 const formatDateStr = (d: Date): string => {
   const y = d.getFullYear();
@@ -104,8 +105,11 @@ class WidgetErrorBoundary extends React.Component<
   static getDerivedStateFromError() {
     return { hasError: true };
   }
-  componentDidCatch(error: Error) {
-    console.error("[WidgetErrorBoundary] WeeklyCalendarWidget render error:", error);
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    reportError(error, {
+      boundary: "WeeklyCalendarWidget",
+      componentStack: info.componentStack ?? undefined,
+    });
   }
   render() {
     if (this.state.hasError) {
@@ -327,16 +331,18 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
       return;
     }
 
-    const startDate = toLocalDateString(ev.startAt);
+    // Múi giờ THẬT của sự kiện (HR event); thiếu thì helper rơi về giờ VN.
+    const evZone = selectedHrEvent?.timezone;
+    const startDate = toLocalDateString(ev.startAt, evZone);
 
     if (ev.type === "personal") {
       const personalData: PersonalEventFormData = {
         id: ev.id,
         title: ev.title,
         date: startDate,
-        endDate: ev.endAt ? toLocalDateString(ev.endAt) : startDate,
-        startTime: ev.startAt ? toLocalTimeString(ev.startAt) : "08:00",
-        endTime: ev.endAt ? toLocalTimeString(ev.endAt) : "09:00",
+        endDate: ev.endAt ? toLocalDateString(ev.endAt, evZone) : startDate,
+        startTime: ev.startAt ? toLocalTimeString(ev.startAt, evZone) : "08:00",
+        endTime: ev.endAt ? toLocalTimeString(ev.endAt, evZone) : "09:00",
         notes: ev.description || "",
         visibility: apiVisibilityToForm(selectedHrEvent?.visibility ?? ev.visibility),
         attachments: remoteAttachmentsToForm(selectedHrEvent?.attachments),
@@ -363,8 +369,8 @@ const WeeklyCalendarWidgetInner: React.FC = () => {
       id: ev.id,
       title: ev.title,
       date: startDate,
-      startTime: ev.startAt ? toLocalTimeString(ev.startAt) : "08:00",
-      endTime: ev.endAt ? toLocalTimeString(ev.endAt) : "09:00",
+      startTime: ev.startAt ? toLocalTimeString(ev.startAt, evZone) : "08:00",
+      endTime: ev.endAt ? toLocalTimeString(ev.endAt, evZone) : "09:00",
       chairman: meta.meetingChairman ?? "",
       participants,
       format: meta.meetingFormat === "online" ? "online" : "offline",

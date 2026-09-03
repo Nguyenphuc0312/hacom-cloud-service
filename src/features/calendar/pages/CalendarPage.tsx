@@ -39,13 +39,8 @@ const PersonalEventFormModal = React.lazy(() =>
 );
 import { useCalendarEventMutations } from "../hooks/useCalendarEventMutations";
 import {
-  hrApi,
-  type AttendanceCalendarDay,
-} from "../../api/hrApi";
-import {
   hrCalendarApi,
   type HRCalendarEvent,
-  type CalendarAttachmentDto,
 } from "../../api/hrCalendarApi";
 import { apiVisibilityToForm } from "../utils/calendarVisibility";
 import { type MeetingFormData } from "../../../components/ui/MeetingFormModal";
@@ -58,7 +53,6 @@ import { WeekView } from "../components/WeekView";
 import { getWeekDays, getIsoWeekNumber, eventOccursOnDay, getMultiDayPosition, type MultiDayPosition } from "../utils/timeline";
 import {
   buildExtendedEventMap,
-  filterCalendarEventsByType,
   getMeetingMetadata,
   mapHrmEventToCalendarEvent,
   remoteAttachmentsToForm,
@@ -71,11 +65,7 @@ import { useDelayedLoading } from "../../../hooks/useDelayedLoading";
 import { HrNotificationBell } from "../components/HrNotificationBell";
 import { UserSearchModal } from "../../../components/ui/UserSearchModal";
 import { loadUserProfiles } from "../../../services/userBatchLoader";
-import {
-  resolvePublicResourceUrl,
-  CALENDAR_ATTACHMENTS_USE_MOCK,
-} from "../../../config";
-import { mockGetAttachmentsForEvents } from "../utils/calendarAttachmentMockStore";
+import { resolvePublicResourceUrl } from "../../../config";
 
 /**
  * Calendar view types.
@@ -135,15 +125,6 @@ const formatDateString = (date: Date): string => {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
-
-/**
- * Format time from HH:mm format
- */
-const formatTime = (time: string | null | undefined): string => {
-  if (!time) return "--:--";
-  return time;
-};
-
 
 /**
  * Mini calendar component for the sidebar.
@@ -325,31 +306,6 @@ const EventBadge: React.FC<{
   );
 };
 
-/**
- * Attendance badge component for calendar day cell
- */
-const AttendanceBadge: React.FC<{
-  attendance: AttendanceCalendarDay;
-}> = ({ attendance }) => {
-  const hasPunch = !!(attendance.firstPunch || attendance.lastPunch);
-
-  return (
-    <div
-      className="attendance-badge block w-full rounded border border-border bg-surface px-1.5 py-0.5 text-left text-xs"
-      title={hasPunch ? `Giờ đến: ${formatTime(attendance.firstPunch)} · Giờ về: ${formatTime(attendance.lastPunch)}` : "Chưa có dữ liệu chấm công"}
-    >
-      {hasPunch ? (
-        <span className="block space-y-0.5">
-          <span className="block truncate text-text-secondary">Giờ đến: <span className="font-medium text-text-primary">{formatTime(attendance.firstPunch)}</span></span>
-          <span className="block truncate text-text-secondary">Giờ về: <span className="font-medium text-text-primary">{formatTime(attendance.lastPunch)}</span></span>
-        </span>
-      ) : (
-        <span className="block truncate text-text-muted">Chưa chấm công</span>
-      )}
-    </div>
-  );
-};
-
 interface MonthGridDay {
   date: Date;
   isCurrentMonth: boolean;
@@ -364,22 +320,16 @@ interface MonthGridDay {
 const MonthGrid: React.FC<{
   calendarDays: MonthGridDay[];
   events: (LocalCalendarEvent | ExtendedCalendarEvent)[];
-  getAttendanceForDate: (date: Date) => AttendanceCalendarDay | undefined;
   isToday: (date: Date) => boolean;
   isSelected: (date: Date) => boolean;
-  isAttendanceFilterActive: boolean;
-  showAttendance: boolean;
   onOpenDay: (date: Date) => void;
   onEventClick: (event: LocalCalendarEvent | ExtendedCalendarEvent) => void;
 }> = React.memo(
   ({
     calendarDays,
     events,
-    getAttendanceForDate,
     isToday,
     isSelected,
-    isAttendanceFilterActive,
-    showAttendance,
     onOpenDay,
     onEventClick,
   }) => {
@@ -424,7 +374,6 @@ const MonthGrid: React.FC<{
             const maxVisibleEvents = 2;
             const visibleEvents = dayEvents.slice(0, maxVisibleEvents);
             const remainingCount = dayEvents.length - maxVisibleEvents;
-            const attendance = getAttendanceForDate(dayInfo.date);
 
             return (
               <div
@@ -453,13 +402,6 @@ const MonthGrid: React.FC<{
                     {dayInfo.date.getDate()}
                   </span>
                 </div>
-
-                {/* Attendance badge — only show for own calendar */}
-                {attendance && isAttendanceFilterActive && showAttendance && (
-                  <div className="mb-1">
-                    <AttendanceBadge attendance={attendance} />
-                  </div>
-                )}
 
                 {/* Events */}
                 <div className="space-y-0.5">
@@ -511,7 +453,6 @@ export const CalendarPage: React.FC = () => {
     viewingUnitName,
     filters,
     setFilters,
-    setViewingUser,
     fetchEvents,
     isLoading: storeLoading,
   } = storeState;
@@ -547,11 +488,6 @@ export const CalendarPage: React.FC = () => {
   const handledNavState = useRef<string | null>(null);
   const [pendingOpenEventId, setPendingOpenEventId] = useState<string | null>(null);
 
-  // Attendance data state. (Loading/error state đã bỏ: giá trị chưa từng được
-  // render — chỉ giữ data + log lỗi ra console cho dev.)
-  const [attendanceData, setAttendanceData] = useState<AttendanceCalendarDay[]>([]);
-
-
   // Meeting form modal state
   const [meetingModalOpen, setMeetingModalOpen] = useState(false);
   const [meetingModalDate, setMeetingModalDate] = useState<string | undefined>();
@@ -584,9 +520,15 @@ export const CalendarPage: React.FC = () => {
   // Create event loading state
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
 
-  // Handle select user from search
+  // Handle select user from search. Đồng bộ tháng đang xem của TRANG vào store
+  // trước (setDate không fetch): đổi người khi ĐANG ở mode "other" thì effect
+  // refetch không chạy lại (deps y nguyên), chỉ còn fetch của setViewingUser —
+  // mà nó lấy range theo store, không sync thì load nhầm tháng (cùng bẫy với
+  // handleBackToMyCalendar bên dưới).
   const handleSelectUser = (userId: string, userName: string) => {
-    setViewingUser(userId, userName);
+    const store = useCalendarStore.getState();
+    store.setDate(currentYear, currentMonth);
+    store.setViewingUser(userId, userName);
   };
 
   // Hai nguồn cùng yêu cầu mở sẵn một sự kiện:
@@ -726,7 +668,7 @@ export const CalendarPage: React.FC = () => {
   useEffect(() => {
     const { from, to } = getMonthFetchRange(currentYear, currentMonth);
     void fetchEvents(from, to);
-  }, [currentYear, currentMonth, mode]);
+  }, [currentYear, currentMonth, fetchEvents, mode]);
 
   // Extended events map cho detail view — thuần derive từ apiEvents → useMemo
   // (trước là effect+setState gây cascading render + chặn React Compiler).
@@ -746,9 +688,9 @@ export const CalendarPage: React.FC = () => {
       return {
         id: event.id,
         title: event.title,
-        date: toLocalDateString(event.startAt),
-        startTime: toLocalTimeString(event.startAt),
-        endTime: toLocalTimeString(event.endAt),
+        date: toLocalDateString(event.startAt, event.timezone),
+        startTime: toLocalTimeString(event.startAt, event.timezone),
+        endTime: toLocalTimeString(event.endAt, event.timezone),
         chairman: meta.meetingChairman ?? "",
         participants: participantNames,
         format: meta.meetingFormat === "online" ? "online" : "offline",
@@ -764,22 +706,6 @@ export const CalendarPage: React.FC = () => {
   // Day/Week View dựng block theo thời lượng + overlap — xem utils/timeline.ts).
   const calendarEventsFromApi = useMemo((): ExtendedCalendarEvent[] => {
     return apiEvents.map(mapHrmEventToCalendarEvent);
-  }, [apiEvents]);
-
-  // MOCK attachments (khi BE chưa trả `attachments[]`): nạp từ IndexedDB theo
-  // eventId để viewer + form sửa hiển thị lại. No-op khi nối BE thật.
-  const [mockAttachmentsByEventId, setMockAttachmentsByEventId] = useState<
-    Record<string, CalendarAttachmentDto[]>
-  >({});
-  useEffect(() => {
-    if (!CALENDAR_ATTACHMENTS_USE_MOCK || apiEvents.length === 0) return;
-    let cancelled = false;
-    void mockGetAttachmentsForEvents(apiEvents.map((e) => e.id)).then((map) => {
-      if (!cancelled) setMockAttachmentsByEventId(map);
-    });
-    return () => {
-      cancelled = true;
-    };
   }, [apiEvents]);
 
   // Avatar người tham gia lấy từ chat-web (/users/batch, GIỐNG Poll) bằng authUserId —
@@ -827,39 +753,11 @@ export const CalendarPage: React.FC = () => {
     );
   }, [calendarEventsFromApi, participantAvatars]);
 
-  // Fetch attendance data when month changes.
-  // Skip when viewing another user's calendar — never show current user's attendance
-  // alongside someone else's events. A future phase can fetch target user's attendance here.
-  useEffect(() => {
-    // Xem lịch người khác → không hiển thị chấm công của mình. Clear nằm trong
-    // async fn (không set-state đồng bộ trong effect body → tránh cascading render).
-    const fetchAttendance = async () => {
-      if (mode === "other") {
-        setAttendanceData([]);
-        return;
-      }
-      try {
-        const fromDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`;
-        const toDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${new Date(currentYear, currentMonth + 1, 0).getDate().toString().padStart(2, "0")}`;
-
-        const data = await hrApi.getMyAttendanceCalendar({ from: fromDate, to: toDate });
-        // reason EMPLOYEE_NOT_LINKED / NO_ATTENDANCE_DATA → items rỗng → lịch trống (không có badge).
-        setAttendanceData(data.items ?? []);
-      } catch (error: unknown) {
-        console.error("Failed to fetch attendance:", error);
-        setAttendanceData([]);
-      }
-    };
-
-    void fetchAttendance();
-  }, [currentYear, currentMonth, mode]);
-
   // Calendar type filters — local state for display
   const localFilters = useMemo((): CalendarTypeFilter[] => {
     const defaultFilters: CalendarTypeFilter[] = [
       { type: "meeting", label: "Lịch họp", color: "bg-teal-500", checked: true },
       { type: "personal", label: "Cá nhân", color: "bg-amber-500", checked: true },
-      { type: "attendance", label: "Chấm công", color: "bg-emerald-500", checked: false },
     ];
 
     if (filters.types.length === 0) return defaultFilters;
@@ -885,13 +783,10 @@ export const CalendarPage: React.FC = () => {
   // Calendar chỉ hiển thị sự kiện từ API (họp/cá nhân…); không còn nhiệm vụ & ngày lễ.
   const allEvents = calendarEventsWithAvatars;
 
-  // Filter events based on selected filters.
-  // knownTypes = đúng những loại CÓ checkbox; loại khác (vd "task") không có ô để
-  // tick nên phải hiện mặc định, không được lọc mất.
+  // Chỉ hiện đúng hai nhóm mà trang lịch cung cấp: lịch họp và cá nhân.
   const filteredEvents = useMemo(() => {
     const activeTypes = localFilters.filter((f) => f.checked).map((f) => f.type);
-    const knownTypes = localFilters.map((f) => f.type);
-    return filterCalendarEventsByType(allEvents, activeTypes, knownTypes);
+    return allEvents.filter((event) => activeTypes.includes(event.type));
   }, [allEvents, localFilters]);
 
   // Search filtered events
@@ -909,15 +804,6 @@ export const CalendarPage: React.FC = () => {
   const calendarDays = useMemo(
     () => generateCalendarDays(currentYear, currentMonth),
     [currentYear, currentMonth]
-  );
-
-  // Get attendance for a specific date
-  const getAttendanceForDate = useCallback(
-    (date: Date): AttendanceCalendarDay | undefined => {
-      const dateStr = formatDateString(date);
-      return attendanceData.find((a) => a.date === dateStr);
-    },
-    [attendanceData]
   );
 
   // Check if a date is today
@@ -1050,15 +936,8 @@ export const CalendarPage: React.FC = () => {
   // Raw HR event for the selected item — carries participant roster + response.
   const selectedHrEvent = useMemo(() => {
     if (!selectedEvent) return undefined;
-    const found = apiEvents.find((e) => e.id === selectedEvent.id);
-    if (!found) return undefined;
-    // MOCK: overlay attachments từ IndexedDB nếu BE chưa trả (found.attachments rỗng).
-    const mockAtts = mockAttachmentsByEventId[found.id];
-    if (mockAtts && (!found.attachments || found.attachments.length === 0)) {
-      return { ...found, attachments: mockAtts };
-    }
-    return found;
-  }, [selectedEvent, apiEvents, mockAttachmentsByEventId]);
+    return apiEvents.find((e) => e.id === selectedEvent.id);
+  }, [selectedEvent, apiEvents]);
 
   // Handle edit event — open MeetingFormModal with pre-filled data
   const handleEditEvent = useCallback(() => {
@@ -1186,9 +1065,6 @@ export const CalendarPage: React.FC = () => {
     setEditingPersonalEvent(null);
     setSelectedEvent(null);
   }, [mutations]);
-
-  // Check if attendance filter is active
-  const isAttendanceFilterActive = localFilters.find(f => f.type === "attendance")?.checked ?? true;
 
   // View buttons
   const viewButtons: Array<{ id: CalendarView; label: string }> = [
@@ -1474,11 +1350,8 @@ export const CalendarPage: React.FC = () => {
             <MonthGrid
               calendarDays={calendarDays}
               events={searchedEvents}
-              getAttendanceForDate={getAttendanceForDate}
               isToday={isToday}
               isSelected={isSelected}
-              isAttendanceFilterActive={isAttendanceFilterActive}
-              showAttendance={mode !== "other"}
               onOpenDay={handleOpenDay}
               onEventClick={handleEventClick}
             />
@@ -1489,7 +1362,6 @@ export const CalendarPage: React.FC = () => {
             <DayView
               date={selectedDate}
               events={searchedEvents}
-              attendance={mode !== "other" ? getAttendanceForDate(selectedDate) : undefined}
               onEventClick={handleEventClick}
               onSlotClick={mode !== "other" ? handleCreateAtSlot : undefined}
             />
@@ -1500,7 +1372,6 @@ export const CalendarPage: React.FC = () => {
             <WeekView
               weekDate={selectedDate}
               events={searchedEvents}
-              attendanceData={mode !== "other" ? attendanceData : []}
               onDateClick={handleOpenDay}
               onEventClick={handleEventClick}
               onSlotClick={mode !== "other" ? handleCreateAtSlot : undefined}
@@ -1511,6 +1382,13 @@ export const CalendarPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Suspense CỤC BỘ cho cụm modal lazy — bắt buộc, không phải trang trí.
+          Thiếu nó, lần ĐẦU mở modal (chunk chưa tải) suspend nổi bọt lên
+          boundary ở RootLayout → React ẩn cả trang và DỌN effect của cây bị ẩn
+          → cleanup unmount ở trên chạy resetCalendarData() → đang xem lịch
+          người khác bị đá về "Lịch của tôi". Lần 2 chunk đã cache nên không
+          tái hiện — đúng kiểu bug "làm lại thì hết". */}
+      <React.Suspense fallback={null}>
       {/* Event detail modal */}
       {selectedEventLive && (
         <EventDetailModal
@@ -1629,6 +1507,7 @@ export const CalendarPage: React.FC = () => {
           initialData={editingPersonalEvent}
         />
       )}
+      </React.Suspense>
 
       {/* Delete confirmation dialog */}
       <ConfirmDialog

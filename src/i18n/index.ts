@@ -28,10 +28,31 @@ const isProduction =
   typeof import.meta !== "undefined" && Boolean(import.meta.env?.PROD);
 const missingTranslationKeys = new Set<string>();
 
+const hasLoadedTranslation = (key: string): boolean =>
+  i18n.exists(key) || appNamespaces.some((namespace) => i18n.exists(key, { ns: namespace }));
+
 const handleMissingKey = (key: string) => {
-  if (!isProduction && !missingTranslationKeys.has(key)) {
+  if (isProduction || missingTranslationKeys.has(key)) {
+    return "";
+  }
+
+  if (hasLoadedTranslation(key)) {
+    return "";
+  }
+
+  const logIfStillMissing = () => {
+    if (missingTranslationKeys.has(key) || hasLoadedTranslation(key)) {
+      return;
+    }
+
     missingTranslationKeys.add(key);
     logger.warn("i18n", "missing_translation_key", { key });
+  };
+
+  if (typeof window === "undefined") {
+    logIfStillMissing();
+  } else {
+    window.setTimeout(logIfStillMissing, 500);
   }
 
   return "";

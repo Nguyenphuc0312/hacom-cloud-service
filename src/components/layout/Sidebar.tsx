@@ -41,6 +41,7 @@ interface SidebarProps {
   onRetryConversations?: () => void;
   onLoadMoreConversations?: () => void;
   onCurrentUserClick?: () => void;
+  onAddFriendClick?: () => void;
   className?: string;
 }
 
@@ -120,6 +121,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onRetryConversations,
   onLoadMoreConversations,
   onCurrentUserClick,
+  onAddFriendClick = () => undefined,
   className,
 }) => {
   const { t } = useTranslation();
@@ -199,6 +201,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           layoutState={layoutState}
           currentUser={currentUser}
           onCurrentUserClick={onCurrentUserClick}
+          onAddFriendClick={onAddFriendClick}
         />
 
         <SidebarSearch

@@ -31,6 +31,14 @@ import { resolvePublicResourceUrl } from "../../config";
 import type { Message } from "../../types";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { useEnrichedProfileStore, useResolvedName } from "../../stores/enrichedProfileStore";
+import { ResourceFilterBar } from "../common/resource-filter/ResourceFilterBar";
+import {
+  EMPTY_RESOURCE_FILTERS,
+  hasActiveFilters,
+  type ResourceFilters,
+  type ResourceSender,
+} from "../common/resource-filter/resourceFilter";
+import { isoRangeToSearchWindow } from "../common/resource-filter/dateRange";
 
 interface SearchPanelProps {
   /** Current conversation ID to scope search (optional) */
@@ -104,7 +112,12 @@ const FileResultRow: React.FC<{
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30 focus-visible:ring-inset",
       )}
     >
-      <FileTypeIcon type={iconType} className="h-9 w-9 shrink-0" />
+      <FileTypeIcon
+        type={iconType}
+        fileName={item.fileName}
+        variant="outline"
+        className="h-9 w-9 shrink-0"
+      />
       <div className="min-w-0 flex-1">
         <FileName
           name={item.fileName}
@@ -135,6 +148,9 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     [queryScope],
   );
   const [activeIndex, setActiveIndex] = useState(0);
+  const [filters, setFilters] = useState<ResourceFilters>(
+    EMPTY_RESOURCE_FILTERS,
+  );
 
   const {
     query,
@@ -151,6 +167,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     debounceMs: 400,
     initialQuery,
     limit: 10,
+    senderId: filters.senderId,
+    ...isoRangeToSearchWindow(filters.from, filters.to),
   });
 
   const MESSAGE_PREVIEW_COUNT = 10;
@@ -185,6 +203,37 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     }
     return map;
   }, [conversation?.participants]);
+
+  /**
+   * Sender choices for the filter.
+   *
+   * Taken from the conversation roster, NOT from the loaded results the way the
+   * shared-resources modal does it: search filtering happens server-side, so
+   * building the list from the current page would only ever offer people who
+   * already appear in it — and picking one of them could never narrow anything
+   * the user could not already see. The roster offers everyone in the room,
+   * including members with no match for the current query.
+   *
+   * `avatarUrl: null` on purpose — `ResourceFilterBar` resolves each member's
+   * avatar through the enrich path, which returns a freshly signed URL. The
+   * roster's own `avatar` is the same kind of long-lived snapshot that made the
+   * shared-resources dropdown render dead links.
+   */
+  const senders = useMemo<ResourceSender[]>(() => {
+    const participants = conversation?.participants ?? [];
+    return participants
+      .filter((participant) => Boolean(participant.id))
+      .map((participant) => ({
+        id: participant.id,
+        name:
+          participant.displayName?.trim() ||
+          nameByUserId[participant.id] ||
+          participant.username ||
+          "",
+        avatarUrl: null,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, "vi"));
+  }, [conversation?.participants, nameByUserId]);
 
   // File results (same query box) — mirrors Zalo's "File" section below messages.
   const FILE_PREVIEW_COUNT = 5;
@@ -221,6 +270,20 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   useEffect(() => {
     searchQueryByScope.set(queryScope, query);
   }, [query, queryScope]);
+
+  // Đổi hội thoại thì bỏ bộ lọc: `senderId` là thành viên của phòng CŨ, giữ lại
+  // sẽ lọc bằng một người không có trong phòng mới và luôn ra 0 kết quả, trong
+  // khi chip vẫn hiện tên người đó như thể đang hợp lệ.
+  //
+  // Chỉnh ngay trong lúc render (không dùng effect) để lần render đầu của phòng
+  // mới đã sạch bộ lọc — làm trong effect thì có một nhịp render trung gian bắn
+  // request bằng senderId của phòng cũ. Đây cũng là cách `prevDebouncedQuery`
+  // trong useMessageSearch đang làm.
+  const [prevQueryScope, setPrevQueryScope] = useState(queryScope);
+  if (prevQueryScope !== queryScope) {
+    setPrevQueryScope(queryScope);
+    setFilters(EMPTY_RESOURCE_FILTERS);
+  }
 
   const jumpToResult = useCallback(
     (index: number) => {
@@ -299,6 +362,9 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     reset();
     searchQueryByScope.delete(queryScope);
     setActiveIndex(0);
+    // Bỏ luôn bộ lọc: xoá chữ mà vẫn giữ lọc thì ô tìm kiếm trông như đã sạch
+    // trong khi danh sách vẫn đang bị thu hẹp — người dùng không hiểu vì sao.
+    setFilters(EMPTY_RESOURCE_FILTERS);
   }, [queryScope, reset]);
 
   return (
@@ -308,8 +374,11 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
       aria-label={t("chat:search.title")}
       onKeyDown={handleKeyDown}
     >
-      {/* Header — matches the info panel (GroupInfo) header */}
-      <div className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between border-b border-border bg-surface/95 px-4 backdrop-blur-sm">
+      {/* Header — phải cao bằng ChatHeader để đường kẻ ngang thẳng hàng với khung chat.
+          ChatHeader đặt min-h var(--app-header-height) trên div CON và border-b ở thẻ
+          NGOÀI; gộp cả hai vào một thẻ khiến border ăn vào vùng min-h và hụt 1px. */}
+      <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-surface/95 px-4 backdrop-blur-sm">
+        <div className="flex min-h-[var(--app-header-height)] items-center justify-between">
         <h3 className="text-sm font-bold text-text-primary">
           {t("chat:search.title")}
         </h3>
@@ -321,6 +390,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         >
           <XMarkIcon className="h-5 w-5" />
         </button>
+        </div>
       </div>
 
       {/* Search input */}
@@ -351,6 +421,18 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             </button>
           )}
         </div>
+
+        {/* Người gửi / Ngày gửi — chỉ có nghĩa khi đang ở trong một hội thoại,
+            vì danh sách người gửi lấy từ thành viên của phòng. */}
+        {conversationId && senders.length > 0 && (
+          <div className="mt-2">
+            <ResourceFilterBar
+              filters={filters}
+              onFiltersChange={setFilters}
+              senders={senders}
+            />
+          </div>
+        )}
       </div>
 
       {/* Results area */}
@@ -376,8 +458,10 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           </div>
         )}
 
-        {/* Idle state — panel just opened, no query yet */}
-        {!isLoading && !error && !query.trim() && (
+        {/* Idle state — panel just opened, no query AND no filter yet.
+            Lọc riêng (không gõ chữ) vẫn là một tìm kiếm hợp lệ, nên còn bộ lọc
+            đang bật thì hiển thị kết quả chứ không quay về màn hình gợi ý. */}
+        {!isLoading && !error && !query.trim() && !hasActiveFilters(filters) && (
           <div className="flex flex-col items-center px-8 pb-12 pt-16 text-center">
             <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[#1976D2]/10">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#1976D2]/20">
@@ -400,7 +484,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         {!isLoading &&
           !isFilesFetching &&
           !error &&
-          query.trim() &&
+          (query.trim() || hasActiveFilters(filters)) &&
           results.length === 0 &&
           fileResults.length === 0 && (
           <div className="flex flex-col items-center px-8 py-16 text-center">

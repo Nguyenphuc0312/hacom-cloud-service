@@ -2,6 +2,7 @@ import { createElement, lazy } from "react";
 import { Navigate } from "react-router-dom";
 import type { AppRouteConfig } from "../types";
 import { ROUTE_PATHS } from "../paths";
+import { WORK_MODULE_ENABLED } from "../../config";
 
 const ChatPage = lazy(() => import("../../pages/ChatPage"));
 const SettingsPage = lazy(() => import("../../pages/SettingsPage"));
@@ -17,7 +18,15 @@ const FAQPage = lazy(() => import("../../pages/FAQPage"));
 const TipsPage = lazy(() => import("../../pages/TipsPage"));
 const ReportIssuePage = lazy(() => import("../../pages/ReportIssuePage"));
 const CalendarPage = lazy(() => import("../../features/calendar/pages/CalendarPage"));
+const TeamTimesheetPage = lazy(() => import("../../features/timesheet/pages/TeamTimesheetPage"));
+const WorkHubPage = lazy(() => import("../../features/work/pages/WorkHubPage"));
+const WorkComingSoon = lazy(() => import("../../features/work/pages/WorkComingSoon"));
+const workPage = WORK_MODULE_ENABLED ? WorkHubPage : WorkComingSoon;
+const teamTimesheetPage = WORK_MODULE_ENABLED ? TeamTimesheetPage : WorkComingSoon;
 const AiAssistantPage = lazy(() => import("../../features/ai-assistant/pages/AiAssistantPage"));
+const WorkReportDraftPage = lazy(
+  () => import("../../features/personal-ai/pages/WorkReportDraftPage"),
+);
 const CloudPage = lazy(() => import("../../features/cloud/pages/CloudPage"));
 const CloudManagePage = lazy(() => import("../../features/cloud/pages/CloudManagePage"));
 const CloudLegacyRedirect = () =>
@@ -36,8 +45,12 @@ export const privateRoutes: AppRouteConfig[] = [
   { path: ROUTE_PATHS.SETTINGS, component: SettingsPage },
   { path: ROUTE_PATHS.MAINTENANCE, component: MaintenancePage },
   { path: ROUTE_PATHS.TASKS, component: TasksPage },
+  { path: ROUTE_PATHS.TEAM_TIMESHEET, component: teamTimesheetPage },
+  { path: ROUTE_PATHS.TIMESHEET, component: workPage },
+  { path: ROUTE_PATHS.LEAVE, component: workPage },
   { path: ROUTE_PATHS.CALENDAR, component: CalendarPage },
   { path: ROUTE_PATHS.AI_ASSISTANT, component: AiAssistantPage },
+  { path: ROUTE_PATHS.WORK_REPORT_DRAFTS, component: WorkReportDraftPage },
   { path: ROUTE_PATHS.CLOUD, component: CloudPage },
   { path: ROUTE_PATHS.CLOUD_MANAGE, component: CloudManagePage },
   { path: ROUTE_PATHS.CLOUD_LEGACY, component: CloudLegacyRedirect },

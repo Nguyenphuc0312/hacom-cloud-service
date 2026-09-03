@@ -35,6 +35,11 @@ dist-ssr
 # Lint/build scratch output
 lint_output.txt
 vite-dev*.log
+
+# Env — KHÔNG commit. Chỉ .env.example được theo dõi.
+.env
+.env.*
+!.env.example
 lint-current.json
 test-current.json
 test-results/

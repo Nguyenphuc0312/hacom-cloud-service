@@ -23,6 +23,12 @@ import { Skeleton } from "../ui";
 import { ImagePreviewModal } from "../modals/ImagePreviewModal";
 import { SafeImage } from "../common/SafeImage";
 import {
+  afterNextPaint,
+  getRedactedResourceTiming,
+  markImagePerformanceMilestone,
+  reportImagePerformance,
+} from "../../utils/imagePerformanceTelemetry";
+import {
   getThumbnailPollDelayMs,
   shouldContinueThumbnailPolling,
 } from "./imageThumbnailPolling";
@@ -70,6 +76,8 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
   const [failedSource, setFailedSource] = useState<string | null>(null);
   const [showFullScreen, setShowFullScreen] = useState(false);
   const refreshedSourceRef = useRef<string | null>(null);
+  const imageRequestedAtRef = useRef<number | null>(null);
+  const reportedPlaceholderRef = useRef<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const isVisible = useInViewport(containerRef, { rootMargin: "320px 0px" });
 
@@ -113,9 +121,50 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
 
   const mediaWidth = attachment.width ? Math.min(attachment.width, 320) : 280;
   const aspectRatio =
-    attachment.width && attachment.height
+    attachment.aspectRatio && attachment.aspectRatio > 0
+      ? String(attachment.aspectRatio)
+      : attachment.width && attachment.height
       ? `${attachment.width} / ${attachment.height}`
       : "4 / 3";
+  const placeholderCandidate =
+    attachment.placeholder ?? thumbnailUrl?.placeholder ?? undefined;
+  const placeholderUrl =
+    placeholderCandidate && placeholderCandidate.length <= 2_048
+      ? resolvePublicResourceUrl(placeholderCandidate, {
+          context: "image",
+          allowDataImage: true,
+        })
+      : undefined;
+  const placeholderStyle: React.CSSProperties | undefined = placeholderUrl
+    ? {
+        backgroundImage: `url("${placeholderUrl}")`,
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundSize: "cover",
+      }
+    : undefined;
+
+  useEffect(() => {
+    if (!placeholderUrl || reportedPlaceholderRef.current === attachment.id) return;
+    reportedPlaceholderRef.current = attachment.id;
+    return afterNextPaint(() => {
+      const renderedHeight =
+        attachment.width && attachment.height
+          ? Math.round(mediaWidth * (attachment.height / attachment.width))
+          : undefined;
+      reportImagePerformance(conversationId, {
+        kind: "placeholder_painted",
+        renderedWidth: mediaWidth,
+        renderedHeight,
+        outcome: "success",
+      });
+      markImagePerformanceMilestone(conversationId, "T3", {
+        renderedWidth: mediaWidth,
+        renderedHeight,
+        outcome: "success",
+      });
+    });
+  }, [attachment.height, attachment.id, attachment.width, conversationId, mediaWidth, placeholderUrl]);
 
   // True when batch thumbnail API has permanently failed for this file.
   // This happens for forwarded messages where the new conversationId is not yet
@@ -131,19 +180,26 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
   // fallback when the real server message (no attachment.url) replaces optimistic.
   const cachedBlobUrl = blobPreviewCache.get(attachment.id) ?? null;
 
-  // Always use the attachment's own URL as immediate fallback — shows before the batch
-  // thumbnail API responds and while the thumbnail pipeline is still processing.
-  // The batch thumbnail URL (when ready) takes priority via activeSource ordering.
-  const attachmentDirectUrl = resolvePublicResourceUrl(
-    attachment.thumbnailUrl ?? attachment.url,
-    // allowBlob: true lets the optimistic message display the local blob preview
-    // URL (from draft.previewUrl) before the server presigned URL arrives.
-    { context: 'image', allowBlob: true },
-  ) ?? cachedBlobUrl ?? null;
+  const attachmentThumbnailUrl = resolvePublicResourceUrl(
+    attachment.thumbnailUrl,
+    { context: "image", allowBlob: true },
+  );
+  const optimisticDirectUrl = attachment.url?.startsWith("blob:")
+    ? resolvePublicResourceUrl(attachment.url, {
+        context: "image",
+        allowBlob: true,
+      })
+    : null;
 
-  // Use thumbnail URL for display; fall back to attachment's own URL when batch API
-  // hasn't responded yet, is still processing, or has failed terminally.
-  const activeSource = thumbnailUrl?.url ?? attachmentDirectUrl ?? null;
+  // Timeline rendering is thumbnail-only. A persisted attachment's original URL
+  // must never be an eager fallback while the batch thumbnail request is pending.
+  // Optimistic local blobs remain available until the server message reconciles.
+  const activeSource =
+    thumbnailUrl?.url ??
+    attachmentThumbnailUrl ??
+    cachedBlobUrl ??
+    optimisticDirectUrl ??
+    null;
   const hasDisplayUrl = Boolean(activeSource);
   const hasCaption = Boolean(caption);
   const isLoaded = Boolean(activeSource && loadedSource === activeSource);
@@ -151,6 +207,77 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
   // Terminal states where no URL will ever be available — show a static fallback icon,
   // never a spinning skeleton.
   const isTerminalNoUrl = !activeSource && terminalBatchStatus;
+
+  useEffect(() => {
+    imageRequestedAtRef.current = activeSource ? performance.now() : null;
+  }, [activeSource]);
+
+  const handleImageLoad = useCallback(
+    (
+      event: React.SyntheticEvent<HTMLImageElement>,
+      source: string,
+      meta?: { decodeDurationMs?: number },
+    ) => {
+      if (!activeSource) return;
+      const requestedAt = imageRequestedAtRef.current;
+      const resourceTiming = getRedactedResourceTiming(source);
+      const paintPayload = {
+        durationMs:
+          requestedAt === null
+            ? undefined
+            : Math.round(performance.now() - requestedAt),
+        width: event.currentTarget.naturalWidth,
+        height: event.currentTarget.naturalHeight,
+        renderedWidth: event.currentTarget.clientWidth,
+        renderedHeight: event.currentTarget.clientHeight,
+        decodeDurationMs: meta?.decodeDurationMs,
+        ...resourceTiming,
+        outcome: "success" as const,
+      };
+
+      if (resourceTiming.requestStartMs !== undefined) {
+        markImagePerformanceMilestone(
+          conversationId,
+          "T5",
+          { outcome: "success" },
+          resourceTiming.requestStartMs,
+        );
+      }
+      if (resourceTiming.responseStartMs !== undefined) {
+        markImagePerformanceMilestone(
+          conversationId,
+          "T6",
+          { outcome: "success" },
+          resourceTiming.responseStartMs,
+        );
+      }
+      if (resourceTiming.responseEndMs !== undefined) {
+        markImagePerformanceMilestone(
+          conversationId,
+          "T7",
+          { outcome: "success" },
+          resourceTiming.responseEndMs,
+        );
+      }
+      markImagePerformanceMilestone(conversationId, "T8", {
+        decodeDurationMs: meta?.decodeDurationMs,
+        outcome: "success",
+      });
+
+      setLoadedSource(activeSource);
+      setFailedSource((previous) =>
+        previous === activeSource ? null : previous,
+      );
+      afterNextPaint(() => {
+        reportImagePerformance(conversationId, {
+          kind: "image_painted",
+          ...paintPayload,
+        });
+        markImagePerformanceMilestone(conversationId, "T9", paintPayload);
+      });
+    },
+    [activeSource, conversationId],
+  );
 
   // Reset backoff bookkeeping whenever the thumbnail pipeline leaves the
   // retryable state (reaches ready, failed, not_found, etc.).
@@ -265,7 +392,18 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
         if (url) setLightboxUrl(url);
       }
     }
-  }, [activeSource, previewUrl, fetchPreview, onClick, attachment.fileName, attachment.id, senderName, senderAvatar, sentAt, conversationId]);
+  }, [
+    activeSource,
+    attachment.fileName,
+    attachment.id,
+    conversationId,
+    fetchPreview,
+    onClick,
+    previewUrl,
+    senderAvatar,
+    senderName,
+    sentAt,
+  ]);
 
   const handleLoadHd = useCallback(async () => {
     setShowHd(true);
@@ -300,13 +438,14 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
       <div className={clsx("relative", className)}>
         <div
           ref={containerRef}
+          data-image-placeholder={placeholderUrl ? "painted" : undefined}
           className={clsx(
             "relative overflow-hidden rounded-xl bg-surface-overlay",
           )}
-          style={{ width: mediaWidth, maxWidth: "100%", aspectRatio }}
+          style={{ width: mediaWidth, maxWidth: "100%", aspectRatio, ...placeholderStyle }}
         >
           {/* Thumbnail placeholder / retry-exhausted fallback */}
-          {isThumbnailPending && !retryExhausted && (
+          {isThumbnailPending && !retryExhausted && !placeholderUrl && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
               <ArrowPathIcon className="h-8 w-8 animate-spin text-text-muted" />
               <span className="text-xs text-text-muted">
@@ -314,7 +453,7 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
               </span>
             </div>
           )}
-          {isThumbnailPending && retryExhausted && (
+          {isThumbnailPending && retryExhausted && !placeholderUrl && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-3">
               <PhotoIcon className="h-10 w-10 text-text-muted" />
               <span className="text-center text-xs text-text-muted">
@@ -330,10 +469,28 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
               </button>
             </div>
           )}
-          {!isThumbnailPending && (
+          {!isThumbnailPending && !hasDisplayUrl && !placeholderUrl && (
             <div className="absolute inset-0 flex items-center justify-center">
               <PhotoIcon className="h-12 w-12 text-text-muted" />
             </div>
+          )}
+
+          {hasDisplayUrl && (
+            <SafeImage
+              className={clsx(
+                "absolute inset-0 h-full w-full cursor-pointer object-cover transition-opacity duration-150",
+                isLoaded ? "opacity-100" : "opacity-0",
+                "hover:opacity-95",
+              )}
+              src={activeSource!}
+              alt={caption || attachment.fileName || t("chat:image.previewAlt")}
+              onClick={handleImageClick}
+              onLoad={handleImageLoad}
+              onError={handleImageError}
+              fallback={null}
+              retryOnSignedUrlExpired
+              onRetrySource={() => void refreshThumbnail(true)}
+            />
           )}
 
           {/* HD badge */}
@@ -387,20 +544,25 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
       <div className={clsx("relative", fillContainer && "h-full w-full", className)}>
         <div
           ref={containerRef}
+          data-image-placeholder={placeholderUrl ? "painted" : undefined}
           className={clsx(
             "relative overflow-hidden bg-surface-overlay",
             fillContainer ? "h-full w-full" : "rounded-xl",
           )}
-          style={fillContainer ? undefined : { width: mediaWidth, maxWidth: "100%", aspectRatio }}
+          style={
+            fillContainer
+              ? placeholderStyle
+              : { width: mediaWidth, maxWidth: "100%", aspectRatio, ...placeholderStyle }
+          }
         >
           {/* Skeleton — only while we're waiting for a real URL or for the image to load.
                Hidden when thumbnail is pending (has its own UI), terminal, or errored. */}
-          {(!isLoaded || isLoadingThumbnail || !hasDisplayUrl) && !isError && !isTerminalNoUrl && !isThumbnailPending && (
+          {(!isLoaded || isLoadingThumbnail || !hasDisplayUrl) && !isError && !isTerminalNoUrl && !isThumbnailPending && !placeholderUrl && (
             <Skeleton className="absolute inset-0" rounded="lg" />
           )}
 
           {/* Processing/queued — thumbnail pipeline is still running, within retry budget */}
-          {isThumbnailPending && !hasDisplayUrl && !retryExhausted && (
+          {isThumbnailPending && !hasDisplayUrl && !retryExhausted && !placeholderUrl && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surface-overlay">
               <ArrowPathIcon className="h-8 w-8 animate-spin text-text-muted" />
               <span className="text-xs text-text-muted">
@@ -411,7 +573,7 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
 
           {/* Active window elapsed — still polling slowly in the background, but
               surface a fallback so the user can open/download the original now. */}
-          {isThumbnailPending && !hasDisplayUrl && retryExhausted && (
+          {isThumbnailPending && !hasDisplayUrl && retryExhausted && !placeholderUrl && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surface-overlay p-4">
               <PhotoIcon className="h-10 w-10 text-text-muted" />
               <span className="text-center text-xs text-text-muted">
@@ -496,13 +658,7 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
               src={activeSource!}
               alt={caption || attachment.fileName || t("chat:image.previewAlt")}
               onClick={handleImageClick}
-              onLoad={() => {
-                if (!activeSource) return;
-                setLoadedSource(activeSource);
-                setFailedSource((previous) =>
-                  previous === activeSource ? null : previous,
-                );
-              }}
+              onLoad={handleImageLoad}
               onError={handleImageError}
               fallback={null}
               retryOnSignedUrlExpired
@@ -542,6 +698,7 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
         senderName={senderName}
         senderAvatar={senderAvatar}
         sentAt={sentAt}
+        telemetryConversationKey={conversationId}
       />
     </>
   );

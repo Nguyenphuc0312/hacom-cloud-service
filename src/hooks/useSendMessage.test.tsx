@@ -95,6 +95,30 @@ describe("useSendMessage", () => {
     );
   });
 
+  it("forwards rich-text metadata through the parent send callback", async () => {
+    const onSend = vi.fn();
+    const options = {
+      contentFormat: "rich_text" as const,
+      contentJson: { type: "doc" },
+      plainText: "màu đỏ",
+    };
+    const { result } = renderHook(() => useSendMessage({ onSend }));
+
+    await act(async () => {
+      await result.current.sendTextMessage(
+        '<p><span style="color: rgb(229, 57, 53)">màu đỏ</span></p>',
+        options,
+      );
+    });
+
+    expect(onSend).toHaveBeenCalledWith(
+      '<p><span style="color: rgb(229, 57, 53)">màu đỏ</span></p>',
+      undefined,
+      MessageType.TEXT,
+      options,
+    );
+  });
+
   it("retries with the existing clientMessageId/localId and suppresses double clicks", async () => {
     let resolveRetry!: (value: unknown) => void;
     const retryPromise = new Promise((resolve) => {

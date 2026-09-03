@@ -129,10 +129,15 @@ export const CloudConversationEntry: React.FC<CloudConversationEntryProps> = ({
             )}
           >
             <ConversationItemMenu
+              conversationId={CLOUD_CONVERSATION_ID}
+              isPersonalCloud
               isPinned={isPinned}
-              onTogglePin={() =>
-                togglePinnedConversation(CLOUD_CONVERSATION_ID)
-              }
+              labels={[]}
+              assignedLabelIds={[]}
+              onTogglePinned={togglePinnedConversation}
+              onToggleLabel={() => undefined}
+              onDeleteConversation={() => undefined}
+              onOpenLabelManager={() => undefined}
             />
             <span className="text-right text-[11px] font-medium text-text-muted">
               {timeLabel}

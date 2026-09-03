@@ -46,7 +46,11 @@ export const PersonalWorkspaceHeader: React.FC = () => {
         </AnimatePresence>
       </div>
 
-      {/* Right — source panel toggle */}
+      {/* Right — source panel toggle.
+          Bỏ nút "Bản nháp giao ban": trùng lối vào với tag `#TBP_AITEST` ngay
+          trong khung chat, mà lại hiện cho MỌI user trong khi trang đích đòi
+          phạm vi bộ phận — ai không phải TBP bấm vào chỉ nhận "Bạn không có
+          phạm vi bộ phận nào". Trang /work-report-drafts vẫn còn, vào bằng URL. */}
       <div className="flex items-center gap-1">
         <button
           type="button"

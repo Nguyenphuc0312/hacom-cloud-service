@@ -1,4 +1,5 @@
 import { Node, mergeAttributes } from "@tiptap/core";
+import type { Editor } from "@tiptap/core";
 
 /**
  * Atomic inline "@mention" chip for the composer (Zalo-style blue pill).
@@ -71,3 +72,66 @@ export const MentionChip = Node.create({
     return `@${node.attrs.sendLabel || node.attrs.label}`;
   },
 });
+
+/** Chữ một chip đóng góp vào `getText()`. Một nguồn duy nhất cho cả `renderText`
+ *  lẫn phép đo offset — hai chỗ này lệch nhau là offset trỏ sai. */
+const chipText = (attrs: { sendLabel?: string; label?: string }): string =>
+  `@${attrs.sendLabel || attrs.label || ""}`;
+
+/**
+ * Chữ một node lá đóng góp vào `getText()` — phải khớp TUYỆT ĐỐI cách
+ * `getText()` serialise, nếu không offset của mọi tag phía sau đều lệch.
+ *
+ * `hardBreak` (Shift+Enter) nằm trong cùng một block nên `blockSeparator` không
+ * áp dụng cho nó, nhưng `getText()` vẫn đổi nó thành "\n". Không khai báo ở đây
+ * thì `textBetween` đếm 0 và mỗi lần Shift+Enter làm tag phía sau lệch 1 ký tự.
+ */
+const leafTextForOffset = (leaf: {
+  type: { name: string };
+  attrs: { sendLabel?: string; label?: string };
+}): string => {
+  if (leaf.type.name === MentionChip.name) return chipText(leaf.attrs);
+  if (leaf.type.name === "hardBreak") return "\n";
+  return "";
+};
+
+export interface MentionRange {
+  userId: string;
+  /** Code point, gồm cả '@'. */
+  offset: number;
+  length: number;
+}
+
+/**
+ * Vị trí từng chip trong chuỗi mà `editor.getText()` trả về.
+ *
+ * Contract: `FE__mention-structured-ranges__contract__30-07-26` — đơn vị **code
+ * point**, tính cả '@'. Đo bằng chính `blockSeparator` + `leafText` mà `getText()`
+ * dùng; sai một trong hai là mọi tag đứng sau trỏ lệch.
+ *
+ * Vì sao dùng cái này thay vì dò tên: editor biết chắc chip nằm đâu và trỏ tới ai,
+ * không phải đoán ngược từ chữ — nên trùng tên, đổi tên, alias đều không phá được.
+ */
+export const collectMentionRanges = (
+  editor: Editor,
+  blockSeparator: string,
+): MentionRange[] => {
+  const ranges: MentionRange[] = [];
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name !== MentionChip.name || !node.attrs.id) return;
+    const before = editor.state.doc.textBetween(
+      0,
+      pos,
+      blockSeparator,
+      leafTextForOffset,
+    );
+    ranges.push({
+      userId: String(node.attrs.id),
+      // Array.from đếm code point. `String.length` là UTF-16 nên emoji ngoài BMP
+      // tính 2 và đẩy lệch mọi tag phía sau.
+      offset: Array.from(before).length,
+      length: Array.from(chipText(node.attrs)).length,
+    });
+  });
+  return ranges;
+};

@@ -6,6 +6,7 @@ export const fallbackMessageActionLabels: Record<MessageActionId, string> = {
   reply: "Trả lời",
   forward: "Chuyển tiếp",
   copy: "Sao chép",
+  downloadAttachment: "Lưu về máy",
   retry: "Gửi lại",
   pin: "Ghim tin nhắn",
   unpin: "Bỏ ghim",

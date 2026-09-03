@@ -53,6 +53,24 @@ export interface GetMessagesArgs {
   limit?: number;
 }
 
+/**
+ * Một tag `@` lúc GỬI ĐI.
+ *
+ * `offset`/`length` đếm bằng **code point** (`Array.from(s).length`, không phải
+ * `String.length`), tính cả ký tự '@' — contract
+ * `FE__mention-structured-ranges__contract__30-07-26`. Có range thì BE lưu lại và
+ * mọi client render theo vị trí, khỏi dò tên. Thiếu → BE để `null`, client lùi về
+ * đường dò tên cho tin cũ.
+ */
+export interface MentionSendInput {
+  userId: string;
+  displayName: string;
+  /** `null` = tin cũ / BE bỏ range vì không hợp lệ. Mọi chỗ đọc đều phải kiểm
+   *  `typeof === "number"`, không dùng truthy (offset 0 là hợp lệ). */
+  offset?: number | null;
+  length?: number | null;
+}
+
 export interface SendMessageInput {
   conversationId: string;
   clientMessageId: string;
@@ -76,10 +94,7 @@ export interface SendMessageInput {
    * Mentions with resolved display name for optimistic rendering.
    * The RTK mutation extracts userIds for the API payload.
    */
-  mentions?: {
-    userId: string;
-    displayName: string;
-  }[];
+  mentions?: MentionSendInput[];
   attachments?: SendMessageAttachmentInput[];
   audio?: AudioMessagePayload;
   location?: LocationMessagePayload;
@@ -296,6 +311,9 @@ const normalizeMentionsFromServer = (mentions: unknown): Mention[] | undefined =
       displayName: String(rec.displayName ?? ""),
       ...(typeof avatarUrl === "string" && avatarUrl ? { avatarUrl } : {}),
       ...(typeof employeeCode === "string" && employeeCode ? { employeeCode } : {}),
+      // Range BE trả về. Rớt ở đây là uổng: đã lưu đúng mà client vẫn phải dò tên.
+      ...(typeof rec.offset === "number" ? { offset: rec.offset } : {}),
+      ...(typeof rec.length === "number" ? { length: rec.length } : {}),
     };
   });
 };
@@ -359,6 +377,11 @@ export const buildOptimisticMessage = (input: SendMessageInput): Message => {
           mentions: input.mentions.map((m) => ({
             userId: m.userId,
             displayName: m.displayName || m.userId,
+            // Giữ range ở bong bóng optimistic: thiếu thì tag nhảy từ "đúng" (lúc
+            // vừa gửi) sang "dò tên" (sau ack) — nhìn như nháy.
+            ...(typeof m.offset === "number" && typeof m.length === "number"
+              ? { offset: m.offset, length: m.length }
+              : {}),
           })),
         }
       : {}),
@@ -634,10 +657,22 @@ export const chatApi = createApi({
             clientMessageId: input.clientMessageId,
             tempId: input.localId,
             localId: input.localId,
-            // API expects string[] of valid user GUIDs — exclude "all" until BE deployed
-            mentions: input.mentions
-              ?.filter((m) => m.userId !== "all")
-              .map((m) => m.userId),
+            // BE nhận cả `string[]` (cũ) lẫn `{userId, offset, length}[]` (contract
+            // mention-ranges). Có range thì gửi dạng object để BE lưu vị trí tag;
+            // không có thì giữ nguyên string[] như trước.
+            //
+            // "all" PHẢI được gửi lên, không lọc bỏ. BE dùng chính sentinel này để
+            // nở ra toàn bộ thành viên (`message-write.service.ts:104-118`:
+            // hasMentionAll → notificationTargets = mọi member đang active).
+            // Lọc mất ở đây thì payload không còn mention nào, BE không có gì để
+            // fan-out — tag @all hiện đúng pill trong ô nhập nhưng KHÔNG ai nhận
+            // thông báo. Kiểm chứng 13-08-26: tin "@all họp lúc 3h" lưu xuống với
+            // `mentions: []`.
+            mentions: input.mentions?.map((m) =>
+              typeof m.offset === "number" && typeof m.length === "number"
+                ? { userId: m.userId, offset: m.offset, length: m.length }
+                : m.userId,
+            ),
             attachments: input.attachments,
             audio: input.audio,
             location: input.location,

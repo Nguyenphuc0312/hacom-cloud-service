@@ -71,7 +71,8 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
         });
       } else if (apiError.statusCode === 401) {
         toast.error(
-          apiError.message || "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.",
+          apiError.message ||
+            "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.",
         );
       } else {
         toast.error(apiError.message || t("security.changeFailed"));
@@ -93,12 +94,15 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
           defaultValue: "Cập nhật mật khẩu đăng nhập Hacom Holdings.",
         })}
       >
-        <form onSubmit={handleSubmit(onSubmit)} className="max-w-[480px] space-y-4">
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="max-w-[480px] space-y-4"
+        >
           <Input
             {...register("currentPassword")}
             type="password"
             label={t("security.currentPassword")}
-            placeholder="********"
+            placeholder={t("security.currentPasswordPlaceholder")}
             leftIcon={<LockClosedIcon className="h-4 w-4 text-[#1565C0]" />}
             error={errors.currentPassword?.message}
             disabled={isLoading}
@@ -110,7 +114,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
               {...register("newPassword")}
               type="password"
               label={t("security.newPassword")}
-              placeholder="********"
+              placeholder={t("security.newPasswordPlaceholder")}
               leftIcon={<LockClosedIcon className="h-4 w-4 text-[#1565C0]" />}
               error={errors.newPassword?.message}
               disabled={isLoading}
@@ -122,7 +126,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
             {...register("confirmPassword")}
             type="password"
             label={t("security.confirmPassword")}
-            placeholder="********"
+            placeholder={t("security.confirmPasswordPlaceholder")}
             leftIcon={<LockClosedIcon className="h-4 w-4 text-[#1565C0]" />}
             error={errors.confirmPassword?.message}
             disabled={isLoading}
@@ -136,12 +140,24 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
                   type="checkbox"
                   className="peer h-4 w-4 cursor-pointer appearance-none rounded border border-border-strong checked:border-[#1565C0] checked:bg-[#1565C0] focus:outline-none focus:ring-2 focus:ring-[#1976D2]/30 disabled:cursor-not-allowed disabled:opacity-50"
                   checked={logoutOtherDevicesField.value}
-                  onChange={(e) => logoutOtherDevicesField.onChange(e.target.checked)}
+                  onChange={(e) =>
+                    logoutOtherDevicesField.onChange(e.target.checked)
+                  }
                   disabled={isLoading}
                 />
                 {logoutOtherDevicesField.value && (
-                  <svg className="pointer-events-none absolute h-2.5 w-2.5 text-white" viewBox="0 0 10 10" fill="none">
-                    <path d="M1.5 5L4 7.5L8.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <svg
+                    className="pointer-events-none absolute h-2.5 w-2.5 text-white"
+                    viewBox="0 0 10 10"
+                    fill="none"
+                  >
+                    <path
+                      d="M1.5 5L4 7.5L8.5 2.5"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
                   </svg>
                 )}
               </div>
@@ -150,7 +166,9 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
                   Đăng xuất khỏi các thiết bị khác
                 </p>
                 <p className="text-xs text-text-secondary">
-                  Chọn mục này nếu bạn nghi ngờ người khác từng sử dụng tài khoản của bạn. Bạn vẫn sẽ tiếp tục đăng nhập trên thiết bị hiện tại.
+                  Chọn mục này nếu bạn nghi ngờ người khác từng sử dụng tài
+                  khoản của bạn. Bạn vẫn sẽ tiếp tục đăng nhập trên thiết bị
+                  hiện tại.
                 </p>
               </div>
             </label>
@@ -160,7 +178,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
             <Button
               type="submit"
               variant="brand"
-              size="sm"
+              size="md"
               isLoading={isLoading}
               disabled={isLoading}
             >

@@ -166,9 +166,9 @@ export const SidebarLabelFilter: React.FC<{
   onMarkVisibleRead: () => void | Promise<void>;
 }> = ({ layoutState, onMarkVisibleRead }) => {
   const { t } = useTranslation();
-  const labels = useUIStore((state) => state.conversationLabels ?? []);
+  const labels = useUIStore((state) => state.conversationLabels);
   const selectedLabelIds = useUIStore(
-    (state) => state.selectedConversationLabelIds ?? [],
+    (state) => state.selectedConversationLabelIds,
   );
   const setSelectedLabelIds = useUIStore(
     (state) => state.setSelectedConversationLabelIds,
@@ -207,26 +207,15 @@ export const SidebarLabelFilter: React.FC<{
 
   useEffect(() => {
     let cancelled = false;
-    // Older Cloud deployments do not expose the labels endpoints yet. Do not
-    // invoke a missing method during the first paint: an eager property call
-    // would throw outside the promise chain and the whole chat route would be
-    // replaced by the generic 500 error boundary.
-    const getConversationLabels = (
-      conversationApi as typeof conversationApi & {
-        getConversationLabels?: () => Promise<ConversationLabelStateDto>;
-      }
-    ).getConversationLabels;
-
-    if (typeof getConversationLabels === "function") {
-      getConversationLabels()
-        .then((state) => {
-          if (cancelled) return;
-          applyConversationLabelState(state, setConversationLabelState);
-        })
-        .catch(() => {
-          // The sidebar still works without labels; API errors surface on mutation.
-        });
-    }
+    conversationApi
+      .getConversationLabels()
+      .then((state) => {
+        if (cancelled) return;
+        applyConversationLabelState(state, setConversationLabelState);
+      })
+      .catch(() => {
+        // The sidebar still works without labels; API errors surface on mutation.
+      });
 
     return () => {
       cancelled = true;
@@ -495,7 +484,7 @@ export const ConversationLabelManagerModal: React.FC = () => {
   const { t } = useTranslation();
   const isOpen = useUIStore((state) => state.isConversationLabelManagerOpen);
   const onClose = useUIStore((state) => state.closeConversationLabelManager);
-  const labels = useUIStore((state) => state.conversationLabels ?? []);
+  const labels = useUIStore((state) => state.conversationLabels);
   const setConversationLabelState = useUIStore(
     (state) => state.setConversationLabelState,
   );

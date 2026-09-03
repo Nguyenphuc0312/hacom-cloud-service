@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { PersonalDocument, PersonalChatMessage } from "../types";
+import type { PersonalAttachment, PersonalDocument, PersonalChatMessage } from "../types";
 import { registerStoreResetter } from "../../../stores/storeResetRegistry";
 
 interface PersonalWorkspaceConversation {
@@ -17,6 +17,11 @@ interface PersonalWorkspaceConversation {
   /** Đánh dấu conversation được tạo mới bằng nút "+", chưa được backend xác nhận.
    * Đảm bảo new_conversation: true luôn được gửi trên tin nhắn đầu tiên. */
   pendingNew?: boolean;
+  /**
+   * Tệp đính kèm hỏi đáp TẠM của riêng hội thoại này. Không mang sang hội thoại
+   * khác (yêu cầu 07-08-26) nên phải nằm trong conversation, không để state phẳng.
+   */
+  attachments?: PersonalAttachment[];
 }
 
 interface ServerSessionInput {
@@ -87,8 +92,76 @@ interface PersonalAiState {
   setOwnerId: (id: string) => void;
   /** Nạp messages từ server vào conversation (chỉ khi conversation đang rỗng). */
   loadMessagesForConversation: (conversationId: string, messages: PersonalChatMessage[]) => void;
+  /** Ghi chip tệp đính kèm tạm — CHỈ gọi sau khi BE trả 2xx có attachment_id. */
+  addAttachment: (conversationId: string, attachment: PersonalAttachment) => void;
+  /** Bỏ chip — CHỈ gọi sau khi DELETE trả 2xx. */
+  removeAttachment: (conversationId: string, attachmentId: string) => void;
+  /**
+   * Đánh dấu tệp đã dùng cho một câu hỏi → ẩn chip khỏi ô nhập, nhưng GIỮ lại
+   * trong store để các lượt hỏi sau vẫn gửi kèm `attachment_ids`.
+   */
+  markAttachmentsConsumed: (conversationId: string) => void;
+  /** Thay toàn bộ chip khi khôi phục lúc mở lại hội thoại. */
+  setAttachments: (conversationId: string, attachments: PersonalAttachment[]) => void;
   /** Xoá toàn bộ dữ liệu (dùng khi logout). */
   clearStore: () => void;
+}
+
+/** Nối `chunk` vào message cuối. Giữ nguyên reference các message cũ để
+ * React.memo ở PersonalMessageBubble ăn được. */
+function applyStreamChunk(conversationId: string, chunk: string) {
+  return (s: PersonalAiState) => ({
+    conversations: s.conversations.map((c) => {
+      if (c.id !== conversationId) return c;
+      const last = c.messages[c.messages.length - 1];
+      if (!last || last.role !== "assistant") return c;
+      const messages = c.messages.slice();
+      messages[messages.length - 1] = {
+        ...last,
+        content: last.content + chunk,
+        isStreaming: true,
+      };
+      return { ...c, messages };
+    }),
+  });
+}
+
+// ── Buffer token streaming: gom token, flush 1 lần/animation frame ──
+let pendingConversationId: string | null = null;
+let pendingTokens = "";
+let pendingFrame: number | null = null;
+
+/** Đẩy buffer vào store ngay lập tức. Gọi khi stream xong/lỗi/huỷ hoặc khi ghi
+ * đè content để không mất token còn treo trong buffer. */
+export function flushPersonalStreamBuffer(): void {
+  if (pendingFrame !== null) {
+    cancelAnimationFrame(pendingFrame);
+    pendingFrame = null;
+  }
+  if (!pendingConversationId || !pendingTokens) {
+    pendingConversationId = null;
+    pendingTokens = "";
+    return;
+  }
+  const conversationId = pendingConversationId;
+  const chunk = pendingTokens;
+  pendingConversationId = null;
+  pendingTokens = "";
+  usePersonalAiStore.setState(applyStreamChunk(conversationId, chunk));
+}
+
+function bufferStreamToken(conversationId: string, token: string): void {
+  // Đổi hội thoại giữa chừng → xả buffer của cuộc cũ trước, không ghi nhầm.
+  if (pendingConversationId && pendingConversationId !== conversationId) {
+    flushPersonalStreamBuffer();
+  }
+  pendingConversationId = conversationId;
+  pendingTokens += token;
+  if (pendingFrame !== null) return;
+  pendingFrame = requestAnimationFrame(() => {
+    pendingFrame = null;
+    flushPersonalStreamBuffer();
+  });
 }
 
 export const usePersonalAiStore = create<PersonalAiState>()(
@@ -237,24 +310,16 @@ export const usePersonalAiStore = create<PersonalAiState>()(
         }));
       },
 
+      // Streaming token: gom vào buffer, flush 1 lần/animation frame. Không batch
+      // thì mỗi token là 1 set() → re-render toàn bộ danh sách message.
       appendToken: (conversationId, token) => {
-        set((s) => ({
-          conversations: s.conversations.map((c) => {
-            if (c.id !== conversationId) return c;
-            const messages = [...c.messages];
-            const last = messages[messages.length - 1];
-            if (!last || last.role !== "assistant") return c;
-            messages[messages.length - 1] = {
-              ...last,
-              content: last.content + token,
-              isStreaming: true,
-            };
-            return { ...c, messages };
-          }),
-        }));
+        bufferStreamToken(conversationId, token);
       },
 
       finalizeMessage: (conversationId, content, citations) => {
+        // Xả token còn treo trước khi ghi đè content, nếu không những token của
+        // frame cuối sẽ flush SAU và ghi đè mất nội dung final.
+        flushPersonalStreamBuffer();
         const now = new Date().toISOString();
         set((s) => ({
           conversations: s.conversations.map((c) => {
@@ -318,6 +383,52 @@ export const usePersonalAiStore = create<PersonalAiState>()(
           }),
         }));
       },
+
+      addAttachment: (conversationId, attachment) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) => {
+            if (c.id !== conversationId) return c;
+            const existing = c.attachments ?? [];
+            // Tải lại cùng một tệp không được nhân đôi chip.
+            if (existing.some((a) => a.attachment_id === attachment.attachment_id)) return c;
+            return { ...c, attachments: [...existing, attachment] };
+          }),
+        })),
+
+      removeAttachment: (conversationId, attachmentId) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === conversationId
+              ? {
+                  ...c,
+                  attachments: (c.attachments ?? []).filter(
+                    (a) => a.attachment_id !== attachmentId,
+                  ),
+                }
+              : c,
+          ),
+        })),
+
+      markAttachmentsConsumed: (conversationId) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === conversationId
+              ? {
+                  ...c,
+                  attachments: (c.attachments ?? []).map((a) =>
+                    a.consumed ? a : { ...a, consumed: true },
+                  ),
+                }
+              : c,
+          ),
+        })),
+
+      setAttachments: (conversationId, attachments) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === conversationId ? { ...c, attachments } : c,
+          ),
+        })),
 
       renameConversation: (id, title) =>
         set((s) => ({
@@ -415,18 +526,22 @@ export const usePersonalAiStore = create<PersonalAiState>()(
 
       loadMessagesForConversation: (conversationId, messages) => {
         set((s) => ({
-          conversations: s.conversations.map((c) =>
-            c.id === conversationId && c.messages.length === 0
-              ? {
-                  ...c,
-                  messages: messages.map((m) => ({
-                    ...m,
-                    isStreaming: false,
-                    thinkingPhase: null,
-                  })),
-                }
-              : c,
-          ),
+          conversations: s.conversations.map((c) => {
+            if (c.id !== conversationId) return c;
+            const incoming = messages.map((m) => ({
+              ...m,
+              isStreaming: false,
+              thinkingPhase: null,
+            }));
+            if (c.messages.length === 0) return { ...c, messages: incoming };
+            // Đã có message trên máy: chỉ nhận phần LỊCH SỬ CŨ HƠN chưa biết
+            // (trang trước từ pagination §5), giữ nguyên phần đang hiển thị để
+            // không đụng vào message đang stream và không phá memo của bubble.
+            const known = new Set(c.messages.map((m) => m.id));
+            const older = incoming.filter((m) => !known.has(m.id));
+            if (older.length === 0) return c;
+            return { ...c, messages: [...older, ...c.messages] };
+          }),
         }));
       },
 

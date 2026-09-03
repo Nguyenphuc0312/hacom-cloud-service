@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import clsx from "clsx";
+import { useClickOutside } from "../../hooks";
 import { EMOJI_CATEGORIES } from "../../constants/emojis";
 
 interface EmojiPickerProps {
@@ -22,18 +23,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const isScrollingRef = useRef(false);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        pickerRef.current &&
-        !pickerRef.current.contains(event.target as Node)
-      ) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onClose]);
+  useClickOutside(pickerRef, onClose);
 
   const handleCategoryClick = useCallback((categoryId: string) => {
     setActiveCategory(categoryId);

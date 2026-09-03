@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { SparklesIcon, BookOpenIcon } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { PersonalMessageBubble } from "./PersonalMessageBubble";
 import {
   AiMessageAvatar,
@@ -16,6 +17,12 @@ interface PersonalChatAreaProps {
   isLoadingHistory?: boolean;
   isRagMode: boolean;
   onSuggestionSelect?: (value: string) => void;
+  /** Còn lịch sử cũ hơn ở server (§5). */
+  hasOlderHistory?: boolean;
+  /** Đang tải trang cũ hơn. */
+  isLoadingOlder?: boolean;
+  /** Cuộn gần đỉnh → gọi để tải trang cũ hơn. */
+  onLoadOlder?: () => void;
 }
 
 const EmptyState: React.FC<{
@@ -86,83 +93,193 @@ export const PersonalChatArea: React.FC<PersonalChatAreaProps> = ({
   isLoadingHistory = false,
   isRagMode,
   onSuggestionSelect,
+  hasOlderHistory = false,
+  isLoadingOlder = false,
+  onLoadOlder,
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
   const prevLengthRef = useRef(messages.length);
-  const { activeConversationId } = usePersonalAiStore();
+  /** `scrollHeight - scrollTop` ngay trước khi prepend lịch sử cũ (để bù vị trí). */
+  const prependAnchorRef = useRef<number | null>(null);
+  /**
+   * Danh sách đã đo xong và đã cuộn về đúng chỗ chưa. Lúc `false` thì phủ lớp
+   * chờ và KHÓA cuộn — frame đầu các dòng còn ở chiều cao ước lượng, cho kéo
+   * ngay sẽ thấy khoảng trắng rồi giật, người dùng tưởng lỗi.
+   */
+  const [isReady, setIsReady] = useState(false);
+  // Selector cụ thể, KHÔNG `usePersonalAiStore()` trần: gọi trần là đăng ký
+  // toàn bộ store, nên mỗi frame streaming lại render component này một lần —
+  // đúng thứ virtualization đang tìm cách tránh.
+  const activeConversationId = usePersonalAiStore((s) => s.activeConversationId);
 
   const hasMessages = messages.length > 0;
+
+  const rowVirtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => containerRef.current,
+    // Ước lượng ban đầu; chiều cao thật do `measureElement` ghi đè sau khi mount.
+    estimateSize: () => 140,
+    // Giữ vài dòng ngoài tầm nhìn để cuộn nhanh không thấy khoảng trắng.
+    overscan: 6,
+    getItemKey: (index) => messages[index].id,
+  });
 
   const handleScroll = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
     isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= 80;
-  }, []);
+    // Cuộn gần đỉnh → tải trang lịch sử cũ hơn. Ghi lại chiều cao trước khi
+    // prepend để bù scrollTop, giữ nguyên message người dùng đang đọc (§4.6).
+    // `isReady` là điều kiện bắt buộc: lúc chưa đo xong `scrollTop` còn là 0,
+    // vào đây là tự tải trang cũ ngay khi mở hội thoại dù chưa ai cuộn.
+    if (isReady && el.scrollTop < 200 && hasOlderHistory && !isLoadingOlder) {
+      prependAnchorRef.current = el.scrollHeight - el.scrollTop;
+      onLoadOlder?.();
+    }
+  }, [isReady, hasOlderHistory, isLoadingOlder, onLoadOlder]);
 
-  // Scroll to bottom when new messages are added (always) or streaming ends while near bottom.
+  /**
+   * Bám đáy trong danh sách ảo. KHÔNG dùng `scrollTop = scrollHeight`: lúc này
+   * chiều cao tổng chỉ là ƯỚC LƯỢNG, các dòng mới đo xong sẽ làm nó đổi, nên
+   * đặt scrollTop bằng tay là nhảy sai chỗ. `scrollToIndex` để virtualizer tự
+   * bù sau khi đo.
+   */
+  const scrollToBottom = useCallback(() => {
+    if (messages.length === 0) return;
+    rowVirtualizer.scrollToIndex(messages.length - 1, { align: "end" });
+  }, [rowVirtualizer, messages.length]);
+
+  // Bám đáy khi tin nhắn cuối DÀI RA từng frame streaming. `messages.length`
+  // không đổi trong lúc stream nên phải theo cả độ dài nội dung, nếu không câu
+  // trả lời chạy khuất dưới đáy màn hình.
+  const lastContentLength = messages[messages.length - 1]?.content.length ?? 0;
+
+  // Tin nhắn mới → luôn bám đáy; đang stream mà người dùng đứng gần đáy → bám theo.
   useEffect(() => {
     const el = containerRef.current;
-    if (!el) return;
     const lengthChanged = prevLengthRef.current !== messages.length;
     prevLengthRef.current = messages.length;
-    if (lengthChanged) {
-      // New message added — always scroll, reset the "detached" flag.
-      isAtBottomRef.current = true;
-      el.scrollTop = el.scrollHeight;
-    } else if (isAtBottomRef.current) {
-      el.scrollTop = el.scrollHeight;
-    }
-  }, [messages.length, isStreaming]);
+    // Chưa đo xong thì effect mở-hội-thoại đang lo việc cuộn — chen vào đây chỉ
+    // tổ tranh nhau, và nó chạy trên số đo chưa đúng.
+    if (!isReady) return;
 
-  // Scroll to bottom on conversation switch
+    // Vừa prepend lịch sử cũ → bù scrollTop, KHÔNG nhảy xuống đáy. Nhánh này
+    // phải đứng trước vì `messages.length` cũng đổi khi prepend.
+    const anchor = prependAnchorRef.current;
+    if (anchor !== null) {
+      prependAnchorRef.current = null;
+      if (el) el.scrollTop = el.scrollHeight - anchor;
+      return;
+    }
+
+    if (lengthChanged) {
+      // Có tin nhắn mới — luôn cuộn, bỏ cờ "đang đọc lịch sử".
+      isAtBottomRef.current = true;
+      scrollToBottom();
+    } else if (isAtBottomRef.current) {
+      scrollToBottom();
+    }
+  }, [messages.length, lastContentLength, isStreaming, isReady, scrollToBottom]);
+
+  // Đổi hội thoại → che lại, chờ đo xong mới cho xem/cuộn.
   useEffect(() => {
     isAtBottomRef.current = true;
     prevLengthRef.current = messages.length;
-    if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
-    }
+    setIsReady(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversationId]);
 
-  if (!hasMessages && isLoadingHistory) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-[#1976D2]" />
-          <p className="text-sm text-text-muted">Đang tải lịch sử...</p>
-        </div>
-      </div>
-    );
-  }
+  /**
+   * Chờ danh sách đo xong rồi mới bỏ lớp che.
+   *
+   * Cuộn xuống đáy ở HAI frame liên tiếp: frame đầu các dòng còn ở chiều cao
+   * ước lượng (`estimateSize`), `measureElement` ghi chiều cao thật xong thì
+   * tổng chiều cao đổi → phải cuộn lại lần nữa mới đúng đáy. Bỏ nhịp thứ hai
+   * là mở ra thấy lơ lửng giữa hội thoại.
+   */
+  useEffect(() => {
+    if (!hasMessages || isReady) return;
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      scrollToBottom();
+      raf2 = requestAnimationFrame(() => {
+        scrollToBottom();
+        setIsReady(true);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [hasMessages, isReady, scrollToBottom]);
 
-  if (!hasMessages) {
-    return (
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <EmptyState
-          isRagMode={isRagMode}
-          onSuggestionSelect={onSuggestionSelect}
-        />
-      </div>
-    );
-  }
+  const canScroll = isReady || !hasMessages;
 
   return (
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-y-auto ai-scrollbar"
+      // Container cuộn phải LUÔN mount, kể cả lúc rỗng/đang tải: virtualizer đo
+      // viewport qua ref này, mount muộn thì nó đo phải null → không dựng dòng
+      // nào → màn trắng dù messages đã có.
+      className={clsx(
+        "relative flex flex-1 flex-col ai-scrollbar",
+        // Chưa sẵn sàng thì KHOÁ cuộn: cho kéo lúc chưa đo xong sẽ thấy khoảng
+        // trắng và giật về, giống hệt lỗi.
+        canScroll ? "overflow-y-auto" : "overflow-hidden",
+      )}
     >
+      {!hasMessages && isLoadingHistory && (
+        <div className="flex flex-1 items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-[#1976D2]" />
+            <p className="text-sm text-text-muted">Đang tải lịch sử...</p>
+          </div>
+        </div>
+      )}
+
+      {!hasMessages && !isLoadingHistory && (
+        <EmptyState
+          isRagMode={isRagMode}
+          onSuggestionSelect={onSuggestionSelect}
+        />
+      )}
+
+      {hasMessages && (
       <div className="flex flex-col py-4">
-        <AnimatePresence initial={false}>
-          {messages.map((message, idx) => (
-            <PersonalMessageBubble
-              key={message.id}
-              message={message}
-              isLast={idx === messages.length - 1}
-            />
+        {isLoadingOlder && (
+          <div className="flex items-center justify-center gap-2 py-3 text-xs text-text-muted">
+            <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-border border-t-[#1976D2]" />
+            Đang tải lịch sử cũ hơn...
+          </div>
+        )}
+        {/* Virtual list: chỉ mount message trong tầm nhìn + overscan. Chiều cao
+            đo thật qua `measureElement` vì bảng báo cáo cao rất khác nhau.
+
+            Chỉ HIỆN sau khi đã đo xong và cuộn về đúng chỗ (`isReady`): frame
+            đầu các dòng còn ở chiều cao ước lượng nên vị trí cuộn sai, hiện ra
+            là thấy chữ nhảy một nhịp — trông như lỗi. */}
+        <div
+          className={clsx(
+            "relative w-full transition-opacity duration-200",
+            isReady ? "opacity-100" : "opacity-0",
+          )}
+          style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+        >
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => (
+            <div
+              key={messages[virtualRow.index].id}
+              data-index={virtualRow.index}
+              ref={rowVirtualizer.measureElement}
+              className="absolute left-0 top-0 w-full"
+              style={{ transform: `translateY(${virtualRow.start}px)` }}
+            >
+              <PersonalMessageBubble message={messages[virtualRow.index]} />
+            </div>
           ))}
-        </AnimatePresence>
+        </div>
 
         {/* Loading ghost when waiting for first token */}
         {isStreaming &&
@@ -196,6 +313,19 @@ export const PersonalChatArea: React.FC<PersonalChatAreaProps> = ({
 
         <div ref={bottomRef} className="h-4" aria-hidden="true" />
       </div>
+      )}
+
+      {/* Lớp chờ phủ lên trong lúc danh sách chưa đo xong. Đặt `absolute` để
+          không cộng thêm chiều cao vào vùng cuộn (cộng vào sẽ tự sinh đúng cái
+          thanh cuộn thừa mà nó đang muốn tránh). */}
+      {hasMessages && !isReady && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-surface">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-[#1976D2]" />
+            <p className="text-sm text-text-muted">Đang mở hội thoại...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

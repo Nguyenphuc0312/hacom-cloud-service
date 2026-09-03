@@ -5,24 +5,45 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # Security header được include vào TỪNG location bên dưới, không chỉ ở đây:
+    # add_header của block con ghi đè TOÀN BỘ add_header của block cha, và mọi
+    # location đều có Cache-Control riêng. Xem nginx/security-headers.conf.
+    include /etc/nginx/snippets/security-headers.conf;
+
     location = /healthz {
         access_log off;
         add_header Cache-Control "no-store";
+        include /etc/nginx/snippets/security-headers.conf;
         return 200 "ok\n";
     }
 
     location = /index.html {
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+        include /etc/nginx/snippets/security-headers.conf;
+    }
+
+    # This file is generated during the image build. It lets the release
+    # workflow verify that the public HTTPS route serves the expected image,
+    # not merely that the local container is healthy.
+    location = /build-info.json {
+        try_files $uri =404;
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+        include /etc/nginx/snippets/security-headers.conf;
     }
 
     location /assets/ {
         try_files $uri =404;
-        expires 1y;
+        # `expires 1y` tự sinh Cache-Control riêng → trùng với add_header bên
+        # dưới (curl thấy 2 dòng Cache-Control). Tắt expires, giữ add_header vì
+        # nó nói rõ "immutable" — asset có hash trong tên nên không bao giờ đổi.
+        expires off;
         add_header Cache-Control "public, max-age=31536000, immutable";
+        include /etc/nginx/snippets/security-headers.conf;
     }
 
     location / {
         try_files $uri $uri/ /index.html;
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+        include /etc/nginx/snippets/security-headers.conf;
     }
 }

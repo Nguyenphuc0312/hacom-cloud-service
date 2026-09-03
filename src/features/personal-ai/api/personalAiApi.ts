@@ -18,6 +18,7 @@ import {
   refreshAccessTokenShared,
 } from "../../../services/authRefreshCoordinator";
 import { resolveSourceUrl } from "../../ai-assistant/utils/sourceUtils";
+import { fallbackUploadMessage } from "../../../services/ai-chat/uploadFailure";
 import {
   appendScopeTokenToUrl,
   withScopeToken,
@@ -29,13 +30,24 @@ import {
   normalizeScopeTypes,
   parseScopeRequiredDetail,
 } from "./workReportScopeApi";
-import type { WorkReportScopeRequired } from "../types";
+import type {
+  PersonalAttachment,
+  WorkReportAiDraftReady,
+  WorkReportAiDraftWaiting,
+  WorkReportScopeRequired,
+} from "../types";
 
 const BASE_URL =
   (import.meta.env.VITE_AI_CHAT_BASE_URL as string | undefined)?.trim() ||
   "https://ai.hacomholdings.com.vn";
 
 const DOCS_BASE = `${BASE_URL}/api/chat/personal/documents`;
+/**
+ * Tệp đính kèm hỏi đáp TẠM trong Trợ lý cá nhân — KHÁC `DOCS_BASE` (Sources/
+ * NotebookLM). Tệp ở đây không vào thư viện Sources, chỉ sống trong một hội
+ * thoại và có hạn dùng. Xem FE__personal-general-attachment__request__07-08-26.
+ */
+const ATTACHMENTS_BASE = `${BASE_URL}/api/chat/personal/attachments`;
 const WEEKLY_REPORT_FILES_BASE = `${BASE_URL}/api/chat/personal/weekly-report/files`;
 const CHAT_URL = `${BASE_URL}/api/chat/personal/stream`;
 /** Báo cáo theo CẤP (TBP / LĐĐV / TCT) — nộp file + xuất Excel bảng gộp. */
@@ -142,7 +154,9 @@ export class AiHttpError extends PersonalAiError {
   readonly rawBody: string;
 
   constructor(status: number, rawBody: string) {
-    super(status, "http", parseHttpErrorMessage(rawBody));
+    // Body rỗng (vd 500 không có JSON) → câu an toàn theo status, KHÔNG để lọt
+    // `PersonalAI error [http]: 500` ra bong bóng chat (contract 07/08/26 §7.9).
+    super(status, "http", parseHttpErrorMessage(rawBody) ?? fallbackUploadMessage(status));
     this.name = "AiHttpError";
     this.rawBody = rawBody;
   }
@@ -165,6 +179,48 @@ export class LevelReportScopeRequiredError extends PersonalAiError {
     this.name = "LevelReportScopeRequiredError";
     this.scope = scope;
   }
+}
+
+/**
+ * SSE `event: error` — BE từ chối/bỏ dở giữa stream, KHÔNG phải lỗi HTTP hay
+ * mạng. Trước đây event này bị bỏ qua hoàn toàn: stream kết thúc không có `done`
+ * nên caller nhận "network", và mã lý do (vd `ATTACHMENT_MODE_REJECTED`) mất
+ * sạch — user chỉ thấy "lỗi kết nối" cho một lượt BE đã trả lời rõ ràng.
+ * `code` giữ nguyên để caller quyết định giữ lại file/câu hỏi.
+ */
+export class AiStreamError extends PersonalAiError {
+  readonly code: string;
+
+  constructor(code: string, message?: string) {
+    super(0, "http", message ?? "Không xử lý được yêu cầu. Vui lòng thử lại.");
+    this.name = "AiStreamError";
+    this.code = code;
+  }
+}
+
+/** BE từ chối lượt hỏi vì tệp đính kèm không hợp mode — giữ file + câu hỏi. */
+export const ATTACHMENT_MODE_REJECTED = "ATTACHMENT_MODE_REJECTED";
+
+/**
+ * BE không còn giữ tệp đính kèm nữa (hết hạn, bị dọn, hoặc upload chưa từng
+ * thành công). KHÁC `ATTACHMENT_MODE_REJECTED`: ở đây chip đang trỏ vào một ID
+ * chết, giữ lại chỉ làm MỌI câu hỏi sau trong hội thoại hỏng y hệt — phải bỏ chip
+ * và bảo user tải lại tệp.
+ */
+export const ATTACHMENT_NOT_FOUND = "ATTACHMENT_NOT_FOUND";
+
+/**
+ * Lỗi này có phải "tệp không còn nữa" không.
+ *
+ * Nhận cả theo `code` lẫn theo lời văn: BE hiện trả câu tiếng Việt "Không tìm
+ * thấy tệp đính kèm đã chọn hoặc tệp đã hết hạn." mà chưa chắc kèm mã, và nếu
+ * đoán sai theo hướng giữ chip thì hội thoại kẹt vĩnh viễn.
+ */
+export function isAttachmentGoneError(err: unknown): boolean {
+  if (!(err instanceof AiStreamError)) return false;
+  const code = err.code.toUpperCase();
+  if (code === ATTACHMENT_NOT_FOUND || code === "ATTACHMENT_EXPIRED") return true;
+  return /không tìm thấy tệp đính kèm|tệp đã hết hạn/i.test(err.message);
 }
 
 function extractHttpErrorMessage(rawText: string): string | undefined {
@@ -225,7 +281,10 @@ function pickString(...values: unknown[]): string | undefined {
   return undefined;
 }
 
-async function aiRequest(
+/** Host AI cho caller ngoài module (vd `workReportDraftApi`). */
+export const AI_BASE_URL = BASE_URL;
+
+export async function aiRequest(
   url: string,
   init: RequestInit = {},
   timeoutMs = TIMEOUT_MS,
@@ -487,6 +546,162 @@ export function uploadPersonalDocument(
   });
 }
 
+/** Chuẩn hoá payload tệp đính kèm tạm; thiếu `attachment_id` thì coi như hỏng. */
+export function normalizePersonalAttachment(raw: unknown): PersonalAttachment | undefined {
+  const obj = asRecord(raw);
+  // BE trả { ok, attachment: {...} }; nhận cả object phẳng cho chắc.
+  const node = asRecord(obj?.attachment) ?? obj;
+  const attachmentId = pickString(node?.attachment_id);
+  if (!node || !attachmentId) return undefined;
+  return {
+    attachment_id: attachmentId,
+    filename: pickString(node.filename) ?? "Tệp đính kèm",
+    pages: typeof node.pages === "number" ? node.pages : undefined,
+    expires_at: pickString(node.expires_at),
+    mode: pickString(node.mode),
+    // `session_id` nằm ở gốc response (cạnh `attachment`), không nằm trong node.
+    session_id: pickString(obj?.session_id, node.session_id),
+  };
+}
+
+/**
+ * POST /api/chat/personal/attachments/upload — tải tệp hỏi đáp TẠM.
+ *
+ * Chỉ gọi khi user KHÔNG dùng lệnh nộp báo cáo (xem `isReportSubmissionText`).
+ * Tệp không vào Sources; chỉ sau 2xx có `attachment_id` mới được hiện chip.
+ */
+export function uploadPersonalAttachment(
+  file: File,
+  sessionId: string,
+  options?: { onProgress?: (pct: number) => void; signal?: AbortSignal },
+): Promise<PersonalAttachment> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const timeoutId = window.setTimeout(() => {
+      xhr.abort();
+      reject(new PersonalAiError(0, "timeout"));
+    }, UPLOAD_TIMEOUT_MS);
+
+    const cleanup = () => {
+      window.clearTimeout(timeoutId);
+      options?.signal?.removeEventListener("abort", handleAbort);
+    };
+    const handleAbort = () => {
+      xhr.abort();
+      cleanup();
+      reject(new PersonalAiError(0, "timeout"));
+    };
+    if (options?.signal) {
+      if (options.signal.aborted) {
+        cleanup();
+        reject(new PersonalAiError(0, "timeout"));
+        return;
+      }
+      options.signal.addEventListener("abort", handleAbort);
+    }
+
+    const form = new FormData();
+    form.append("file", file, file.name);
+    form.append("session_id", sessionId);
+
+    xhr.open("POST", `${ATTACHMENTS_BASE}/upload`, true);
+    xhr.responseType = "text";
+    for (const [key, value] of Object.entries(buildAuthHeaders())) {
+      xhr.setRequestHeader(key, value);
+    }
+
+    if (options?.onProgress) {
+      xhr.upload.addEventListener("progress", (evt) => {
+        if (evt.lengthComputable && evt.total > 0) {
+          options.onProgress!(Math.min(100, Math.round((evt.loaded / evt.total) * 100)));
+        }
+      });
+    }
+
+    xhr.addEventListener("load", () => {
+      cleanup();
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const attachment = normalizePersonalAttachment(JSON.parse(xhr.responseText));
+          if (attachment) resolve(attachment);
+          else reject(invalidUploadResponseError());
+        } catch (err) {
+          reject(err instanceof PersonalAiError ? err : invalidUploadResponseError());
+        }
+      } else {
+        reject(
+          new PersonalAiError(
+            xhr.status,
+            "http",
+            parseHttpErrorMessage(xhr.responseText) ??
+              formatHttpErrorMessage(xhr.responseText, xhr.status),
+          ),
+        );
+      }
+    });
+    xhr.addEventListener("error", () => { cleanup(); reject(new PersonalAiError(0, "network")); });
+    xhr.addEventListener("abort", () => { cleanup(); reject(new PersonalAiError(0, "timeout")); });
+    xhr.send(form);
+  });
+}
+
+/** GET /api/chat/personal/attachments?session_id=… — khôi phục chip sau reload. */
+export async function listPersonalAttachments(
+  sessionId: string,
+  options?: { signal?: AbortSignal },
+): Promise<PersonalAttachment[]> {
+  const url = `${ATTACHMENTS_BASE}?session_id=${encodeURIComponent(sessionId)}`;
+  const res = await fetch(url, { headers: buildAuthHeaders(), signal: options?.signal });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new PersonalAiError(
+      res.status,
+      "http",
+      parseHttpErrorMessage(text) ?? formatHttpErrorMessage(text, res.status),
+    );
+  }
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  const obj = asRecord(payload);
+  const list = Array.isArray(obj?.attachments)
+    ? obj.attachments
+    : Array.isArray(payload)
+      ? payload
+      : [];
+  return list
+    .map(normalizePersonalAttachment)
+    .filter((a): a is PersonalAttachment => a !== undefined);
+}
+
+/**
+ * DELETE /api/chat/personal/attachments/{id}?session_id=… — xoá chip.
+ * Caller CHỈ được xoá chip local sau khi hàm này resolve (BE trả 2xx).
+ */
+export async function deletePersonalAttachment(
+  attachmentId: string,
+  sessionId: string,
+  options?: { signal?: AbortSignal },
+): Promise<void> {
+  const url = `${ATTACHMENTS_BASE}/${encodeURIComponent(attachmentId)}?session_id=${encodeURIComponent(sessionId)}`;
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: buildAuthHeaders(),
+    signal: options?.signal,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new PersonalAiError(
+      res.status,
+      "http",
+      parseHttpErrorMessage(text) ?? formatHttpErrorMessage(text, res.status),
+    );
+  }
+}
+
 /**
  * POST /api/level-reports/upload — nộp file bản cấp (TBP / LĐĐV).
  *
@@ -615,8 +830,9 @@ function postLevelReport(
             : new PersonalAiError(
                 status,
                 "http",
-                parseHttpErrorMessage(xhr.responseText) ??
-                  formatHttpErrorMessage(xhr.responseText, status),
+                // §2: lý do BE trả trước, fallback theo status sau — không bao
+                // giờ đẩy chuỗi kỹ thuật `PersonalAI error [http]: …` ra UI.
+                parseHttpErrorMessage(xhr.responseText) ?? fallbackUploadMessage(status),
               ),
         );
       }
@@ -926,6 +1142,113 @@ export async function downloadLevelReportExport(url: string): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
+/**
+ * Dựng URL tải bản nháp AI từ `export_url` của SSE `work_report_ai_draft_ready`.
+ *
+ * BE gửi path tương đối (`/api/work-report-drafts/<id>/export.xlsx`); ghép qua
+ * `BASE_URL` để đi đúng host AI (dev: proxy `/ai-api`). Chỉ nhận path đúng dạng
+ * bản nháp — payload lạ trả null và caller không hiện nút tải.
+ *
+ * `/api/work-report-drafts/*` đi qua `BASE_URL` như MỌI endpoint chatbot khác,
+ * KHÔNG qua `chat.hacomholdings.com.vn`. Team Chatbot từng báo "gateway chưa
+ * định tuyến" kèm 404 trên host chat, nhưng host đó proxy toàn bộ `/api/` sang
+ * chat-api (NestJS) và chưa bao giờ là cổng vào của API chatbot —
+ * `/api/work-reports/*` hiện có cũng 404 y hệt ở đó. FE giữ một đường: host AI.
+ */
+export function buildWorkReportDraftExportUrl(exportUrl: string | undefined): string | null {
+  if (!exportUrl?.trim()) return null;
+  try {
+    // BASE_URL có thể tương đối ở dev (/ai-api) nên new URL() không dùng làm
+    // base được — parse theo origin hiện tại rồi ghép lại như parseLevelReportExportHref.
+    const url = new URL(exportUrl.trim(), window.location.origin);
+    if (/^\/api\/work-report-drafts\/[^/]+\/export\.xlsx$/i.test(url.pathname)) {
+      return `${BASE_URL}${url.pathname}${url.search}`;
+    }
+  } catch {
+    /* export_url không hợp lệ */
+  }
+  return null;
+}
+
+/**
+ * URL tải bản nháp dựng TỪ `draft_id`.
+ *
+ * Contract §"Trình bày chat và xuất Excel" nói `work_report_ai_draft_ready` mang
+ * `draft_id`, còn request 06/08 mô tả cùng sự kiện đó mang `export_url`. Nhận cả
+ * hai: có `export_url` thì dùng, không thì ghép từ `draft_id`.
+ */
+export function workReportDraftExportUrlFromId(draftId: string | undefined): string | null {
+  const id = draftId?.trim();
+  // draft_id đi thẳng vào path nên phải chặn ký tự tách path/query, tránh dựng
+  // ra URL trỏ đi chỗ khác từ payload SSE.
+  if (!id || !/^[A-Za-z0-9._-]+$/.test(id)) return null;
+  return `${BASE_URL}/api/work-report-drafts/${id}/export.xlsx`;
+}
+
+/** Trạng thái job dựng bản nháp (contract §4). */
+export interface WorkReportDraftJob {
+  status: "queued" | "running" | "succeeded" | "failed";
+  draft_id?: string;
+  error_message?: string;
+}
+
+/**
+ * GET /api/work-report-drafts/jobs/{job_id} — poll trạng thái dựng bản nháp.
+ *
+ * Contract §"Không yêu cầu gửi lại tag khi xử lý lâu": một bản nháp có thể cần
+ * nhiều lượt LLM, vượt giới hạn chờ của SSE. Nên khi SSE chỉ kịp báo
+ * `work_report_ai_draft_waiting` kèm `job_id`, FE phải tự poll đúng job đó —
+ * TUYỆT ĐỐI không bắt TBP gõ lại tag để tạo/đọc job.
+ */
+export async function fetchWorkReportDraftJob(
+  jobId: string,
+  options?: { signal?: AbortSignal },
+): Promise<WorkReportDraftJob> {
+  const url = appendScopeTokenToUrl(
+    `${BASE_URL}/api/work-report-drafts/jobs/${encodeURIComponent(jobId)}`,
+  );
+  const response = await aiRequest(url, { signal: options?.signal });
+  const payload = (await response.json()) as Record<string, unknown>;
+  const status = pickString(payload.status) ?? "";
+  return {
+    status: (["queued", "running", "succeeded", "failed"].includes(status)
+      ? status
+      : "running") as WorkReportDraftJob["status"],
+    draft_id: pickString(payload.draft_id),
+    error_message: pickString(payload.error_message),
+  };
+}
+
+/**
+ * GET /api/work-report-drafts/{draft_id}/export.xlsx → tải bản nháp AI (.xlsx).
+ *
+ * Endpoint đòi header `Authorization`, nên KHÔNG render `export_url` thành thẻ
+ * `<a href>`: dán vào thanh địa chỉ luôn 401 vì trình duyệt không gửi token.
+ * Phải fetch blob rồi trigger download thủ công như `downloadLevelReportExport`.
+ *
+ * Token chỉ đi trong header — không nhét vào URL, không log, không lưu thêm chỗ nào.
+ */
+export async function downloadWorkReportDraft(url: string): Promise<void> {
+  // Nhiều phạm vi DEPARTMENT → gửi kèm `scope_token` như các endpoint khác.
+  const response = await aiRequest(appendScopeTokenToUrl(url), {}, UPLOAD_TIMEOUT_MS);
+
+  const disposition = response.headers.get("content-disposition") ?? "";
+  let filename = "nhap-giao-ban.xlsx";
+  const nameMatch = disposition.match(/filename[^;=\n]*=["']?([^"';\n]*)["']?/i);
+  if (nameMatch?.[1]) filename = decodeURIComponent(nameMatch[1].trim());
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
 function normalizeWeeklyReportFile(raw: unknown): WeeklyReportFileItem | null {
   if (!raw || typeof raw !== "object") return null;
   const obj = raw as Record<string, unknown>;
@@ -1021,6 +1344,65 @@ function normalizeCitation(raw: unknown): PersonalCitation | null {
 }
 
 /**
+ * Chuẩn hoá bản nháp AI về đúng shape `WorkReportAiDraftReady`.
+ *
+ * Dùng chung cho CẢ hai nguồn: SSE `work_report_ai_draft_ready` và
+ * `metadata.work_report_ai_draft` lúc tải lịch sử — nút tải sau khi F5 phải
+ * giống hệt nút lúc nhận SSE, nên không tách hai bản kiểm tra.
+ * Không dựng được URL hợp lệ thì trả undefined và caller không hiện nút.
+ */
+export function normalizeWorkReportAiDraft(raw: unknown): WorkReportAiDraftReady | undefined {
+  const obj = asRecord(raw);
+  if (!obj) return undefined;
+  const draftId = pickString(obj.draft_id);
+  const exportUrl =
+    buildWorkReportDraftExportUrl(pickString(obj.export_url)) ??
+    workReportDraftExportUrlFromId(draftId);
+  if (!draftId || !exportUrl) return undefined;
+  return {
+    draft_id: draftId,
+    export_url: exportUrl,
+    export_format: pickString(obj.export_format),
+    read_only: obj.read_only === true,
+  };
+}
+
+/** Link tải bản nháp trong transcript: `/api/work-report-drafts/<id>/export.xlsx`. */
+const DRAFT_EXPORT_HREF_RE =
+  /(?:https?:\/\/[^\s)]+)?\/api\/work-report-drafts\/[^\s/)]+\/export\.xlsx(?:\?[^\s)]*)?/gi;
+
+/**
+ * Bỏ link tải bản nháp AI khỏi nội dung chat.
+ *
+ * Request 07/08/26: transcript chỉ được có MỘT nút tải + một dòng cảnh báo,
+ * không render link Markdown/URL thô. Link đó cần `Authorization` nên bấm thẳng
+ * luôn ra 401 — để lại chỉ tạo một lối tải hỏng cạnh cái nút chạy được. BE suy
+ * metadata cho transcript cũ TỪ chính link/marker này, nên nó vẫn nằm trong
+ * `content` và sẽ hiện lên sau khi tải lịch sử nếu không cắt.
+ *
+ * Chỉ cắt phần link; chữ còn lại của câu giữ nguyên (BE có thể đã viết câu dẫn
+ * quanh nó). Dọn nốt dấu ngoặc/nhãn rỗng do cắt để lại, và các dòng trống thừa.
+ */
+export function stripDraftExportLinks(content: string): string {
+  if (!content || !/work-report-drafts/i.test(content)) return content;
+
+  return content
+    // [nhãn](link) → bỏ trọn cụm Markdown, kể cả nhãn.
+    .replace(
+      /\[[^\]\n]*\]\(\s*(?:https?:\/\/[^\s)]+)?\/api\/work-report-drafts\/[^\s/)]+\/export\.xlsx(?:\?[^\s)]*)?\s*\)/gi,
+      "",
+    )
+    // URL trần còn sót (kể cả trong <...>).
+    .replace(DRAFT_EXPORT_HREF_RE, "")
+    .replace(/<\s*>/g, "")
+    // Dòng chỉ còn dấu câu/gạch đầu dòng sau khi cắt → bỏ hẳn dòng đó.
+    .replace(/^[ \t]*[-*>]?[ \t]*[.,;:]*[ \t]*$/gm, "")
+    // Gộp dòng trống thừa và cắt khoảng trắng hai đầu.
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/**
  * Chuẩn hoá `calendar_events` từ SSE `done`. Chỉ giữ dòng có `event_id` (bắt
  * buộc để mở chi tiết). `detail_action` chỉ nhận khi đúng type — thiếu/hỏng thì
  * bỏ, khi đó bubble không hiện nút chi tiết cho dòng đó (theo spec).
@@ -1065,6 +1447,15 @@ export async function streamPersonalChat(
     onSelectionRequest?: (data: DepartmentSelectionRequest) => void;
     /** SSE `work_report_scope_required` — mở widget chọn scope ngay (§3). */
     onScopeRequired?: (data: WorkReportScopeRequired) => void;
+    /** SSE `work_report_ai_draft_ready` — hiện nút tải bản nháp AI. */
+    onDraftReady?: (data: WorkReportAiDraftReady) => void;
+    /**
+     * SSE `work_report_ai_draft_waiting` / `work_report_ai_draft_job` — bản nháp
+     * còn đang dựng, kèm `job_id` để FE tự poll thay vì bắt gõ lại tag.
+     */
+    onDraftWaiting?: (data: WorkReportAiDraftWaiting) => void;
+    /** SSE `work_report_ai_draft_failed` — dừng poll, hiện lỗi vận hành. */
+    onDraftFailed?: (message?: string) => void;
     signal?: AbortSignal;
   },
 ): Promise<PersonalChatResponse> {
@@ -1103,6 +1494,9 @@ export async function streamPersonalChat(
     // nguyên nhân #baocaocv "lúc hiện lúc không" (mất selection_request → rơi vào
     // ReportTextBox rỗng). Chỉ xử lý event đã đủ (kết bằng "\n\n"), giữ phần dư.
     let buffer = "";
+    // SSE `event: error` không thể ném ngay trong processEvent (đang ở trong
+    // vòng đọc) — giữ lại rồi ném sau khi thoát vòng, trước mọi fallback.
+    let streamError: AiStreamError | null = null;
 
     const processEvent = (event: string) => {
       if (!event.trim()) return;
@@ -1171,6 +1565,52 @@ export async function streamPersonalChat(
             });
           }
         } catch { /* malformed payload — ignore */ }
+      } else if (eventType === "work_report_ai_draft_ready" && options?.onDraftReady) {
+        // Bản nháp AI đã dựng xong. Contract nói event mang `draft_id`, request
+        // 06/08 nói mang `export_url` — nhận cả hai, ưu tiên `export_url` nếu có
+        // và hợp lệ, còn lại ghép từ `draft_id`. Không dựng được URL thì bỏ qua,
+        // không hiện nút tải hỏng.
+        try {
+          const draft = normalizeWorkReportAiDraft(JSON.parse(data));
+          if (draft) options.onDraftReady(draft);
+        } catch { /* malformed payload — ignore */ }
+      } else if (
+        (eventType === "work_report_ai_draft_waiting" ||
+          // `..._job` phát sau thời gian chờ của SSE. KHÔNG coi là kết thúc:
+          // giữ nguyên `job_id` và poll tiếp đúng job đó (contract mục 3).
+          eventType === "work_report_ai_draft_job") &&
+        options?.onDraftWaiting
+      ) {
+        try {
+          const parsed = JSON.parse(data) as Record<string, unknown>;
+          const jobId = pickString(parsed.job_id);
+          if (jobId) {
+            options.onDraftWaiting({
+              job_id: jobId,
+              period_start: pickString(parsed.period_start),
+              period_end: pickString(parsed.period_end),
+            });
+          }
+        } catch { /* malformed payload — ignore */ }
+      } else if (eventType === "work_report_ai_draft_failed" && options?.onDraftFailed) {
+        try {
+          const parsed = JSON.parse(data) as Record<string, unknown>;
+          options.onDraftFailed(pickString(parsed.error_message, parsed.message));
+        } catch {
+          options.onDraftFailed(undefined);
+        }
+      } else if (eventType === "error") {
+        // BE trả lý do rõ ràng giữa stream (vd ATTACHMENT_MODE_REJECTED). Giữ
+        // `code` + `detail` an toàn của BE thay vì để rơi xuống "network".
+        try {
+          const parsed = JSON.parse(data) as Record<string, unknown>;
+          streamError = new AiStreamError(
+            pickString(parsed.code, parsed.error_code) ?? "",
+            pickString(parsed.detail, parsed.message, parsed.error),
+          );
+        } catch {
+          streamError = new AiStreamError("", data.trim() || undefined);
+        }
       } else if (eventType === "done") {
         try {
           const parsed = JSON.parse(data);
@@ -1188,6 +1628,7 @@ export async function streamPersonalChat(
                 ? parsed.export_id
                 : undefined,
             calendar_events: normalizeCalendarEvents(parsed.calendar_events),
+            mode: pickString(parsed.mode),
           };
         } catch {
           /* malformed done payload — recover below */
@@ -1214,6 +1655,10 @@ export async function streamPersonalChat(
     // Flush event cuối nếu server không gửi "\n\n" kết thúc.
     if (buffer.trim()) processEvent(buffer);
 
+    // BE đã nói rõ vì sao dừng → ném đúng lý do đó. Phải đứng TRƯỚC fallback
+    // parse: stream lỗi không có `done`, để rơi xuống dưới sẽ thành "network".
+    if (streamError) throw streamError;
+
     // Fallback: parse from accumulated text
     if (!finalResponse) {
       const match = accumulated.match(/event:\s*done\s*\ndata:\s*(.+)/);
@@ -1234,6 +1679,7 @@ export async function streamPersonalChat(
                 ? parsed.export_id
                 : undefined,
             calendar_events: normalizeCalendarEvents(parsed.calendar_events),
+            mode: pickString(parsed.mode),
           };
         } catch {
           /* unrecoverable */

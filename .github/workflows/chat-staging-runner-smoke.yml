@@ -1,0 +1,17 @@
+name: Chat staging runner smoke
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, linux, chat-staging]
+    steps:
+      - run: |
+          whoami
+          hostname
+          pwd
+          id
+          test "$(whoami)" = "chat-staging-runner"

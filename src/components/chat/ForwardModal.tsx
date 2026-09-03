@@ -2,7 +2,11 @@ import React from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { Users } from "lucide-react";
-import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import {
+  ChevronDownIcon,
+  MagnifyingGlassIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 import type { Attachment, Conversation, Message } from "../../types";
 import { RoomType } from "../../types";
@@ -107,6 +111,7 @@ interface ForwardPreview {
   meta?: string;
   /** Colored file-type icon when there's no thumbnail. */
   iconType?: FileIconType;
+  fileName?: string;
   /** Image/video: source conversation + attachment id to fetch a thumbnail. */
   imageSource?: { conversationId: string; attachmentId: string };
 }
@@ -125,7 +130,8 @@ const ForwardThumb: React.FC<{
   source: { conversationId: string; attachmentId: string };
   alt: string;
   fallbackIcon: FileIconType;
-}> = ({ source, alt, fallbackIcon }) => {
+  fileName?: string;
+}> = ({ source, alt, fallbackIcon, fileName }) => {
   const { url } = usePreviewUrl(source.conversationId, source.attachmentId, {
     autoFetch: true,
   });
@@ -140,7 +146,7 @@ const ForwardThumb: React.FC<{
       />
     );
   }
-  return <FileTypeIcon type={fallbackIcon} />;
+  return <FileTypeIcon type={fallbackIcon} fileName={fileName} variant="tile" />;
 };
 
 /**
@@ -182,6 +188,7 @@ const buildPreview = (messages: Message[]): ForwardPreview => {
       text: attachment.fileName || "Tệp đính kèm",
       meta: attachment.fileSize ? formatFileSize(attachment.fileSize) : undefined,
       iconType: getFileIconType(attachment.mimeType, attachment.fileName),
+      fileName: attachment.fileName,
       imageSource:
         (isImage || isVideo) && msg.conversationId
           ? { conversationId: msg.conversationId, attachmentId: attachment.id }
@@ -351,15 +358,15 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
       role="presentation"
     >
       <div
-        className="flex max-h-full w-full max-w-[400px] flex-col overflow-hidden rounded-[14px] bg-surface shadow-elev4"
+        className="flex max-h-full w-full max-w-[650px] flex-col overflow-hidden rounded-md bg-surface shadow-elev4"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label={t("chat:message.forward.title", { defaultValue: "Chia sẻ" })}
       >
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between px-4 pt-3 pb-2">
-          <h2 className="text-base font-semibold text-text-primary">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-3">
+          <h2 className="text-[18px] font-semibold text-text-primary">
             {t("chat:message.forward.title", { defaultValue: "Chia sẻ" })}
           </h2>
           <button
@@ -373,9 +380,9 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
         </div>
 
         {/* Search */}
-        <div className="shrink-0 px-4 pb-1">
-          <div className="flex items-center gap-2 rounded-full border border-border bg-surface-hover px-3 py-1.5 transition-colors focus-within:border-[#1976D2]/60">
-            <MagnifyingGlassIcon className="h-4 w-4 shrink-0 text-text-muted" />
+        <div className="shrink-0 px-5 pb-1 pt-3">
+          <div className="flex h-11 items-center gap-2 rounded-md border border-[#1976D2] bg-surface px-3 transition-colors focus-within:ring-2 focus-within:ring-[#1976D2]/15">
+            <MagnifyingGlassIcon className="h-5 w-5 shrink-0 text-text-muted" />
             <input
               type="text"
               placeholder={t("chat:message.forward.searchPlaceholder", {
@@ -393,7 +400,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
         <div
           role="tablist"
           aria-label={t("chat:message.forward.title", { defaultValue: "Chia sẻ" })}
-          className="flex shrink-0 items-center gap-5 border-b border-border px-4 pt-2"
+          className="flex shrink-0 items-center gap-5 border-b border-border px-5 pt-2"
         >
           {tabs.map((item) => {
             const active = item.id === tab;
@@ -405,7 +412,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                 aria-selected={active}
                 onClick={() => setTab(item.id)}
                 className={clsx(
-                  "relative -mb-px border-b-2 pb-2 text-[13px] transition-colors",
+                  "relative -mb-px border-b-2 pb-3 text-[15px] transition-colors",
                   active
                     ? "border-[#1565C0] font-semibold text-[#1565C0]"
                     : "border-transparent font-medium text-text-muted hover:text-text-primary",
@@ -415,6 +422,13 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
               </button>
             );
           })}
+          <button
+            type="button"
+            className="ml-auto -mt-1 inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
+          >
+            {t("chat:message.forward.filter", { defaultValue: "Phân loại" })}
+            <ChevronDownIcon className="h-4 w-4" />
+          </button>
         </div>
 
         {/* Conversation list — height comes from its own content (auto basis), so
@@ -424,7 +438,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
             so the preview + note + footer never get clipped by `overflow-hidden`.
             Do NOT use flex-1/basis-0 here: the parent is sized by max-h, so there
             is no free space to distribute and the list collapses to 0px. */}
-        <div className="min-h-0 max-h-[264px] shrink overflow-y-auto py-1">
+        <div className="min-h-0 max-h-[520px] shrink overflow-y-auto py-3">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 px-6 py-10 text-center text-sm text-text-muted">
               <MagnifyingGlassIcon className="h-7 w-7 opacity-30" />
@@ -458,7 +472,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                       disabled={blocked}
                       onClick={() => toggleSelect(conv.id)}
                       className={clsx(
-                        "flex w-full items-center gap-2.5 px-4 py-1.5 text-left transition-colors",
+                        "flex min-h-[54px] w-full items-center gap-3 px-5 py-2 text-left transition-colors",
                         blocked
                           ? "cursor-not-allowed opacity-50"
                           : "hover:bg-surface-hover",
@@ -466,7 +480,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                     >
                       <span
                         className={clsx(
-                          "flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                          "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
                           isSelected
                             ? "border-[#1565C0] bg-[#1565C0]"
                             : "border-border bg-transparent",
@@ -490,7 +504,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                         )}
                       </span>
                       <div className="relative shrink-0">
-                        <Avatar src={conv.avatar} alt={name} size="sm" />
+                        <Avatar src={conv.avatar} alt={name} size="md" />
                         {isGroup && (
                           <div className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-surface ring-1 ring-border">
                             <Users className="h-2 w-2 text-text-muted" />
@@ -498,7 +512,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-text-primary">
+                        <p className="truncate text-[15px] font-medium text-text-primary">
                           {name}
                         </p>
                         {blocked && (
@@ -531,9 +545,14 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                       source={preview.imageSource}
                       alt={preview.text}
                       fallbackIcon={preview.iconType ?? "generic"}
+                      fileName={preview.fileName}
                     />
                   ) : (
-                    <FileTypeIcon type={preview.iconType ?? "generic"} />
+                    <FileTypeIcon
+                      type={preview.iconType ?? "generic"}
+                      fileName={preview.fileName}
+                      variant="tile"
+                    />
                   )}
                 </div>
                 <div className="min-w-0 flex-1">

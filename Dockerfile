@@ -39,6 +39,9 @@ ARG VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE=true
 ARG VITE_CHAT_SIMPLE_TIMELINE_DEBUG=false
 ARG VITE_CHAT_USE_LEGACY_TIMELINE=false
 ARG VITE_HR_API_BASE_URL
+# Màn "Công & Phép" (/timesheet, /leave, /timesheet/team) đã mở trên deploy.
+# Có thể truyền `false` làm rollback tạm thời.
+ARG VITE_WORK_MODULE_ENABLED=true
 # Refresh token storage mode. "cookie" = HttpOnly cookie set by auth-service
 # (secure, XSS-proof). "session" = localStorage fallback for envs without
 # cookie-based auth. Production must always use "cookie".
@@ -57,6 +60,7 @@ ENV VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE=${VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE}
 ENV VITE_CHAT_SIMPLE_TIMELINE_DEBUG=${VITE_CHAT_SIMPLE_TIMELINE_DEBUG}
 ENV VITE_CHAT_USE_LEGACY_TIMELINE=${VITE_CHAT_USE_LEGACY_TIMELINE}
 ENV VITE_HR_API_BASE_URL=${VITE_HR_API_BASE_URL}
+ENV VITE_WORK_MODULE_ENABLED=${VITE_WORK_MODULE_ENABLED}
 ENV VITE_REFRESH_TOKEN_STORAGE_MODE=${VITE_REFRESH_TOKEN_STORAGE_MODE}
 
 WORKDIR /workspace
@@ -68,10 +72,15 @@ RUN npm run build
 RUN test -f /workspace/chat-shared-types/dist/index.d.ts
 
 WORKDIR /workspace/chat-web-client
-RUN npm run build && node scripts/verify-dist-assets.mjs
+RUN npm run build \
+  && printf '{"buildSha":"%s"}\n' "${VITE_APP_BUILD_SHA}" > dist/build-info.json \
+  && node scripts/verify-dist-assets.mjs
 
 FROM nginx:1.27-alpine AS production
 COPY chat-web-client/nginx/default.conf.template /etc/nginx/templates/default.conf.template
+# Snippet security header — default.conf.template include vào từng location.
+# Thiếu file này nginx sẽ KHÔNG khởi động được (include trỏ vào file không có).
+COPY chat-web-client/nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=build /workspace/chat-web-client/dist /usr/share/nginx/html
 
 EXPOSE 80

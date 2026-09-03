@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
+import { UserPlusIcon } from "@heroicons/react/24/outline";
 import CreateGroupIcon from "../../../shared/layout/CreateGroupIcon";
 import { emitOpenNewChatModal } from "../../../lib/commandPalette";
 import { Avatar } from "../../common/Avatar";
@@ -13,6 +14,7 @@ interface SidebarHeaderProps {
   layoutState: ChatLayoutState;
   currentUser: UserSummary;
   onCurrentUserClick?: () => void;
+  onAddFriendClick: () => void;
 }
 
 const resolveDisplayName = (user: UserSummary, fallback: string): string =>
@@ -41,6 +43,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   layoutState,
   currentUser,
   onCurrentUserClick,
+  onAddFriendClick,
 }) => {
   const { t } = useTranslation();
   const isDense = layoutState !== "normal";
@@ -108,6 +111,18 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
             isDense ? "gap-1" : "gap-1.5",
           )}
         >
+          <IconButtonSurface
+            onClick={onAddFriendClick}
+            className={clsx(
+              "rounded-md text-text-muted hover:bg-surface-hover/70 hover:text-[#1565C0]",
+              "h-[var(--control-height-md)] w-[var(--control-height-md)]",
+            )}
+            aria-label={t("sidebar:header.addFriendLabel")}
+            title={t("sidebar:header.addFriendLabel")}
+          >
+            <UserPlusIcon className="h-[18px] w-[18px]" />
+          </IconButtonSurface>
+
           <IconButtonSurface
             onClick={() => emitOpenNewChatModal()}
             className={clsx(

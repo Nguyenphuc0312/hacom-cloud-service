@@ -299,7 +299,7 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = () => {
             giật layout (khớp wrapper thật trong WeeklyCalendarWidget). */}
         <React.Suspense
           fallback={
-            <div className="mt-5 h-[420px] w-full animate-pulse rounded-xl border border-border bg-surface shadow-elev1" />
+            <div className="skeleton mt-5 h-[420px] w-full rounded-xl" />
           }
         >
           <WeeklyCalendarWidget />

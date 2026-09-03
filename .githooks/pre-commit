@@ -1,0 +1,9 @@
+#!/bin/sh
+# Chặn secret lọt vào .env trước khi commit.
+#
+# .env được git theo dõi có chủ đích: team muốn ai clone về cũng chạy dev
+# đúng như production ngay. Đổi lại, lần nào có người thêm API key vào file
+# này thì nó sẽ tự lên remote mà không ai chặn. Hook này chặn đúng chỗ đó.
+#
+# Bỏ qua khi thật sự cần: git commit --no-verify
+exec node "$(dirname "$0")/../scripts/check-env-secrets.mjs"

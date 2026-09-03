@@ -7,6 +7,7 @@ export type AuthStatus =
   | "authenticated"
   | "pending_hr_link"
   | "activation_required"
+  | "password_change_required"
   | "verifying_activation"
   | "locked"
   | "disabled"

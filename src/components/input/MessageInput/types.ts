@@ -1,6 +1,7 @@
 import type { ComposerMode } from "../../../hooks/useComposerAvailability";
 import type { InputMode, LocationMessagePayload, Message } from "../../../types";
 import type { AttachmentDraft } from "../../../types/attachmentDraft";
+import type { SendTextMessageOptions } from "../../../features/chat/hooks/useSendMessage";
 
 export interface MentionCandidate {
   id: string;
@@ -39,6 +40,18 @@ export interface MessageInputHandle {
   /** Focus the editor — e.g. after selecting a new conversation.
    *  Pass scrollIntoView:false to focus without scrolling ancestors. */
   focus: (options?: { scrollIntoView?: boolean }) => void;
+  /**
+   * Vị trí các tag `@` trong nội dung sắp gửi (code point, gồm cả '@').
+   *
+   * ChatWindow đọc NGAY TRƯỚC khi gửi, lúc editor còn nguyên nội dung — đọc sau
+   * `clearContent()` thì rỗng. Đi qua ref thay vì thêm tham số cho `onSend` để
+   * khỏi phải nới cùng lúc 5 signature trên đường xuống API.
+   */
+  getMentionRanges: () => {
+    userId: string;
+    offset: number;
+    length: number;
+  }[];
 }
 
 export interface MessageInputProps {
@@ -49,6 +62,7 @@ export interface MessageInputProps {
     content?: string,
     fileMeta?: unknown,
     type?: string,
+    textOptions?: SendTextMessageOptions,
   ) => unknown | Promise<unknown>;
   mode: InputMode;
   conversationId?: string;
@@ -74,6 +88,8 @@ export interface MessageInputProps {
     clientMessageId?: string,
   ) => unknown | Promise<unknown>;
   conversationName?: string;
+  /** Optional product-specific prompt while retaining the shared composer. */
+  placeholder?: string;
   /** "direct"|"private" = 1-1 DM; "group" = nhóm. Poll chỉ hiện khi là nhóm. */
   conversationType?: string;
 

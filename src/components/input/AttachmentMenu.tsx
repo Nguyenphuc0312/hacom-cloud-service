@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useRef } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
+import { useClickOutside } from "../../hooks";
 import {
   PhotoIcon,
   DocumentIcon,
@@ -75,7 +76,8 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
       icon: ChartBarIcon,
       color: "bg-[#1976D2]/10 text-[#1565C0]",
       enabled: canPoll,
-      disabledReason: t("chat:attachment.pollGroupOnly", { defaultValue: "Chỉ dành cho nhóm" }),
+      // ẩn hẳn ở chat 1-1 thay vì hiện dòng disabled "Chỉ dành cho nhóm"
+      hidden: !canPoll,
     },
     {
       id: "reminder",
@@ -86,16 +88,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
     },
   ];
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        onClose();
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onClose]);
+  useClickOutside(menuRef, onClose);
 
   useEffect(() => {
     // Focus the first menu item on mount
@@ -147,7 +140,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
         className,
       )}
     >
-      {attachmentTypes.map((type) => {
+      {attachmentTypes.filter((type) => !type.hidden).map((type) => {
         const isDisabled = !type.enabled || disabledItemIds.includes(type.id);
         return (
         <button
@@ -159,7 +152,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
             if (!isDisabled) onSelect(type.id);
           }}
           disabled={isDisabled}
-          title={!type.enabled ? (type.disabledReason ?? t("common:toast.featureInDevelopment", { defaultValue: "Coming soon" })) : undefined}
+          title={!type.enabled ? t("common:toast.featureInDevelopment", { defaultValue: "Coming soon" }) : undefined}
           className={clsx(
             "flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             !isDisabled
@@ -179,7 +172,7 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
             )}
             {!type.enabled && (
               <p className="text-[11px] text-text-muted">
-                {type.disabledReason ?? t("common:toast.featureInDevelopment", { defaultValue: "Coming soon" })}
+                {t("common:toast.featureInDevelopment", { defaultValue: "Coming soon" })}
               </p>
             )}
           </div>

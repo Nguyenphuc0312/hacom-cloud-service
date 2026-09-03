@@ -4,6 +4,7 @@ import type { CalendarLocalAttachment } from "../../../components/ui/CalendarAtt
 import type { MeetingFormData } from "../../../components/ui/MeetingFormModal";
 import type { PersonalEventFormData } from "../../../components/ui/PersonalEventFormModal";
 import { apiVisibilityToForm } from "./calendarVisibility";
+import { getEventWallClock } from "./eventTimeZone";
 
 const isImageMime = (mime: string | null | undefined) => (mime ?? "").startsWith("image/");
 
@@ -35,24 +36,32 @@ const formatDateString = (date: Date): string => {
 };
 
 /**
- * Convert an ISO timestamp (UTC from API) to LOCAL wall-clock HH:mm.
- * Never slice the raw string; that yields UTC time and shifts VN events by 7h.
+ * Đổi mốc tuyệt đối (ISO/UTC từ API) sang giờ tường HH:mm CỦA SỰ KIỆN.
+ *
+ * Truyền `timeZone` (lấy từ `HRCalendarEvent.timezone`) thì giờ đọc giống nhau ở
+ * mọi nơi. Không truyền thì rơi về múi giờ nghiệp vụ mặc định — KHÔNG dùng giờ
+ * máy nữa: `getHours()` khiến cuộc họp 08:00 giờ VN hiện 01:00 trên máy UTC và
+ * 21:00 hôm trước ở New York.
+ *
+ * Tuyệt đối không cắt chuỗi thô: cách đó trả ra giờ UTC.
  */
-export const toLocalTimeString = (iso: string | null | undefined): string => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
+export const toLocalTimeString = (
+  iso: string | null | undefined,
+  timeZone?: string | null,
+): string => getEventWallClock(iso, timeZone)?.time ?? "";
 
 /**
- * Convert an ISO timestamp (UTC from API) to LOCAL date YYYY-MM-DD.
+ * Đổi mốc tuyệt đối sang ngày YYYY-MM-DD theo múi giờ CỦA SỰ KIỆN.
+ *
+ * ⚠️ YYYY-MM-DD là giá trị kỹ thuật cho `<input type="date">`. Chỗ nào hiện cho
+ * người dùng thì format lại thành dd/mm/yyyy (`formatEventDateVi`).
  */
-export const toLocalDateString = (iso: string | null | undefined): string => {
+export const toLocalDateString = (
+  iso: string | null | undefined,
+  timeZone?: string | null,
+): string => {
   if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
-  return formatDateString(d);
+  return getEventWallClock(iso, timeZone)?.date ?? iso.slice(0, 10);
 };
 
 /**
@@ -94,10 +103,12 @@ export const localizeEventTitle = (title: string | null | undefined): string => 
 export const mapHrmEventToCalendarEvent = (event: HRCalendarEvent): ExtendedCalendarEvent => ({
   id: event.id,
   title: localizeEventTitle(event.title),
-  date: toLocalDateString(event.startAt),
+  date: toLocalDateString(event.startAt, event.timezone),
+  endDate: toLocalDateString(event.endAt, event.timezone) || undefined,
+  endTime: toLocalTimeString(event.endAt, event.timezone) || undefined,
   type: mapEventTypeForDisplay(event),
   description: event.description ?? undefined,
-  time: toLocalTimeString(event.startAt),
+  time: toLocalTimeString(event.startAt, event.timezone),
   startAt: event.startAt,
   endAt: event.endAt,
   isAllDay: event.isAllDay,
@@ -203,10 +214,12 @@ export const mapHrmEventToExtendedDetail = (
   return {
     id: event.id,
     title: localizeEventTitle(event.title),
-    date: toLocalDateString(event.startAt),
+    date: toLocalDateString(event.startAt, event.timezone),
+    endDate: toLocalDateString(event.endAt, event.timezone) || undefined,
+    endTime: toLocalTimeString(event.endAt, event.timezone) || undefined,
     type: mapEventTypeForDisplay(event),
     description: event.description ?? undefined,
-    time: toLocalTimeString(event.startAt),
+    time: toLocalTimeString(event.startAt, event.timezone),
     startAt: event.startAt,
     endAt: event.endAt,
     meetingLocation: event.location ?? undefined,
@@ -260,7 +273,7 @@ export const buildCalendarEventForm = (
   | null => {
   const type = mapEventTypeForDisplay(event);
   const startDate = event.startAt
-    ? toLocalDateString(event.startAt)
+    ? toLocalDateString(event.startAt, event.timezone)
     : formatDateString(new Date());
 
   if (type === "personal") {
@@ -271,9 +284,9 @@ export const buildCalendarEventForm = (
         title: localizeEventTitle(event.title),
         date: startDate,
         // endAt có thể sang ngày khác (qua đêm / nhiều ngày) → lấy ngày local của endAt.
-        endDate: event.endAt ? toLocalDateString(event.endAt) : startDate,
-        startTime: event.startAt ? toLocalTimeString(event.startAt) : "08:00",
-        endTime: event.endAt ? toLocalTimeString(event.endAt) : "09:00",
+        endDate: event.endAt ? toLocalDateString(event.endAt, event.timezone) : startDate,
+        startTime: event.startAt ? toLocalTimeString(event.startAt, event.timezone) : "08:00",
+        endTime: event.endAt ? toLocalTimeString(event.endAt, event.timezone) : "09:00",
         notes: event.description ?? "",
         visibility: apiVisibilityToForm(event.visibility),
         attachments: remoteAttachmentsToForm(event.attachments),
@@ -300,8 +313,8 @@ export const buildCalendarEventForm = (
       id: event.id,
       title: localizeEventTitle(event.title),
       date: startDate,
-      startTime: event.startAt ? toLocalTimeString(event.startAt) : "08:00",
-      endTime: event.endAt ? toLocalTimeString(event.endAt) : "09:00",
+      startTime: event.startAt ? toLocalTimeString(event.startAt, event.timezone) : "08:00",
+      endTime: event.endAt ? toLocalTimeString(event.endAt, event.timezone) : "09:00",
       chairman: meta.meetingChairman ?? "",
       chairmanEmployeeCode: meta.meetingChairmanEmployeeCode,
       chairmanUserId: meta.meetingChairmanAuthUserId,

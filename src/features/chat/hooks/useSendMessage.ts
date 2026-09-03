@@ -17,12 +17,20 @@ import {
 } from "../../../utils/uploadPolicy";
 import {
   useSendMessageMutation,
+  type MentionSendInput,
   type SendMessageAttachmentInput,
 } from "../../api/chatApi";
 
 export type AttachmentPickerMode = "photo" | "document" | "mixed";
 
 type SendDisposition = "optimistic" | "queued" | "sent" | "failed";
+
+export interface SendTextMessageOptions {
+  contentFormat?: "plain_text" | "rich_text";
+  contentJson?: Record<string, unknown>;
+  plainText?: string;
+  linkPreview?: LinkPreviewMeta;
+}
 
 interface UseSendMessageOptions {
   selectedConversationId?: string | null;
@@ -33,6 +41,7 @@ interface UseSendMessageOptions {
     content?: string,
     fileMeta?: unknown,
     type?: string,
+    textOptions?: SendTextMessageOptions,
   ) => unknown | Promise<unknown>;
   source?: string;
 }
@@ -41,12 +50,7 @@ interface UseSendMessageResult {
   isSending: boolean;
   sendTextMessage: (
     content: string,
-    options?: {
-      contentFormat?: "plain_text" | "rich_text";
-      contentJson?: Record<string, unknown>;
-      plainText?: string;
-      linkPreview?: LinkPreviewMeta;
-    },
+    options?: SendTextMessageOptions,
   ) => Promise<SendDisposition>;
   openFilePicker: (
     mode: AttachmentPickerMode,
@@ -58,7 +62,7 @@ interface UseSendMessageResult {
     fileMeta?: Attachment | Attachment[] | undefined,
     type?: MessageType,
     /** Array of mention objects with userId and displayName for optimistic rendering */
-    mentions?: { userId: string; displayName: string }[],
+    mentions?: MentionSendInput[],
     contentFormat?: "plain_text" | "rich_text",
     contentJson?: Record<string, unknown>,
     plainText?: string,
@@ -227,7 +231,7 @@ export const useSendMessage = ({
       fileMeta?: Attachment | Attachment[] | undefined,
       type: MessageType = MessageTypeEnum.TEXT,
       /** Mentions with resolved displayName for optimistic rendering */
-      mentions?: { userId: string; displayName: string }[],
+      mentions?: MentionSendInput[],
       contentFormat?: "plain_text" | "rich_text",
       contentJson?: Record<string, unknown>,
       plainText?: string,
@@ -239,7 +243,14 @@ export const useSendMessage = ({
       },
     ) => {
       if (onSend) {
-        return Promise.resolve(onSend(content, fileMeta, type));
+        return Promise.resolve(
+          onSend(content, fileMeta, type, {
+            contentFormat,
+            contentJson,
+            plainText,
+            linkPreview,
+          }),
+        );
       }
 
       if (!resolvedConversationId) {
@@ -354,12 +365,7 @@ export const useSendMessage = ({
   const sendTextMessage = React.useCallback(
     async (
       content: string,
-      options?: {
-        contentFormat?: "plain_text" | "rich_text";
-        contentJson?: Record<string, unknown>;
-        plainText?: string;
-        linkPreview?: LinkPreviewMeta;
-      },
+      options?: SendTextMessageOptions,
     ) => {
       const text = content.trim();
       if (!text || disabled) return "failed";
@@ -367,7 +373,12 @@ export const useSendMessage = ({
       setIsSending(true);
       try {
         if (onSend) {
-          const sendResult = onSend(text, undefined, MessageTypeEnum.TEXT);
+          const sendResult = onSend(
+            text,
+            undefined,
+            MessageTypeEnum.TEXT,
+            options,
+          );
           if (isPromiseLike(sendResult)) {
             void Promise.resolve(sendResult).catch(() => undefined);
             return "optimistic";

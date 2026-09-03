@@ -7,6 +7,7 @@ import React, {
   useState,
 } from "react";
 import clsx from "clsx";
+import { useClickOutside } from "../../../../hooks";
 import {
   ArrowUpIcon,
   FileTextIcon,
@@ -21,6 +22,7 @@ import { splitTagSegments, tagBeforeCursor } from "./tagText";
 import { usePersonalDocuments } from "../../hooks/usePersonalDocuments";
 import { useVisibleReportTags } from "../../permissions/useVisibleReportTags";
 import type { ReportTagCommand } from "../../permissions/reportTags";
+import type { PersonalAttachment } from "../../types";
 
 // #tongcvtuan/#tongcvthang ĐÃ BỎ (báo cáo tuần 4 cấp, spec 08/07). Danh sách tag
 // + quy tắc ẩn/hiện theo quyền SUBMIT nằm ở `permissions/reportTags.ts` (spec
@@ -30,8 +32,17 @@ type HashCommand = ReportTagCommand;
 const WEEKLY_REPORT_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv";
 
 interface PersonalChatInputProps {
-  value: string;
-  onChange: (value: string) => void;
+  /**
+   * Nội dung áp từ NGOÀI (chip gợi ý). Chỉ dùng làm giá trị khởi tạo lại khi nó
+   * đổi — draft khi gõ là state nội bộ, không đẩy từng ký tự lên page cha (mỗi
+   * ký tự sẽ render lại toàn bộ danh sách message).
+   */
+  presetValue?: string;
+  /**
+   * Nhận hàm xoá trắng ô nhập. Page cha gọi nó đúng những chỗ trước kia gọi
+   * `setInputValue("")` — tức là chỉ khi lượt gửi THỰC SỰ đi.
+   */
+  onRegisterClear?: (clear: () => void) => void;
   onSubmit: (value: string) => void;
   onStop?: () => void;
   isStreaming?: boolean;
@@ -44,6 +55,13 @@ interface PersonalChatInputProps {
   onRemoveFile?: () => void;
   /** Đang upload (disable gửi và textarea). */
   isUploading?: boolean;
+  /**
+   * Tệp đính kèm hỏi đáp TẠM đã upload xong của hội thoại hiện tại. Khác
+   * `pendingFile` (chưa gửi lên): những chip này đã có `attachment_id` từ BE.
+   */
+  attachments?: PersonalAttachment[];
+  /** Xoá chip — chỉ được gọi BE, chip biến mất sau khi BE trả 2xx. */
+  onRemoveAttachment?: (attachmentId: string) => void;
 }
 
 const LINE_HEIGHT = 24;
@@ -63,14 +81,14 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export const PersonalChatInput = forwardRef<
+const PersonalChatInputImpl = forwardRef<
   HTMLTextAreaElement,
   PersonalChatInputProps
 >(
   (
     {
-      value,
-      onChange,
+      presetValue = "",
+      onRegisterClear,
       onSubmit,
       onStop,
       isStreaming = false,
@@ -78,9 +96,28 @@ export const PersonalChatInput = forwardRef<
       onAttachFile,
       onRemoveFile,
       isUploading = false,
+      attachments = [],
+      onRemoveAttachment,
     },
     ref,
   ) => {
+    // Draft là state NỘI BỘ: gõ một ký tự chỉ re-render component này, không kéo
+    // theo cả danh sách message ở page cha. Cùng pattern với AiPromptBox.
+    const [value, setValue] = useState(presetValue);
+    const lastPresetRef = useRef(presetValue);
+    if (presetValue !== lastPresetRef.current) {
+      // Preset đổi (bấm chip gợi ý) → áp vào ô nhập ngay trong render này.
+      lastPresetRef.current = presetValue;
+      setValue(presetValue);
+    }
+    const onChange = setValue;
+    /**
+     * Vừa bấm Gửi nhưng cha chưa kịp bật `isStreaming` (còn đang `await`
+     * pre-flight). Giữ nút ở trạng thái "đang xử lý" ngay trong nhịp bấm để
+     * không gửi được lượt thứ hai — giống ChatGPT, nút đổi tức thì chứ không
+     * chờ mạng trả lời.
+     */
+    const [justSubmitted, setJustSubmitted] = useState(false);
     const { activeDocuments, isRagMode, handleToggleSource } =
       usePersonalDocuments();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -109,6 +146,41 @@ export const PersonalChatInput = forwardRef<
       );
     }, [hashMenuOpen, hashQuery, hashCommands]);
 
+    /**
+     * Danh sách chip tệp của ô nhập — gộp tệp ĐANG upload (`pendingFile`) và tệp
+     * ĐÃ upload (`attachments`) thành MỘT nguồn.
+     *
+     * Phải khử trùng theo tên: trong lúc `sendWithFile` chờ stream trả lời xong,
+     * cả hai state cùng trỏ tới một tệp — render rời sẽ ra hai chip giống hệt
+     * nhau nằm cạnh nhau. Chip đã upload thắng vì nó có `attachment_id` thật.
+     */
+    const composerFiles = useMemo(() => {
+      const chips = attachments.map((a) => ({
+        key: a.attachment_id,
+        name: a.filename,
+        title: a.pages ? `${a.filename} · ${a.pages} trang` : a.filename,
+        isUploading: false,
+        onRemove: onRemoveAttachment
+          ? () => onRemoveAttachment(a.attachment_id)
+          : undefined,
+      }));
+
+      if (pendingFile && !chips.some((c) => c.name === pendingFile.name)) {
+        const size = formatFileSize(pendingFile.size);
+        chips.push({
+          key: `pending:${pendingFile.name}`,
+          name: pendingFile.name,
+          title: isUploading
+            ? `${pendingFile.name} · Đang tải lên...`
+            : `${pendingFile.name}${size ? ` · ${size}` : ""}`,
+          isUploading: Boolean(isUploading),
+          // Đang tải lên thì không cho xoá — huỷ giữa chừng để lại tệp mồ côi ở BE.
+          onRemove: onRemoveFile && !isUploading ? onRemoveFile : undefined,
+        });
+      }
+      return chips;
+    }, [attachments, pendingFile, isUploading, onRemoveAttachment, onRemoveFile]);
+
     const handleSelectHashCommand = useCallback(
       (cmd: HashCommand) => {
         setHashMenuOpen(false);
@@ -135,19 +207,52 @@ export const PersonalChatInput = forwardRef<
       [onChange, onSubmit, ref],
     );
 
+    /**
+     * Gửi draft hiện tại. KHÔNG tự xoá trắng ô nhập: chỉ page cha mới biết lượt
+     * này có thực sự đi hay không (lượt kèm tệp có thể dừng ở hộp xác nhận, và
+     * user bấm Huỷ thì phải còn nguyên câu hỏi vừa gõ). Cha gọi `clear()` qua
+     * `onRegisterClear` đúng ở những chỗ trước kia gọi `setInputValue("")`.
+     */
+    const submitDraft = useCallback(() => {
+      const trimmed = value.trim();
+      if (!trimmed || isStreaming || isUploading || justSubmitted) return;
+      // Khoá NGAY trong cùng nhịp bấm. `isStreaming` của cha chỉ bật sau khi
+      // hook chạy qua pre-flight (`await /scopes`), nên trong khoảng đó nút vẫn
+      // là mũi tên gửi được — bấm liên tiếp là ra nhiều lượt hỏi trùng nhau.
+      setJustSubmitted(true);
+      onSubmit(trimmed);
+    }, [value, isStreaming, isUploading, justSubmitted, onSubmit]);
+
+    /**
+     * Nhả cờ vừa-bấm-gửi.
+     *
+     * Hai lối ra: (1) cha đã bật `isStreaming`/`isUploading` → bàn giao, hai cờ
+     * kia lo tiếp; (2) lượt gửi kết thúc mà KHÔNG stream (BE hỏi phạm vi, bị
+     * chặn quyền, lỗi mạng) → không có tín hiệu nào để chờ, nên nhả sau một
+     * nhịp ngắn, nếu không ô nhập kẹt vĩnh viễn.
+     */
     useEffect(() => {
-      if (!hashMenuOpen) return;
-      const handlePointerDown = (event: MouseEvent) => {
-        if (
-          hashMenuRef.current &&
-          !hashMenuRef.current.contains(event.target as Node)
-        ) {
-          setHashMenuOpen(false);
-        }
-      };
-      document.addEventListener("mousedown", handlePointerDown);
-      return () => document.removeEventListener("mousedown", handlePointerDown);
-    }, [hashMenuOpen]);
+      if (!justSubmitted) return;
+      if (isStreaming || isUploading) {
+        setJustSubmitted(false);
+        return;
+      }
+      const timer = setTimeout(() => setJustSubmitted(false), 1500);
+      return () => clearTimeout(timer);
+    }, [justSubmitted, isStreaming, isUploading]);
+
+    const clearDraft = useCallback(() => {
+      setValue("");
+      if (ref && "current" in ref && ref.current) {
+        ref.current.style.height = "52px";
+      }
+    }, [ref]);
+
+    useEffect(() => {
+      onRegisterClear?.(clearDraft);
+    }, [onRegisterClear, clearDraft]);
+
+    useClickOutside(hashMenuRef, () => setHashMenuOpen(false), { active: hashMenuOpen });
 
     const adjustHeight = useCallback((el: HTMLTextAreaElement) => {
       el.style.height = "auto";
@@ -236,13 +341,7 @@ export const PersonalChatInput = forwardRef<
 
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        const trimmed = value.trim();
-        if (trimmed && !isStreaming && !isUploading) {
-          onSubmit(trimmed);
-          if (ref && "current" in ref && ref.current) {
-            ref.current.style.height = "52px";
-          }
-        }
+        submitDraft();
       }
     };
 
@@ -272,7 +371,7 @@ export const PersonalChatInput = forwardRef<
     );
 
     const canSend =
-      value.trim().length > 0 && !isStreaming && !isUploading;
+      value.trim().length > 0 && !isStreaming && !isUploading && !justSubmitted;
     const attachDisabled = isStreaming || isUploading || !!pendingFile;
 
     const placeholder = pendingFile
@@ -359,36 +458,46 @@ export const PersonalChatInput = forwardRef<
               : "border-border focus-within:border-border-strong focus-within:ring-2 focus-within:ring-border/20 focus-within:shadow-md",
           )}
         >
-          {/* Pending file chip */}
-          {pendingFile && (
-            <div className="px-3 pt-3">
-              <div className="inline-flex max-w-full items-center gap-2 rounded-2xl border border-border bg-surface-hover px-3 py-2 text-sm text-text-primary">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#1976D2]/10 text-[#1565C0]">
-                  {isUploading ? (
-                    <Loader2Icon size={16} strokeWidth={2} className="animate-spin" />
+          {/* MỘT hàng chip duy nhất cho mọi tệp của ô nhập.
+              Trước đây `attachments` (đã upload) và `pendingFile` (đang upload)
+              render thành HAI hàng riêng; suốt lúc đang trả lời thì cả hai cùng
+              đúng nên CÙNG MỘT tệp hiện hai lần, tới khi stream xong mới hết. */}
+          {composerFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
+              {composerFiles.map((chip) => (
+                <div
+                  key={chip.key}
+                  className="inline-flex max-w-[280px] items-center gap-1.5 rounded-lg border border-border bg-surface-hover py-1 pl-2 pr-1"
+                  title={chip.title}
+                >
+                  {chip.isUploading ? (
+                    <Loader2Icon
+                      size={13}
+                      strokeWidth={2}
+                      className="shrink-0 animate-spin text-[#1565C0]"
+                    />
                   ) : (
-                    <FileTextIcon size={16} strokeWidth={2} />
+                    <FileTextIcon
+                      size={13}
+                      strokeWidth={2}
+                      className="shrink-0 text-[#1565C0]"
+                    />
+                  )}
+                  <span className="truncate text-[12px] text-text-primary">
+                    {chip.name}
+                  </span>
+                  {chip.onRemove && (
+                    <button
+                      type="button"
+                      onClick={chip.onRemove}
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-text-muted transition-colors hover:bg-surface-active hover:text-text-secondary"
+                      aria-label={`Xoá tệp ${chip.name}`}
+                    >
+                      <XIcon size={12} strokeWidth={2} />
+                    </button>
                   )}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{pendingFile.name}</div>
-                  <div className="text-xs text-text-muted">
-                    {isUploading
-                      ? "Đang tải lên..."
-                      : formatFileSize(pendingFile.size) || "Đã đính kèm"}
-                  </div>
-                </div>
-                {onRemoveFile && !isUploading && (
-                  <button
-                    type="button"
-                    onClick={onRemoveFile}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-muted hover:bg-surface-active hover:text-text-secondary transition-colors"
-                    aria-label="Xoá tệp đính kèm"
-                  >
-                    <XIcon size={14} strokeWidth={2} />
-                  </button>
-                )}
-              </div>
+              ))}
             </div>
           )}
 
@@ -480,7 +589,7 @@ export const PersonalChatInput = forwardRef<
                 onScroll={syncOverlayScroll}
                 placeholder={placeholder}
                 rows={1}
-                disabled={isStreaming || isUploading}
+                disabled={isStreaming || isUploading || justSubmitted}
                 className={clsx(
                   TEXT_BOX_CLASS,
                   "relative w-full resize-none bg-transparent text-transparent caret-text-primary placeholder:text-text-muted focus:outline-none disabled:opacity-70",
@@ -492,7 +601,17 @@ export const PersonalChatInput = forwardRef<
 
             {/* Send / Stop */}
             <div className="flex items-center pr-3 pb-2">
-              {isStreaming ? (
+              {justSubmitted && !isStreaming ? (
+                // Khoảng giữa "vừa bấm" và "bắt đầu stream" (đang chạy
+                // pre-flight `/scopes`): hiện spinner để thấy rõ máy đang xử lý,
+                // thay vì nút xám trông như hỏng.
+                <div
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-active text-text-muted"
+                  aria-label="Đang xử lý"
+                >
+                  <Loader2Icon size={16} strokeWidth={2.5} className="animate-spin" />
+                </div>
+              ) : isStreaming ? (
                 <button
                   type="button"
                   onClick={onStop}
@@ -509,15 +628,7 @@ export const PersonalChatInput = forwardRef<
               ) : (
                 <button
                   type="button"
-                  onClick={() => {
-                    const trimmed = value.trim();
-                    if (canSend) {
-                      onSubmit(trimmed);
-                      if (ref && "current" in ref && ref.current) {
-                        ref.current.style.height = "52px";
-                      }
-                    }
-                  }}
+                  onClick={submitDraft}
                   disabled={!canSend}
                   className={clsx(
                     "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all duration-150",
@@ -559,4 +670,8 @@ export const PersonalChatInput = forwardRef<
   },
 );
 
-PersonalChatInput.displayName = "PersonalChatInput";
+PersonalChatInputImpl.displayName = "PersonalChatInput";
+
+/** memo: page cha re-render mỗi frame streaming; composer không phụ thuộc
+ * messages nên chặn ở đây là chặn được re-render nặng nhất của ô nhập. */
+export const PersonalChatInput = React.memo(PersonalChatInputImpl);

@@ -183,6 +183,7 @@
     "employmentStatusValues": {
       "PROBATION": "Thử việc",
       "ACTIVE": "Đang làm việc",
+      "ADMIN": "Admin",
       "SUSPENDED": "Tạm ngưng",
       "TERMINATED": "Đã nghỉ việc",
       "RESIGNED": "Admin"

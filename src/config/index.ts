@@ -238,23 +238,20 @@ export const USE_AUTH_SERVICE =
     : rawUseAuthService === "true";
 
 /**
- * Đính kèm file/ảnh vào lịch (calendar attachments).
+ * Feature flag: màn "Công & Phép" (/timesheet, /leave, /timesheet/team).
  *
- * BE đã ship: chat-api purpose `calendar_attachment` (migration 069) + hr-api
- * lưu `attachmentFileIds` và resolve `attachments[]` khi đọc (forward Bearer token).
- * → Upload đi qua chat-api storage thật, mọi người xem event đều tải được file.
+ * Mặc định BẬT ở mọi môi trường. Bản deploy chạy trong Docker (workflow xoá
+ * `.env.*` khỏi build context) nên giá trị production đến từ build-arg
+ * `VITE_WORK_MODULE_ENABLED`; `.env.production` dùng khi build ngoài Docker.
  *
- * Xem: chat-api-service/docs/requests/FE__calendar-attachments__ACCEPTANCE__02-07-26.md
+ * Có thể đặt "false" để rollback tạm thời: rail vẫn giữ mục đó, route hiện
+ * trang "đang phát triển" giống /tasks — không xoá code.
  */
-export const CALENDAR_ATTACHMENTS_ENABLED = true;
-
-/**
- * Lớp mock (IndexedDB) chỉ để dev-test khi BE tắt — file mock là blob: local, CHỈ
- * người upload trên chính máy đó xem được (không dùng cho thật).
- * Mặc định FALSE (dùng API thật). Bật lại mock: VITE_CALENDAR_ATTACHMENTS_MOCK=true.
- */
-export const CALENDAR_ATTACHMENTS_USE_MOCK =
-  import.meta.env.VITE_CALENDAR_ATTACHMENTS_MOCK === "true";
+const rawWorkModuleEnabled = import.meta.env.VITE_WORK_MODULE_ENABLED;
+export const WORK_MODULE_ENABLED =
+  rawWorkModuleEnabled === undefined || rawWorkModuleEnabled === ""
+    ? true
+    : rawWorkModuleEnabled === "true";
 
 const normalizedApiBaseUrl = normalizeBaseUrl(API_BASE_URL);
 const normalizedAuthBaseUrl = normalizeBaseUrl(AUTH_BASE_URL);
@@ -293,11 +290,9 @@ if (import.meta.env.DEV && !USE_AUTH_SERVICE) {
   });
 }
 
-const rawWebSocketBaseUrl =
-  import.meta.env.VITE_WS_BASE_URL ||
-  import.meta.env.VITE_WS_URL ||
-  import.meta.env.VITE_WEBSOCKET_URL ||
-  "/ws";
+// VITE_WS_URL là biến duy nhất cho WS base — trùng tên với repo variable mà
+// deploy-production.yml + Dockerfile truyền vào lúc build.
+const rawWebSocketBaseUrl = import.meta.env.VITE_WS_URL || "/ws";
 
 const resolveWebSocketUrl = (value: string): string => {
   const normalizedValue = ensureWebSocketScheme(value);
@@ -340,6 +335,10 @@ export const AUTH_CONFIG = {
   USER_KEY: "user",
   REMEMBER_ME_KEY: "rememberMe",
   AUTH_SESSION_ACTIVE_KEY: "authSessionActive",
+  // Minimal principal binding used to prevent a refresh cookie from silently
+  // switching an already-established browser session to another account.
+  AUTH_SESSION_IDENTITY_KEY: "authSessionUserId",
+  AUTH_SESSION_MISMATCH_SENTINEL: "__identity_mismatch__",
 };
 
 // Pagination

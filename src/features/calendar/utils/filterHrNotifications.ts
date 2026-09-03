@@ -11,7 +11,8 @@ export type HrNotificationKindFilter =
   | "invited"
   | "accepted"
   | "declined"
-  | "changed";
+  | "changed"
+  | "timesheet";
 
 /** Chỉ cần đúng phần dữ liệu dùng để lọc — không buộc cả HrAppNotification. */
 export interface FilterableNotification {
@@ -67,6 +68,7 @@ const matchesKind = (
     );
   }
   // accepted / declined: chỉ có ở thông báo phản hồi, phân biệt bằng payload.
+  if (filter === "timesheet") return n.type.startsWith("timesheet.");
   if (n.type !== "calendar.meeting.participant_responded") return false;
   const response = n.payload?.["response"];
   return filter === "accepted"

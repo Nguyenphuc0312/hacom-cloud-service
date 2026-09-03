@@ -28,26 +28,30 @@ export const PasswordField: React.FC<PasswordFieldProps> = ({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-text-secondary mb-1">
+      <label
+        htmlFor={registration.name}
+        className="mb-1 block text-sm font-medium text-text-secondary"
+      >
         {label}
       </label>
       <div className="relative">
         <input
           {...registration}
+          id={registration.name}
           type={show ? "text" : "password"}
           placeholder={placeholder}
           disabled={disabled}
           autoComplete={autoComplete}
-          className="w-full h-11 px-3 pr-10 rounded-lg border border-border focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-sm"
+          className="h-11 w-full rounded-lg border border-border px-3 pr-12 text-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
         />
         <button
           type="button"
           onClick={() => setShow((prev) => !prev)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary transition-colors"
+          className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           aria-label={
             show
-              ? t("common.actions.hidePassword")
-              : t("common.actions.showPassword")
+              ? t("common:actions.hidePassword")
+              : t("common:actions.showPassword")
           }
         >
           {show ? <EyeOff size={18} /> : <Eye size={18} />}
