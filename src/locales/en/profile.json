@@ -181,8 +181,8 @@
       "PROBATION": "Probation",
       "ACTIVE": "Active",
       "SUSPENDED": "Suspended",
-      "TERMINATED": "Terminated",
-      "RESIGNED": "Admin"
+      "TERMINATED": "No longer employed",
+      "RESIGNED": "No longer employed"
     },
     "joinDate": "Join date",
     "enterpriseInfoHint": "These details come from your HR directory and stay read-only here.",

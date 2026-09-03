@@ -36,7 +36,8 @@ export const resolveEmploymentStatusLabel = (
   t: TranslateFn,
 ): string | null => {
   if (!code) return null;
-  return t(`profile:settings.employmentStatusValues.${code}`, {
-    defaultValue: code,
+  const canonicalCode = code === "RESIGNED" ? "TERMINATED" : code;
+  return t(`profile:settings.employmentStatusValues.${canonicalCode}`, {
+    defaultValue: canonicalCode,
   });
 };
