@@ -22,6 +22,7 @@ export const formatJoinDate = (
 export const EMPLOYMENT_STATUS_CODES = [
   "PROBATION",
   "ACTIVE",
+  "ADMIN",
   "SUSPENDED",
   "TERMINATED",
   "RESIGNED",
@@ -36,7 +37,8 @@ export const resolveEmploymentStatusLabel = (
   t: TranslateFn,
 ): string | null => {
   if (!code) return null;
-  return t(`profile:settings.employmentStatusValues.${code}`, {
-    defaultValue: code,
+  const canonicalCode = code === "RESIGNED" ? "ADMIN" : code;
+  return t(`profile:settings.employmentStatusValues.${canonicalCode}`, {
+    defaultValue: canonicalCode,
   });
 };
