@@ -11,6 +11,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getMyTimesheet = vi.fn();
 const getPendingAttendanceExplanations = vi.fn();
+const getMyAttendanceExplanations = vi.fn();
+const approveAttendanceExplanation = vi.fn();
+const rejectAttendanceExplanation = vi.fn();
 const authState = vi.hoisted(() => ({
   roles: ["EMPLOYEE"] as string[],
   permissions: [] as string[],
@@ -50,12 +53,30 @@ vi.mock("../../api/hrApi", () => ({
     getMyTimesheet: (...args: unknown[]) => getMyTimesheet(...args),
     confirmMyTimesheet: vi.fn(),
     disputeMyTimesheet: vi.fn(),
-    getMyAttendanceExplanations: vi.fn().mockResolvedValue([]),
+    getMyAttendanceExplanations: (...args: unknown[]) =>
+      getMyAttendanceExplanations(...args),
     getPendingAttendanceExplanations: (...args: unknown[]) =>
       getPendingAttendanceExplanations(...args),
     createAttendanceExplanation: vi.fn(),
-    approveAttendanceExplanation: vi.fn(),
-    rejectAttendanceExplanation: vi.fn(),
+    approveAttendanceExplanation: (...args: unknown[]) =>
+      approveAttendanceExplanation(...args),
+    rejectAttendanceExplanation: (...args: unknown[]) =>
+      rejectAttendanceExplanation(...args),
+    getLeaveTypeCatalog: vi.fn().mockResolvedValue([
+      {
+        id: "leave-type-annual",
+        code: "ANNUAL",
+        name: "Phép năm",
+        displaySymbol: "P",
+        deductsAnnualLeave: true,
+        paid: true,
+        dayValue: 1,
+        requiresAttachment: false,
+        quotaMode: "ANNUAL_BALANCE",
+        hrRuleStatus: "CONFIRMED",
+        status: "ACTIVE",
+      },
+    ]),
   },
 }));
 
@@ -78,6 +99,9 @@ beforeEach(() => {
   authState.roles = ["EMPLOYEE"];
   authState.permissions = [];
   getPendingAttendanceExplanations.mockResolvedValue({ items: [] });
+  getMyAttendanceExplanations.mockResolvedValue({ items: [] });
+  approveAttendanceExplanation.mockResolvedValue({});
+  rejectAttendanceExplanation.mockResolvedValue({});
 });
 
 const day = (date: string, overrides: Record<string, unknown> = {}) => ({
@@ -375,10 +399,32 @@ describe("MyTimesheetPage — complete month grid", () => {
     expect(container.querySelectorAll("[data-date]")).toHaveLength(30);
     expect(
       container.querySelector('[data-date="2099-09-01"]')?.textContent,
-    ).toContain("L1");
+    ).toContain("L");
     expect(
       container.querySelector('[data-date="2099-09-30"]')?.textContent,
     ).toContain("Chưa tới");
+  });
+  it("opens the HRM symbol catalogue from a leave marker", async () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={["/timesheet?month=2099-09"]}>
+        <MyTimesheetPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(getMyTimesheet).toHaveBeenCalled());
+    const holidayCell = container.querySelector(
+      '[data-date="2099-09-01"]',
+    ) as HTMLElement;
+    const trigger = within(holidayCell).getByRole("button", {
+      name: "Xem thông tin ký hiệu L",
+    });
+    expect(trigger.className).toContain("bg-[#fff59d]");
+
+    fireEvent.click(trigger);
+
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.getByText("Tra cứu ký hiệu ngày nghỉ")).toBeTruthy();
+    expect(screen.getAllByText("Nghỉ lễ, Tết").length).toBeGreaterThan(0);
   });
 });
 
@@ -432,10 +478,10 @@ describe("MyTimesheetPage — Chat approval visibility", () => {
     expect(getPendingAttendanceExplanations).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the full approval queue outside the narrow action sidebar", async () => {
+  it("shows nine approvals per page outside the narrow action sidebar", async () => {
     authState.permissions = ["hr.attendance.read", "hr.attendance.update"];
     getPendingAttendanceExplanations.mockResolvedValueOnce({
-      items: Array.from({ length: 6 }, (_, index) => ({
+      items: Array.from({ length: 12 }, (_, index) => ({
         id: `explanation-${index + 1}`,
         employeeId: `employee-${index + 1}`,
         type: index === 0 ? "LATE" : "OTHER",
@@ -461,11 +507,94 @@ describe("MyTimesheetPage — Chat approval visibility", () => {
     const queue = heading.closest("section");
     expect(queue).toBeTruthy();
     expect(queue?.closest("aside")).toBeNull();
-    expect(screen.getByText("6 yêu cầu")).toBeTruthy();
-    expect(screen.getByText("Nhân viên 6")).toBeTruthy();
+    expect(screen.getByText("12 yêu cầu")).toBeTruthy();
+    expect(screen.getByText("12 bản ghi · Trang 1/2")).toBeTruthy();
+    expect(screen.getByText("Nhân viên 9")).toBeTruthy();
+    expect(screen.queryByText("Nhân viên 10")).toBeNull();
     expect(screen.getByText("Đi muộn")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Trang 2" }));
+    expect(await screen.findByText("Nhân viên 12")).toBeTruthy();
+    expect(screen.queryByText("Nhân viên 1")).toBeNull();
+    expect(screen.getByText("12 bản ghi · Trang 2/2")).toBeTruthy();
   });
 
+  it("requires and sends a reason when rejecting an explanation", async () => {
+    authState.permissions = ["hr.attendance.read", "hr.attendance.update"];
+    getPendingAttendanceExplanations.mockResolvedValueOnce({
+      items: [
+        {
+          id: "explanation-reject",
+          employeeId: "employee-2",
+          type: "LATE",
+          reason: "Đi công trình buổi sáng",
+          status: "SUBMITTED",
+          employee: { employeeCode: "HC0002", fullName: "Trần An" },
+          timesheetDay: { workDate: "2026-08-25", displaySymbol: "?" },
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <MyTimesheetPage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("Trần An");
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Từ chối giải trình của Trần An",
+      }),
+    );
+
+    const dialog = screen.getByRole("dialog");
+    const confirm = within(dialog).getByRole("button", {
+      name: "Xác nhận từ chối",
+    }) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+
+    fireEvent.change(within(dialog).getByLabelText(/Lý do từ chối/), {
+      target: { value: "Thiếu chứng từ" },
+    });
+    expect(confirm.disabled).toBe(false);
+    fireEvent.click(confirm);
+
+    await waitFor(() =>
+      expect(rejectAttendanceExplanation).toHaveBeenCalledWith(
+        "explanation-reject",
+        "Thiếu chứng từ",
+      ),
+    );
+  });
+
+  it("shows the rejection reason to the explanation sender", async () => {
+    getMyAttendanceExplanations.mockResolvedValueOnce({
+      items: [
+        {
+          id: "explanation-rejected",
+          employeeId: "employee-1",
+          timesheetDayId: "day-1",
+          type: "LATE",
+          reason: "Đi công trình buổi sáng",
+          status: "REJECTED",
+          reviewNote: "Thiếu chứng từ xác nhận.",
+          timesheetDay: { workDate: "2026-08-25", displaySymbol: "?" },
+          createdAt: "2026-08-25T08:00:00.000Z",
+          updatedAt: "2026-08-25T09:00:00.000Z",
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <MyTimesheetPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Lý do từ chối:")).toBeTruthy();
+    expect(screen.getByText("Thiếu chứng từ xác nhận.")).toBeTruthy();
+  });
   it("shows the team link only with attendance read permission", async () => {
     const { unmount } = render(
       <MemoryRouter>
