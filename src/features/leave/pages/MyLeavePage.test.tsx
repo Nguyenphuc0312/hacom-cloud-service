@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -200,6 +200,11 @@ describe("MyLeavePage — leave request payload", () => {
     expect(await screen.findByText("Số dư đã đối chiếu trên HRM")).toBeTruthy();
     expect(screen.getByText("Quỹ phép đã đối chiếu")).toBeTruthy();
     expect(screen.queryByText("Số dư đang được HR đối chiếu")).toBeNull();
+    const annualBalance = screen.getByTestId("leave-balance-ANNUAL");
+    expect(within(annualBalance).getByText("Còn có thể sử dụng")).toBeTruthy();
+    expect(within(annualBalance).getByText("Được hưởng")).toBeTruthy();
+    expect(within(annualBalance).getByText("12")).toBeTruthy();
+    expect(within(annualBalance).getByText("9,5")).toBeTruthy();
   });
 
   it("labels an unreconciled annual balance as trial data from the P timesheet", async () => {

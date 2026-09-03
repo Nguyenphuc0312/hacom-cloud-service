@@ -10,7 +10,10 @@ export function attendanceCalendarLabel(
   const symbol = attendance?.displaySymbol?.trim() ?? "";
   const businessLabel = symbol
     .split(";")
-    .map((token) => token.trim())
+    .map((token) => {
+      const normalized = token.trim();
+      return normalized === "L1" ? "L" : normalized;
+    })
     .filter((token) => token && token !== "+" && token !== "-")
     .join(";");
   if (businessLabel) return businessLabel;

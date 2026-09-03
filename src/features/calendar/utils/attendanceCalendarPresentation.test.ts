@@ -26,4 +26,7 @@ describe("attendanceCalendarLabel", () => {
       attendanceCalendarLabel({ displaySymbol: "", shiftCode: "VH1" }),
     ).toBe("VH1");
   });
+  it("chuẩn hóa ký hiệu lễ cũ theo mã HRM hiện hành", () => {
+    expect(attendanceCalendarLabel({ displaySymbol: "L1" })).toBe("L");
+  });
 });

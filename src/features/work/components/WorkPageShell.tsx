@@ -15,8 +15,8 @@ export const WorkPageShell: React.FC<{
   header: React.ReactNode;
   children: React.ReactNode;
 }> = ({ header, children }) => (
-  <main className="h-full min-h-0 w-full overflow-y-auto bg-[#eef2f7] text-[#0f172a]">
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-5 px-4 py-5 md:px-6">
+  <main className="h-full min-h-0 w-full overflow-y-auto bg-[#eef2f7] text-[13px] text-[#0f172a] [--font-size-base:0.875rem] [--font-size-md:0.875rem] [--font-size-sm:0.8125rem]">
+    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-4 px-4 py-4 md:px-6">
       {header}
       {children}
     </div>

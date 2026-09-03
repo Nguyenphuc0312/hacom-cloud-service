@@ -23,6 +23,8 @@ import {
 import { ROUTE_PATHS } from "../../../router/paths";
 import { WorkPageShell } from "../../work/components/WorkPageShell";
 import { ShiftCatalogModal } from "../../../components/message/ShiftCodeReference";
+import { Modal } from "../../../components/ui";
+import { TimesheetSymbolCatalogModal } from "../components/TimesheetSymbolCatalogModal";
 import { formatWorkDate } from "../../work/utils/workDatePresentation";
 import { TimesheetPeriodPicker } from "../components/TimesheetPeriodPicker";
 import { getTimesheetDayScheduleNotice } from "../timesheetDayPresentation";
@@ -33,6 +35,11 @@ import {
 } from "../../auth/utils/workTimeLeaveCapabilities";
 import { useAuthStore } from "../../../stores/authStore";
 import {
+  shiftCodeClass,
+  timesheetSymbolClass,
+} from "../timesheetSymbolPresentation";
+import {
+  datesInMonth,
   gridColumnFor,
   LG_COLUMN_START,
   todayIso,
@@ -51,6 +58,7 @@ type LoadState =
   | { status: "error"; data: MyTimesheetResponse | null; error: string };
 
 const now = new Date();
+const PENDING_EXPLANATIONS_PAGE_SIZE = 9;
 
 const periodStatusLabel: Record<TimesheetPeriodStatus, string> = {
   DRAFT: "Đang chuẩn bị",
@@ -74,25 +82,20 @@ const explanationStatusLabel: Record<AttendanceExplanation["status"], string> =
     CANCELLED: "Đã hủy",
   };
 
+const explanationTypeLabel: Record<AttendanceExplanation["type"], string> = {
+  MISSING_PUNCH: "Thiếu chấm công",
+  LATE: "Đi muộn",
+  EARLY_LEAVE: "Về sớm",
+  OUT_OF_OFFICE: "Đi công tác",
+  OTHER: "Khác",
+};
+
 const explanationStatusClass = (status: AttendanceExplanation["status"]) => {
   if (status === "APPROVED")
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (status === "REJECTED" || status === "CANCELLED")
     return "border-rose-200 bg-rose-50 text-rose-700";
   return "border-amber-200 bg-amber-50 text-amber-700";
-};
-
-const symbolClass = (symbol: string) => {
-  const first = symbol.split(";")[0];
-  if (first === "+") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (first === "-") return "border-cyan-200 bg-cyan-50 text-cyan-700";
-  if (first === "P") return "border-blue-200 bg-blue-50 text-blue-700";
-  if (first === "L") return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700";
-  if (first === "KL" || first === "N")
-    return "border-slate-200 bg-slate-50 text-slate-600";
-  if (first === "Ô" || first === "Cô" || first === "TS")
-    return "border-amber-200 bg-amber-50 text-amber-700";
-  return "border-sky-200 bg-sky-50 text-sky-700";
 };
 
 const formatMonthTitle = (month: number, year: number) =>
@@ -133,12 +136,15 @@ const DayCell: React.FC<{
   day: MyTimesheetDay;
   isFuture?: boolean;
   onShiftCodeSelect: (code: string) => void;
-}> = ({ day, isFuture = false, onShiftCodeSelect }) => {
+  onSymbolSelect: (code: string) => void;
+}> = ({ day, isFuture = false, onShiftCodeSelect, onSymbolSelect }) => {
   const scheduleNotice = getTimesheetDayScheduleNotice(day.source);
   const dayLabel = attendanceCalendarLabel(day);
   const shiftCode = day.shiftCode?.trim() ?? "";
   const isShiftCodeLabel =
     Boolean(shiftCode) && dayLabel.toUpperCase() === shiftCode.toUpperCase();
+  const isReferenceSymbol =
+    Boolean(dayLabel) && !isShiftCodeLabel && dayLabel !== "?";
   const isUnpaidHoliday = day.source === "HOLIDAY_UNPAID";
   const weekdayLabel = WEEKDAY_LABELS[weekdayIndex(day.date)];
   /*
@@ -166,8 +172,9 @@ const DayCell: React.FC<{
 
   return (
     <div
+      data-date={day.date}
       className={[
-        "min-h-[92px] rounded-lg border p-2 text-left transition-colors",
+        "min-h-[84px] rounded-lg border p-2 text-left transition-colors",
         isFuture
           ? "border-dashed border-[#e2e8f0] bg-[#fbfcfe]"
           : scheduleNotice
@@ -179,7 +186,7 @@ const DayCell: React.FC<{
       ].join(" ")}
       title={title || formatShortDate(day.date)}
     >
-      <div className="mb-2 flex items-baseline justify-between gap-2">
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
         <span className="flex items-baseline gap-1.5">
           <span
             className={`text-sm font-semibold tabular-nums ${
@@ -212,15 +219,24 @@ const DayCell: React.FC<{
       ) : dayLabel && isShiftCodeLabel ? (
         <button
           type="button"
-          className={`inline-flex min-w-8 items-center justify-center rounded-md border px-2 py-1 text-sm font-semibold transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/40 ${symbolClass(day.displaySymbol)}`}
+          className={`inline-flex min-w-8 items-center justify-center rounded-md border px-2 py-1 text-xs font-semibold transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/40 ${shiftCodeClass}`}
           aria-label={`Xem thông tin ca ${shiftCode}`}
           onClick={() => onShiftCodeSelect(shiftCode)}
         >
           {dayLabel}
         </button>
+      ) : isReferenceSymbol ? (
+        <button
+          type="button"
+          className={`inline-flex min-w-8 items-center justify-center rounded-md border px-2 py-1 text-xs font-semibold transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/40 ${timesheetSymbolClass(dayLabel)}`}
+          aria-label={`Xem thông tin ký hiệu ${dayLabel}`}
+          onClick={() => onSymbolSelect(dayLabel)}
+        >
+          {dayLabel}
+        </button>
       ) : dayLabel ? (
         <span
-          className={`inline-flex min-w-8 items-center justify-center rounded-md border px-2 py-1 text-sm font-semibold ${symbolClass(day.displaySymbol)}`}
+          className={`inline-flex min-w-8 items-center justify-center rounded-md border px-2 py-1 text-xs font-semibold ${timesheetSymbolClass(dayLabel)}`}
         >
           {dayLabel}
         </span>
@@ -272,7 +288,15 @@ const ExplainableDayCell: React.FC<{
   firstColumn?: number;
   onExplain: (day: MyTimesheetDay) => void;
   onShiftCodeSelect: (code: string) => void;
-}> = ({ day, isFuture = false, firstColumn, onExplain, onShiftCodeSelect }) => (
+  onSymbolSelect: (code: string) => void;
+}> = ({
+  day,
+  isFuture = false,
+  firstColumn,
+  onExplain,
+  onShiftCodeSelect,
+  onSymbolSelect,
+}) => (
   // Nút xếp dưới ô, không absolute: bản absolute đè lên dòng giờ chấm công
   // (08:05 - 17:35) làm mất thông tin ở đúng những ngày cần đọc kỹ nhất.
   <div
@@ -284,6 +308,7 @@ const ExplainableDayCell: React.FC<{
       day={day}
       isFuture={isFuture}
       onShiftCodeSelect={onShiftCodeSelect}
+      onSymbolSelect={onSymbolSelect}
     />
     {/*
       Ngày chưa tới thì không có gì để giải trình. Máy chủ đã ngừng gắn cờ cho
@@ -303,14 +328,57 @@ const ExplainableDayCell: React.FC<{
   </div>
 );
 
+const EmptyDayCell: React.FC<{
+  date: string;
+  isFuture: boolean;
+  firstColumn?: number;
+}> = ({ date, isFuture, firstColumn }) => {
+  const weekdayLabel = WEEKDAY_LABELS[weekdayIndex(date)];
+
+  return (
+    <div
+      className={`flex flex-col ${
+        firstColumn && firstColumn > 1 ? LG_COLUMN_START[firstColumn] : ""
+      }`}
+    >
+      <div
+        data-date={date}
+        title={`${weekdayLabel} ${formatShortDate(date)} · ${
+          isFuture ? "Ngày chưa tới" : "Chưa có dữ liệu chấm công"
+        }`}
+        className="min-h-[84px] rounded-lg border border-dashed border-[#dbe3ed] bg-[#f8fafc] p-2 text-left"
+      >
+        <div className="mb-1.5 flex items-baseline gap-1.5">
+          <span
+            className={`text-sm font-semibold tabular-nums ${
+              isFuture ? "text-[#94a3b8]" : "text-[#475569]"
+            }`}
+          >
+            {dayNumber(date)}
+          </span>
+          <span className="text-[11px] font-medium text-[#94a3b8]">
+            {weekdayLabel}
+          </span>
+        </div>
+        <span className="text-sm text-[#cbd5e1]" aria-hidden="true">
+          ···
+        </span>
+        <div className="mt-2 text-xs text-[#94a3b8]">
+          {isFuture ? "Chưa tới" : "Chưa có dữ liệu"}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SummaryTile: React.FC<{
   label: string;
   value: string;
   tone?: string;
 }> = ({ label, value, tone = "text-[#1565C0]" }) => (
-  <div className="rounded-lg border border-[#d7dce3] bg-white p-4">
+  <div className="rounded-lg border border-[#d7dce3] bg-white p-3">
     <div className="text-sm text-[#64748b]">{label}</div>
-    <div className={`mt-2 text-2xl font-semibold ${tone}`}>{value}</div>
+    <div className={`mt-1 text-xl font-semibold ${tone}`}>{value}</div>
   </div>
 );
 
@@ -331,6 +399,11 @@ const MyExplanationItem: React.FC<{ item: AttendanceExplanation }> = ({
     <div className="mt-1 line-clamp-2 text-xs text-[#64748b]">
       {item.reason}
     </div>
+    {item.status === "REJECTED" && item.reviewNote ? (
+      <div className="mt-2 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-2 text-xs leading-4 text-rose-800">
+        <span className="font-semibold">Lý do từ chối:</span> {item.reviewNote}
+      </div>
+    ) : null}
   </div>
 );
 
@@ -342,28 +415,35 @@ const PendingExplanationItem: React.FC<{
     status: "APPROVED" | "REJECTED",
   ) => void;
 }> = ({ item, reviewingId, onReview }) => (
-  <div className="rounded-lg border border-[#e2e8f0] bg-white px-3 py-2">
+  <article className="flex min-h-[168px] flex-col bg-white p-3">
     <div className="flex items-start justify-between gap-3">
-      <div>
+      <div className="min-w-0">
         <div className="text-sm font-semibold text-[#0f172a]">
           {item.employee?.fullName ?? item.employeeId}
         </div>
-        <div className="text-xs text-[#64748b]">
+        <div className="mt-0.5 text-xs text-[#64748b]">
           {item.employee?.employeeCode ?? "-"} ·{" "}
           {formatShortDate(item.timesheetDay?.workDate)}
         </div>
       </div>
-      <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
-        {item.type}
+      <span className="shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
+        {explanationTypeLabel[item.type]}
       </span>
     </div>
-    <div className="mt-2 line-clamp-2 text-xs text-[#475569]">
+    {item.timesheetDay?.firstPunch || item.timesheetDay?.lastPunch ? (
+      <div className="mt-3 text-xs font-medium tabular-nums text-[#475569]">
+        {item.timesheetDay.firstPunch ?? "--:--"} –{" "}
+        {item.timesheetDay.lastPunch ?? "--:--"}
+      </div>
+    ) : null}
+    <div className="mt-2 line-clamp-3 text-sm leading-[18px] text-[#475569]">
       {item.reason}
     </div>
-    <div className="mt-3 grid grid-cols-2 gap-2">
+    <div className="mt-auto grid grid-cols-2 gap-2 pt-3">
       <button
         type="button"
-        className="inline-flex h-8 items-center justify-center gap-1 rounded-lg bg-[#1565C0] px-2 text-xs font-semibold text-white hover:bg-[#1976D2] disabled:cursor-not-allowed disabled:bg-[#94a3b8]"
+        aria-label={`Duyệt giải trình của ${item.employee?.fullName ?? item.employeeId}`}
+        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#1565C0] px-3 text-xs font-semibold text-white outline-none hover:bg-[#1976D2] focus-visible:ring-2 focus-visible:ring-[#1565C0]/40 disabled:cursor-not-allowed disabled:bg-[#94a3b8]"
         disabled={reviewingId !== null}
         onClick={() => onReview(item, "APPROVED")}
       >
@@ -372,7 +452,8 @@ const PendingExplanationItem: React.FC<{
       </button>
       <button
         type="button"
-        className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-rose-200 bg-white px-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:text-[#94a3b8]"
+        aria-label={`Từ chối giải trình của ${item.employee?.fullName ?? item.employeeId}`}
+        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 outline-none hover:bg-rose-50 focus-visible:ring-2 focus-visible:ring-rose-300 disabled:cursor-not-allowed disabled:text-[#94a3b8]"
         disabled={reviewingId !== null}
         onClick={() => onReview(item, "REJECTED")}
       >
@@ -380,7 +461,7 @@ const PendingExplanationItem: React.FC<{
         Từ chối
       </button>
     </div>
-  </div>
+  </article>
 );
 
 export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
@@ -413,6 +494,9 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
   const [selectedShiftCode, setSelectedShiftCode] = React.useState<
     string | null
   >(null);
+  const [selectedSymbolCode, setSelectedSymbolCode] = React.useState<
+    string | null
+  >(null);
   const [explanationReason, setExplanationReason] = React.useState("");
   const [submittingExplanation, setSubmittingExplanation] =
     React.useState(false);
@@ -425,6 +509,11 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
   const [reviewingExplanationId, setReviewingExplanationId] = React.useState<
     string | null
   >(null);
+  const [pendingExplanationPage, setPendingExplanationPage] = React.useState(1);
+  const [rejectingExplanation, setRejectingExplanation] =
+    React.useState<AttendanceExplanation | null>(null);
+  const [rejectionNote, setRejectionNote] = React.useState("");
+  const rejectionNoteRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   const loadTimesheet = React.useCallback(async () => {
     setState((current) => ({
@@ -485,7 +574,15 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
   const canAct =
     period?.status === "PENDING_EMPLOYEE" &&
     (!confirmation || confirmation.status === "PENDING");
-  const days = data?.days ?? [];
+  const days = React.useMemo(() => data?.days ?? [], [data?.days]);
+  const calendarDates = React.useMemo(
+    () => datesInMonth(year, month),
+    [month, year],
+  );
+  const daysByDate = React.useMemo(
+    () => new Map(days.map((day) => [day.date, day])),
+    [days],
+  );
   // Mốc so sánh ngày tương lai. Tính một lần cho cả lưới để mọi ô dùng chung
   // một "hôm nay", tránh lệch nếu render vắt qua nửa đêm.
   const today = React.useMemo(() => todayIso(), []);
@@ -495,6 +592,20 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
   const daysNeedingReview = days.filter(
     (day) => day.needsExplanation && day.date <= today,
   ).length;
+  const pendingExplanationPageCount = Math.max(
+    1,
+    Math.ceil(pendingExplanations.length / PENDING_EXPLANATIONS_PAGE_SIZE),
+  );
+  const currentPendingExplanationPage = Math.min(
+    pendingExplanationPage,
+    pendingExplanationPageCount,
+  );
+  const pendingPageStart =
+    (currentPendingExplanationPage - 1) * PENDING_EXPLANATIONS_PAGE_SIZE;
+  const pendingExplanationPageItems = pendingExplanations.slice(
+    pendingPageStart,
+    pendingPageStart + PENDING_EXPLANATIONS_PAGE_SIZE,
+  );
   /*
    * Cột nào tô màu "ngày nghỉ" phải suy từ CA ĐÃ SẮP của chính người này, không
    * mặc định Chủ nhật là nghỉ: có ca làm cả Chủ nhật (mẫu ca tuần / weekday_mask
@@ -583,16 +694,24 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
   async function handleReviewExplanation(
     item: AttendanceExplanation,
     status: "APPROVED" | "REJECTED",
+    note = "",
   ) {
     if (!canReviewOnChat) return;
+    const normalizedNote = note.trim();
+    if (status === "REJECTED" && normalizedNote.length < 5) {
+      toast.error("Lý do từ chối cần ít nhất 5 ký tự.");
+      return;
+    }
     setReviewingExplanationId(item.id);
     try {
       if (status === "APPROVED") {
         await hrApi.approveAttendanceExplanation(item.id);
         toast.success("Đã duyệt giải trình.");
       } else {
-        await hrApi.rejectAttendanceExplanation(item.id);
+        await hrApi.rejectAttendanceExplanation(item.id, normalizedNote);
         toast.success("Đã từ chối giải trình.");
+        setRejectingExplanation(null);
+        setRejectionNote("");
       }
       await loadTimesheet();
       await loadExplanations();
@@ -706,25 +825,28 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
             />
           </div>
 
-          {!period ? (
-            <div className="rounded-lg border border-[#d7dce3] bg-white px-4 py-10 text-center">
-              <Clock3
-                size={28}
-                className="mx-auto text-[#64748b]"
-                aria-hidden="true"
-              />
-              <p className="mt-3 font-medium text-[#334155]">
-                {data?.message ?? "Chưa có bảng công tháng này."}
-              </p>
-            </div>
-          ) : state.status === "loading" && !days.length ? (
+          {state.status === "idle" ||
+          (state.status === "loading" && data === null) ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-              {Array.from({ length: 28 }, (_, index) => (
-                <div key={index} className="skeleton h-[92px] rounded-lg" />
+              {calendarDates.map((date) => (
+                <div key={date} className="skeleton h-[84px] rounded-lg" />
               ))}
             </div>
           ) : (
             <>
+              {!period ? (
+                <div className="mb-4 flex items-center gap-3 rounded-lg border border-[#d7dce3] bg-white px-4 py-3 text-sm text-[#475569]">
+                  <Clock3
+                    size={18}
+                    className="shrink-0 text-[#64748b]"
+                    aria-hidden="true"
+                  />
+                  <p>
+                    {data?.message ??
+                      "Chưa có bảng công tháng này; lịch vẫn hiển thị đủ để bạn theo dõi."}
+                  </p>
+                </div>
+              ) : null}
               {/*
                 Hàng thứ chỉ có nghĩa khi ô thật sự nằm đúng cột của thứ đó,
                 nên chỉ hiện từ `lg` — đúng breakpoint mà lưới chuyển sang 7 cột.
@@ -747,30 +869,40 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-                {days.map((day, index) => (
-                  <ExplainableDayCell
-                    key={day.date}
-                    day={day}
-                    isFuture={day.date > today}
-                    onExplain={(item) => {
-                      setExplainingDay(item);
-                      setExplanationReason("");
-                    }}
-                    onShiftCodeSelect={setSelectedShiftCode}
-                    // Chỉ ngày đầu tháng cần đẩy vào đúng cột thứ của nó; các
-                    // ngày sau tự chảy tiếp. Chỉ áp dụng ở lưới 7 cột.
-                    {...(index === 0
-                      ? { firstColumn: gridColumnFor(day.date) }
-                      : {})}
-                  />
-                ))}
+                {calendarDates.map((date, index) => {
+                  const day = daysByDate.get(date);
+                  const firstColumn =
+                    index === 0 ? gridColumnFor(date) : undefined;
+
+                  return day ? (
+                    <ExplainableDayCell
+                      key={date}
+                      day={day}
+                      isFuture={date > today}
+                      onExplain={(item) => {
+                        setExplainingDay(item);
+                        setExplanationReason("");
+                      }}
+                      onShiftCodeSelect={setSelectedShiftCode}
+                      onSymbolSelect={setSelectedSymbolCode}
+                      {...(firstColumn ? { firstColumn } : {})}
+                    />
+                  ) : (
+                    <EmptyDayCell
+                      key={date}
+                      date={date}
+                      isFuture={date > today}
+                      {...(firstColumn ? { firstColumn } : {})}
+                    />
+                  );
+                })}
               </div>
             </>
           )}
         </div>
 
         <aside className="space-y-4">
-          <div className="rounded-lg border border-[#d7dce3] bg-white p-4">
+          <div className="rounded-lg border border-[#d7dce3] bg-white p-3">
             <div className="text-sm font-semibold text-[#0f172a]">Xác nhận</div>
             <div className="mt-3 space-y-2 text-sm text-[#475569]">
               <div className="flex items-center justify-between gap-3">
@@ -809,7 +941,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
             </button>
           </div>
 
-          <div className="rounded-lg border border-[#d7dce3] bg-white p-4">
+          <div className="rounded-lg border border-[#d7dce3] bg-white p-3">
             <div className="text-sm font-semibold text-[#0f172a]">
               Khiếu nại
             </div>
@@ -833,7 +965,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
             </button>
           </div>
 
-          <div className="rounded-lg border border-[#d7dce3] bg-white p-4">
+          <div className="rounded-lg border border-[#d7dce3] bg-white p-3">
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-semibold text-[#0f172a]">
                 Giải trình đã gửi
@@ -857,33 +989,8 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
             </div>
           </div>
 
-          {canReviewOnChat && pendingExplanations.length > 0 ? (
-            <div className="rounded-lg border border-[#d7dce3] bg-white p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-[#0f172a]">
-                  Chờ duyệt giải trình
-                </div>
-                <span className="text-xs font-medium text-[#64748b]">
-                  {pendingExplanations.length}
-                </span>
-              </div>
-              <div className="mt-3 space-y-2">
-                {pendingExplanations.slice(0, 5).map((item) => (
-                  <PendingExplanationItem
-                    key={item.id}
-                    item={item}
-                    reviewingId={reviewingExplanationId}
-                    onReview={(target, status) =>
-                      void handleReviewExplanation(target, status)
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-          ) : null}
-
           {explainingDay ? (
-            <div className="rounded-lg border border-amber-200 bg-white p-4">
+            <div className="rounded-lg border border-amber-200 bg-white p-3">
               <div className="text-sm font-semibold text-[#0f172a]">
                 Giải trình ngày {dayNumber(explainingDay.date)}
               </div>
@@ -926,11 +1033,229 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
           ) : null}
         </aside>
       </section>
+
+      {canReviewOnChat && pendingExplanations.length > 0 ? (
+        <section
+          aria-labelledby="pending-explanations-title"
+          className="overflow-hidden rounded-xl border border-[#d7dce3] bg-white"
+        >
+          <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div>
+              <h2
+                id="pending-explanations-title"
+                className="text-sm font-semibold text-[#0f172a]"
+              >
+                Chờ duyệt giải trình
+              </h2>
+              <p className="mt-1 text-xs text-[#64748b]">
+                Kiểm tra ngày công và lý do trước khi quyết định.
+              </p>
+            </div>
+            <span className="inline-flex w-fit items-center rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+              {pendingExplanations.length} yêu cầu
+            </span>
+          </div>
+          <div className="grid gap-px border-t border-[#e2e8f0] bg-[#e2e8f0] sm:grid-cols-2 xl:grid-cols-3">
+            {pendingExplanationPageItems.map((item) => (
+              <PendingExplanationItem
+                key={item.id}
+                item={item}
+                reviewingId={reviewingExplanationId}
+                onReview={(target, status) => {
+                  if (status === "REJECTED") {
+                    setRejectingExplanation(target);
+                    setRejectionNote("");
+                    return;
+                  }
+                  void handleReviewExplanation(target, status);
+                }}
+              />
+            ))}
+          </div>
+          {pendingExplanationPageCount > 1 ? (
+            <footer className="flex flex-col gap-3 border-t border-[#e2e8f0] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <span
+                className="text-xs text-[#64748b]"
+                role="status"
+                aria-live="polite"
+              >
+                {pendingExplanations.length} bản ghi · Trang{" "}
+                {currentPendingExplanationPage}/{pendingExplanationPageCount}
+              </span>
+              <nav
+                className="flex flex-wrap items-center gap-1"
+                aria-label="Phân trang giải trình chờ duyệt"
+              >
+                <button
+                  type="button"
+                  className="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-[#d7dce3] bg-white px-2 text-xs text-[#475569] hover:bg-[#f8fbff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30 disabled:cursor-not-allowed disabled:text-[#cbd5e1]"
+                  aria-label="Trang trước"
+                  disabled={
+                    currentPendingExplanationPage === 1 ||
+                    reviewingExplanationId !== null
+                  }
+                  onClick={() =>
+                    setPendingExplanationPage(currentPendingExplanationPage - 1)
+                  }
+                >
+                  <ChevronLeft size={16} aria-hidden="true" />
+                </button>
+                {Array.from(
+                  { length: pendingExplanationPageCount },
+                  (_, index) => index + 1,
+                ).map((page) => (
+                  <button
+                    key={page}
+                    type="button"
+                    className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30 ${
+                      page === currentPendingExplanationPage
+                        ? "border-[#1565C0] bg-[#1565C0] text-white"
+                        : "border-[#d7dce3] bg-white text-[#475569] hover:bg-[#f8fbff]"
+                    }`}
+                    aria-label={`Trang ${page}`}
+                    aria-current={
+                      page === currentPendingExplanationPage
+                        ? "page"
+                        : undefined
+                    }
+                    disabled={reviewingExplanationId !== null}
+                    onClick={() => setPendingExplanationPage(page)}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-[#d7dce3] bg-white px-2 text-xs text-[#475569] hover:bg-[#f8fbff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30 disabled:cursor-not-allowed disabled:text-[#cbd5e1]"
+                  aria-label="Trang sau"
+                  disabled={
+                    currentPendingExplanationPage ===
+                      pendingExplanationPageCount ||
+                    reviewingExplanationId !== null
+                  }
+                  onClick={() =>
+                    setPendingExplanationPage(currentPendingExplanationPage + 1)
+                  }
+                >
+                  <ChevronRight size={16} aria-hidden="true" />
+                </button>
+              </nav>
+            </footer>
+          ) : null}
+        </section>
+      ) : null}
       {selectedShiftCode ? (
         <ShiftCatalogModal
           code={selectedShiftCode}
           onClose={() => setSelectedShiftCode(null)}
         />
+      ) : null}
+      {selectedSymbolCode ? (
+        <TimesheetSymbolCatalogModal
+          code={selectedSymbolCode}
+          onClose={() => setSelectedSymbolCode(null)}
+        />
+      ) : null}
+      {rejectingExplanation ? (
+        <Modal
+          isOpen
+          onClose={() => {
+            if (reviewingExplanationId === null) {
+              setRejectingExplanation(null);
+              setRejectionNote("");
+            }
+          }}
+          title="Từ chối giải trình"
+          description={`${rejectingExplanation.employee?.fullName ?? rejectingExplanation.employeeId} · ${formatShortDate(rejectingExplanation.timesheetDay?.workDate)}`}
+          size="md"
+          closeOnOverlayClick={reviewingExplanationId === null}
+          closeOnEsc={reviewingExplanationId === null}
+          initialFocusRef={rejectionNoteRef}
+        >
+          <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fbff] px-3 py-3">
+            <div className="text-xs font-semibold uppercase tracking-wide text-[#64748b]">
+              Nội dung giải trình
+            </div>
+            <p className="mt-1 text-sm leading-5 text-[#334155]">
+              {rejectingExplanation.reason}
+            </p>
+          </div>
+          <label
+            className="mt-4 block text-sm font-semibold text-[#0f172a]"
+            htmlFor="attendance-rejection-note"
+          >
+            Lý do từ chối <span className="text-rose-600">*</span>
+          </label>
+          <p className="mt-1 text-xs text-[#64748b]">
+            Người gửi sẽ thấy nội dung này. Nhập từ 5 đến 1.000 ký tự.
+          </p>
+          <textarea
+            ref={rejectionNoteRef}
+            id="attendance-rejection-note"
+            value={rejectionNote}
+            onChange={(event) => setRejectionNote(event.currentTarget.value)}
+            rows={5}
+            maxLength={1000}
+            aria-required="true"
+            aria-invalid={
+              rejectionNote.length > 0 && rejectionNote.trim().length < 5
+                ? "true"
+                : "false"
+            }
+            className="mt-2 w-full resize-none rounded-lg border border-[#d7dce3] bg-white px-3 py-2 text-sm text-[#0f172a] outline-none transition-colors placeholder:text-[#94a3b8] focus:border-[#1976D2] focus:ring-2 focus:ring-[#1976D2]/15 disabled:bg-[#f8fafc]"
+            placeholder="Nêu rõ căn cứ hoặc thông tin cần bổ sung"
+            disabled={reviewingExplanationId !== null}
+          />
+          <div className="mt-1 flex items-start justify-between gap-3 text-xs">
+            <span
+              className={
+                rejectionNote.length > 0 && rejectionNote.trim().length < 5
+                  ? "text-rose-600"
+                  : "text-[#64748b]"
+              }
+            >
+              {rejectionNote.length > 0 && rejectionNote.trim().length < 5
+                ? "Lý do từ chối cần ít nhất 5 ký tự."
+                : "Bắt buộc nhập lý do trước khi từ chối."}
+            </span>
+            <span className="shrink-0 tabular-nums text-[#64748b]">
+              {rejectionNote.length}/1.000
+            </span>
+          </div>
+          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-[#d7dce3] bg-white px-4 text-sm font-semibold text-[#334155] hover:bg-[#f8fbff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30 disabled:cursor-not-allowed disabled:text-[#94a3b8]"
+              disabled={reviewingExplanationId !== null}
+              onClick={() => {
+                setRejectingExplanation(null);
+                setRejectionNote("");
+              }}
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 text-sm font-semibold text-white hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:cursor-not-allowed disabled:bg-[#94a3b8]"
+              disabled={
+                rejectionNote.trim().length < 5 ||
+                reviewingExplanationId !== null
+              }
+              onClick={() =>
+                void handleReviewExplanation(
+                  rejectingExplanation,
+                  "REJECTED",
+                  rejectionNote,
+                )
+              }
+            >
+              <XCircle size={16} aria-hidden="true" />
+              {reviewingExplanationId === rejectingExplanation.id
+                ? "Đang từ chối"
+                : "Xác nhận từ chối"}
+            </button>
+          </div>
+        </Modal>
       ) : null}
     </WorkPageShell>
   );

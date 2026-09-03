@@ -189,8 +189,9 @@ const BalanceCard: React.FC<{ balance: LeaveBalance; isActive?: boolean }> = ({
   // Thẻ của loại đang khai được làm nổi để thấy ngay quỹ còn lại của ĐÚNG loại
   // đó, thay vì phải quét mắt qua cả bốn thẻ.
   <div
+    data-testid={`leave-balance-${balance.leaveType}`}
     aria-current={isActive ? "true" : undefined}
-    className={`rounded-lg border bg-white p-4 transition-colors motion-safe:duration-200 ${
+    className={`rounded-lg border bg-white p-3 transition-colors motion-safe:duration-200 ${
       isActive
         ? "border-[#1976D2] bg-[#1976D2]/[0.04] ring-1 ring-[#1976D2]/30"
         : "border-[#d7dce3]"
@@ -211,25 +212,40 @@ const BalanceCard: React.FC<{ balance: LeaveBalance; isActive?: boolean }> = ({
         aria-hidden="true"
       />
     </div>
-    <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
+    <div className="mt-4 border-b border-[#e2e8f0] pb-3">
+      <div className="text-xs font-medium text-[#64748b]">
+        Còn có thể sử dụng
+      </div>
+      {balance.remainingDays === null ? (
+        <div className="mt-1 text-base font-semibold text-amber-700">
+          Đang đối chiếu
+        </div>
+      ) : (
+        <div className="mt-1 text-xl font-semibold tabular-nums text-[#1565C0]">
+          {formatDays(balance.remainingDays)}{" "}
+          <span className="text-sm font-medium text-[#64748b]">ngày</span>
+        </div>
+      )}
+    </div>
+    <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+      <div>
+        <div className="text-xs text-[#64748b]">Được hưởng</div>
+        <div className="mt-1 font-semibold tabular-nums text-[#0f172a]">
+          {balance.entitlementDays === null
+            ? "Đối chiếu"
+            : formatDays(balance.entitlementDays)}
+        </div>
+      </div>
       <div>
         <div className="text-xs text-[#64748b]">Đã dùng</div>
-        <div className="mt-1 font-semibold text-[#0f172a]">
+        <div className="mt-1 font-semibold tabular-nums text-[#0f172a]">
           {formatDays(balance.usedDays)}
         </div>
       </div>
       <div>
         <div className="text-xs text-[#64748b]">Chờ duyệt</div>
-        <div className="mt-1 font-semibold text-amber-700">
+        <div className="mt-1 font-semibold tabular-nums text-amber-700">
           {formatDays(balance.pendingDays)}
-        </div>
-      </div>
-      <div>
-        <div className="text-xs text-[#64748b]">Còn lại</div>
-        <div className="mt-1 font-semibold text-[#1565C0]">
-          {balance.remainingDays === null
-            ? "Đối chiếu"
-            : formatDays(balance.remainingDays)}
         </div>
       </div>
     </div>
@@ -477,23 +493,26 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({
   const showLateNotice =
     Boolean(notice?.lateSubmission) && dateIssues.length === 0;
 
-  const loadApprovals = React.useCallback(async (page = 1) => {
-    if (!canReviewOnChat) {
-      setApprovals(null);
-      return null;
-    }
-    try {
-      const pending = await hrApi.getPendingLeaveApprovals({
-        page,
-        pageSize: pendingApprovalPageSize,
-      });
-      setApprovals(pending);
-      return pending;
-    } catch {
-      setApprovals(null);
-      return null;
-    }
-  }, [canReviewOnChat]);
+  const loadApprovals = React.useCallback(
+    async (page = 1) => {
+      if (!canReviewOnChat) {
+        setApprovals(null);
+        return null;
+      }
+      try {
+        const pending = await hrApi.getPendingLeaveApprovals({
+          page,
+          pageSize: pendingApprovalPageSize,
+        });
+        setApprovals(pending);
+        return pending;
+      } catch {
+        setApprovals(null);
+        return null;
+      }
+    },
+    [canReviewOnChat],
+  );
 
   const loadLeave = React.useCallback(
     async (refreshApprovals = true) => {
@@ -722,7 +741,7 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({
         </div>
       ) : null}
 
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {balances.length > 0 ? (
