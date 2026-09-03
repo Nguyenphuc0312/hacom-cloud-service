@@ -191,7 +191,7 @@ const BalanceCard: React.FC<{ balance: LeaveBalance; isActive?: boolean }> = ({
   <div
     data-testid={`leave-balance-${balance.leaveType}`}
     aria-current={isActive ? "true" : undefined}
-    className={`rounded-lg border bg-white p-4 transition-colors motion-safe:duration-200 ${
+    className={`rounded-lg border bg-white p-3 transition-colors motion-safe:duration-200 ${
       isActive
         ? "border-[#1976D2] bg-[#1976D2]/[0.04] ring-1 ring-[#1976D2]/30"
         : "border-[#d7dce3]"
@@ -212,7 +212,7 @@ const BalanceCard: React.FC<{ balance: LeaveBalance; isActive?: boolean }> = ({
         aria-hidden="true"
       />
     </div>
-    <div className="mt-5 border-b border-[#e2e8f0] pb-4">
+    <div className="mt-4 border-b border-[#e2e8f0] pb-3">
       <div className="text-xs font-medium text-[#64748b]">
         Còn có thể sử dụng
       </div>
@@ -221,7 +221,7 @@ const BalanceCard: React.FC<{ balance: LeaveBalance; isActive?: boolean }> = ({
           Đang đối chiếu
         </div>
       ) : (
-        <div className="mt-1 text-2xl font-semibold tabular-nums text-[#1565C0]">
+        <div className="mt-1 text-xl font-semibold tabular-nums text-[#1565C0]">
           {formatDays(balance.remainingDays)}{" "}
           <span className="text-sm font-medium text-[#64748b]">ngày</span>
         </div>
@@ -493,23 +493,26 @@ export const MyLeavePage: React.FC<{ tabBar?: React.ReactNode }> = ({
   const showLateNotice =
     Boolean(notice?.lateSubmission) && dateIssues.length === 0;
 
-  const loadApprovals = React.useCallback(async (page = 1) => {
-    if (!canReviewOnChat) {
-      setApprovals(null);
-      return null;
-    }
-    try {
-      const pending = await hrApi.getPendingLeaveApprovals({
-        page,
-        pageSize: pendingApprovalPageSize,
-      });
-      setApprovals(pending);
-      return pending;
-    } catch {
-      setApprovals(null);
-      return null;
-    }
-  }, [canReviewOnChat]);
+  const loadApprovals = React.useCallback(
+    async (page = 1) => {
+      if (!canReviewOnChat) {
+        setApprovals(null);
+        return null;
+      }
+      try {
+        const pending = await hrApi.getPendingLeaveApprovals({
+          page,
+          pageSize: pendingApprovalPageSize,
+        });
+        setApprovals(pending);
+        return pending;
+      } catch {
+        setApprovals(null);
+        return null;
+      }
+    },
+    [canReviewOnChat],
+  );
 
   const loadLeave = React.useCallback(
     async (refreshApprovals = true) => {

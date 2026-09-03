@@ -174,7 +174,7 @@ const DayCell: React.FC<{
     <div
       data-date={day.date}
       className={[
-        "min-h-[92px] rounded-lg border p-2 text-left transition-colors",
+        "min-h-[84px] rounded-lg border p-2 text-left transition-colors",
         isFuture
           ? "border-dashed border-[#e2e8f0] bg-[#fbfcfe]"
           : scheduleNotice
@@ -186,7 +186,7 @@ const DayCell: React.FC<{
       ].join(" ")}
       title={title || formatShortDate(day.date)}
     >
-      <div className="mb-2 flex items-baseline justify-between gap-2">
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
         <span className="flex items-baseline gap-1.5">
           <span
             className={`text-sm font-semibold tabular-nums ${
@@ -219,7 +219,7 @@ const DayCell: React.FC<{
       ) : dayLabel && isShiftCodeLabel ? (
         <button
           type="button"
-          className={`inline-flex min-w-8 items-center justify-center rounded-md border px-2 py-1 text-sm font-semibold transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/40 ${shiftCodeClass}`}
+          className={`inline-flex min-w-8 items-center justify-center rounded-md border px-2 py-1 text-xs font-semibold transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/40 ${shiftCodeClass}`}
           aria-label={`Xem thông tin ca ${shiftCode}`}
           onClick={() => onShiftCodeSelect(shiftCode)}
         >
@@ -228,7 +228,7 @@ const DayCell: React.FC<{
       ) : isReferenceSymbol ? (
         <button
           type="button"
-          className={`inline-flex min-w-8 items-center justify-center rounded-md border px-2 py-1 text-sm font-semibold transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/40 ${timesheetSymbolClass(dayLabel)}`}
+          className={`inline-flex min-w-8 items-center justify-center rounded-md border px-2 py-1 text-xs font-semibold transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/40 ${timesheetSymbolClass(dayLabel)}`}
           aria-label={`Xem thông tin ký hiệu ${dayLabel}`}
           onClick={() => onSymbolSelect(dayLabel)}
         >
@@ -236,7 +236,7 @@ const DayCell: React.FC<{
         </button>
       ) : dayLabel ? (
         <span
-          className={`inline-flex min-w-8 items-center justify-center rounded-md border px-2 py-1 text-sm font-semibold ${timesheetSymbolClass(dayLabel)}`}
+          className={`inline-flex min-w-8 items-center justify-center rounded-md border px-2 py-1 text-xs font-semibold ${timesheetSymbolClass(dayLabel)}`}
         >
           {dayLabel}
         </span>
@@ -346,9 +346,9 @@ const EmptyDayCell: React.FC<{
         title={`${weekdayLabel} ${formatShortDate(date)} · ${
           isFuture ? "Ngày chưa tới" : "Chưa có dữ liệu chấm công"
         }`}
-        className="min-h-[92px] rounded-lg border border-dashed border-[#dbe3ed] bg-[#f8fafc] p-2 text-left"
+        className="min-h-[84px] rounded-lg border border-dashed border-[#dbe3ed] bg-[#f8fafc] p-2 text-left"
       >
-        <div className="mb-2 flex items-baseline gap-1.5">
+        <div className="mb-1.5 flex items-baseline gap-1.5">
           <span
             className={`text-sm font-semibold tabular-nums ${
               isFuture ? "text-[#94a3b8]" : "text-[#475569]"
@@ -376,9 +376,9 @@ const SummaryTile: React.FC<{
   value: string;
   tone?: string;
 }> = ({ label, value, tone = "text-[#1565C0]" }) => (
-  <div className="rounded-lg border border-[#d7dce3] bg-white p-4">
+  <div className="rounded-lg border border-[#d7dce3] bg-white p-3">
     <div className="text-sm text-[#64748b]">{label}</div>
-    <div className={`mt-2 text-2xl font-semibold ${tone}`}>{value}</div>
+    <div className={`mt-1 text-xl font-semibold ${tone}`}>{value}</div>
   </div>
 );
 
@@ -415,7 +415,7 @@ const PendingExplanationItem: React.FC<{
     status: "APPROVED" | "REJECTED",
   ) => void;
 }> = ({ item, reviewingId, onReview }) => (
-  <article className="flex min-h-[190px] flex-col bg-white p-4">
+  <article className="flex min-h-[168px] flex-col bg-white p-3">
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <div className="text-sm font-semibold text-[#0f172a]">
@@ -436,14 +436,14 @@ const PendingExplanationItem: React.FC<{
         {item.timesheetDay.lastPunch ?? "--:--"}
       </div>
     ) : null}
-    <div className="mt-2 line-clamp-3 text-sm leading-5 text-[#475569]">
+    <div className="mt-2 line-clamp-3 text-sm leading-[18px] text-[#475569]">
       {item.reason}
     </div>
-    <div className="mt-auto grid grid-cols-2 gap-2 pt-4">
+    <div className="mt-auto grid grid-cols-2 gap-2 pt-3">
       <button
         type="button"
         aria-label={`Duyệt giải trình của ${item.employee?.fullName ?? item.employeeId}`}
-        className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#1565C0] px-3 text-xs font-semibold text-white outline-none hover:bg-[#1976D2] focus-visible:ring-2 focus-visible:ring-[#1565C0]/40 disabled:cursor-not-allowed disabled:bg-[#94a3b8]"
+        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#1565C0] px-3 text-xs font-semibold text-white outline-none hover:bg-[#1976D2] focus-visible:ring-2 focus-visible:ring-[#1565C0]/40 disabled:cursor-not-allowed disabled:bg-[#94a3b8]"
         disabled={reviewingId !== null}
         onClick={() => onReview(item, "APPROVED")}
       >
@@ -453,7 +453,7 @@ const PendingExplanationItem: React.FC<{
       <button
         type="button"
         aria-label={`Từ chối giải trình của ${item.employee?.fullName ?? item.employeeId}`}
-        className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 outline-none hover:bg-rose-50 focus-visible:ring-2 focus-visible:ring-rose-300 disabled:cursor-not-allowed disabled:text-[#94a3b8]"
+        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 outline-none hover:bg-rose-50 focus-visible:ring-2 focus-visible:ring-rose-300 disabled:cursor-not-allowed disabled:text-[#94a3b8]"
         disabled={reviewingId !== null}
         onClick={() => onReview(item, "REJECTED")}
       >
@@ -829,7 +829,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
           (state.status === "loading" && data === null) ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
               {calendarDates.map((date) => (
-                <div key={date} className="skeleton h-[92px] rounded-lg" />
+                <div key={date} className="skeleton h-[84px] rounded-lg" />
               ))}
             </div>
           ) : (
@@ -902,7 +902,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
         </div>
 
         <aside className="space-y-4">
-          <div className="rounded-lg border border-[#d7dce3] bg-white p-4">
+          <div className="rounded-lg border border-[#d7dce3] bg-white p-3">
             <div className="text-sm font-semibold text-[#0f172a]">Xác nhận</div>
             <div className="mt-3 space-y-2 text-sm text-[#475569]">
               <div className="flex items-center justify-between gap-3">
@@ -941,7 +941,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
             </button>
           </div>
 
-          <div className="rounded-lg border border-[#d7dce3] bg-white p-4">
+          <div className="rounded-lg border border-[#d7dce3] bg-white p-3">
             <div className="text-sm font-semibold text-[#0f172a]">
               Khiếu nại
             </div>
@@ -965,7 +965,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
             </button>
           </div>
 
-          <div className="rounded-lg border border-[#d7dce3] bg-white p-4">
+          <div className="rounded-lg border border-[#d7dce3] bg-white p-3">
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-semibold text-[#0f172a]">
                 Giải trình đã gửi
@@ -990,7 +990,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
           </div>
 
           {explainingDay ? (
-            <div className="rounded-lg border border-amber-200 bg-white p-4">
+            <div className="rounded-lg border border-amber-200 bg-white p-3">
               <div className="text-sm font-semibold text-[#0f172a]">
                 Giải trình ngày {dayNumber(explainingDay.date)}
               </div>
@@ -1039,19 +1039,19 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
           aria-labelledby="pending-explanations-title"
           className="overflow-hidden rounded-xl border border-[#d7dce3] bg-white"
         >
-          <div className="flex flex-col gap-2 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <div>
               <h2
                 id="pending-explanations-title"
-                className="text-base font-semibold text-[#0f172a]"
+                className="text-sm font-semibold text-[#0f172a]"
               >
                 Chờ duyệt giải trình
               </h2>
-              <p className="mt-1 text-sm text-[#64748b]">
+              <p className="mt-1 text-xs text-[#64748b]">
                 Kiểm tra ngày công và lý do trước khi quyết định.
               </p>
             </div>
-            <span className="inline-flex w-fit items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+            <span className="inline-flex w-fit items-center rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
               {pendingExplanations.length} yêu cầu
             </span>
           </div>
@@ -1075,7 +1075,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
           {pendingExplanationPageCount > 1 ? (
             <footer className="flex flex-col gap-3 border-t border-[#e2e8f0] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
               <span
-                className="text-sm text-[#64748b]"
+                className="text-xs text-[#64748b]"
                 role="status"
                 aria-live="polite"
               >
@@ -1088,7 +1088,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
               >
                 <button
                   type="button"
-                  className="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-[#d7dce3] bg-white px-2 text-sm text-[#475569] hover:bg-[#f8fbff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30 disabled:cursor-not-allowed disabled:text-[#cbd5e1]"
+                  className="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-[#d7dce3] bg-white px-2 text-xs text-[#475569] hover:bg-[#f8fbff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30 disabled:cursor-not-allowed disabled:text-[#cbd5e1]"
                   aria-label="Trang trước"
                   disabled={
                     currentPendingExplanationPage === 1 ||
@@ -1107,7 +1107,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
                   <button
                     key={page}
                     type="button"
-                    className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30 ${
+                    className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30 ${
                       page === currentPendingExplanationPage
                         ? "border-[#1565C0] bg-[#1565C0] text-white"
                         : "border-[#d7dce3] bg-white text-[#475569] hover:bg-[#f8fbff]"
@@ -1126,7 +1126,7 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
                 ))}
                 <button
                   type="button"
-                  className="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-[#d7dce3] bg-white px-2 text-sm text-[#475569] hover:bg-[#f8fbff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30 disabled:cursor-not-allowed disabled:text-[#cbd5e1]"
+                  className="inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-[#d7dce3] bg-white px-2 text-xs text-[#475569] hover:bg-[#f8fbff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1976D2]/30 disabled:cursor-not-allowed disabled:text-[#cbd5e1]"
                   aria-label="Trang sau"
                   disabled={
                     currentPendingExplanationPage ===
