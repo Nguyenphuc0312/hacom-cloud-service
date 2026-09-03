@@ -127,6 +127,8 @@ const formatDays = (value: number | null | undefined) =>
 
 const balanceSourceLabel = (source: LeaveBalance["source"]) => {
   if (source === "RECONCILED_LEAVE_LEDGER") return "Quỹ phép đã đối chiếu";
+  if (source === "CALCULATED_FROM_HIRE_DATE")
+    return "Tính từ ngày vào làm";
   if (source === "TIMESHEET_P_SYMBOL") return "Từ ký hiệu P";
   if (source === "TIMESHEET_OM_SYMBOL") return "Từ ký hiệu OM";
   if (source === "TIMESHEET_KL_SYMBOL") return "Từ ký hiệu KL";
@@ -137,6 +139,13 @@ const leaveModeLabel = (data: MyLeaveResponse | null) => {
   if (!data) return "Đang tải quỹ phép";
   if (data.mode === "EMPLOYEE_NOT_LINKED") return "Chưa liên kết HR";
   if (data.mode === "LIVE") return "Số dư đã đối chiếu trên HRM";
+  if (
+    data.balances.some(
+      (balance) => balance.source === "CALCULATED_FROM_HIRE_DATE",
+    )
+  ) {
+    return "Số dư tạm tính theo ngày vào làm";
+  }
   return "Số dư đang được HR đối chiếu";
 };
 
