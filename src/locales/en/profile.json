@@ -180,9 +180,10 @@
     "employmentStatusValues": {
       "PROBATION": "Probation",
       "ACTIVE": "Active",
+      "ADMIN": "Admin",
       "SUSPENDED": "Suspended",
       "TERMINATED": "No longer employed",
-      "RESIGNED": "No longer employed"
+      "RESIGNED": "Admin"
     },
     "joinDate": "Join date",
     "enterpriseInfoHint": "These details come from your HR directory and stay read-only here.",

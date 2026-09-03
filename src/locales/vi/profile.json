@@ -180,9 +180,10 @@
     "employmentStatusValues": {
       "PROBATION": "Thử việc",
       "ACTIVE": "Đang làm việc",
+      "ADMIN": "Admin",
       "SUSPENDED": "Tạm ngưng",
       "TERMINATED": "Đã nghỉ việc",
-      "RESIGNED": "Đã nghỉ việc"
+      "RESIGNED": "Admin"
     },
     "joinDate": "Ngày vào làm",
     "enterpriseInfoHint": "Các thông tin này đồng bộ từ hệ thống HR và chỉ có thể xem tại đây.",
