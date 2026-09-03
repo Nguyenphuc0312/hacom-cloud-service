@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   WEEKDAY_LABELS,
   WEEK_COLUMNS,
+  datesInMonth,
   gridColumnFor,
   weekdayIndex,
 } from "./timesheetCalendar";
@@ -45,5 +46,20 @@ describe("gridColumnFor", () => {
   it("keeps the header row and the column count in step", () => {
     expect(WEEK_COLUMNS).toHaveLength(7);
     expect(WEEKDAY_LABELS).toHaveLength(7);
+  });
+});
+
+describe("datesInMonth", () => {
+  it("always returns the full selected month", () => {
+    const september = datesInMonth(2026, 9);
+
+    expect(september).toHaveLength(30);
+    expect(september[0]).toBe("2026-09-01");
+    expect(september.at(-1)).toBe("2026-09-30");
+  });
+
+  it("includes leap day when February has one", () => {
+    expect(datesInMonth(2028, 2)).toHaveLength(29);
+    expect(datesInMonth(2028, 2).at(-1)).toBe("2028-02-29");
   });
 });

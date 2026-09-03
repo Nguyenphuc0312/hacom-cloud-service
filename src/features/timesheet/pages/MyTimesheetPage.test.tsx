@@ -103,7 +103,7 @@ const day = (date: string, overrides: Record<string, unknown> = {}) => ({
  * affordance for those days no matter what the API sends.
  */
 describe("MyTimesheetPage — future days", () => {
-  const past = iso(shift(-3));
+  const past = iso(shift(-1));
   const future = iso(shift(3));
 
   beforeEach(() => {
@@ -214,7 +214,7 @@ describe("MyTimesheetPage — shifts that include Sunday", () => {
       summary: { totalPaidDays: 0, totalLeaveDays: 0, countBySymbol: {} },
     });
     render(
-      <MemoryRouter initialEntries={["/timesheet?period=2026-03"]}>
+      <MemoryRouter initialEntries={["/timesheet?month=2026-03"]}>
         <MyTimesheetPage />
       </MemoryRouter>,
     );
@@ -340,6 +340,48 @@ describe("MyTimesheetPage — shifts that include Sunday", () => {
   });
 });
 
+describe("MyTimesheetPage — complete month grid", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getMyTimesheet.mockResolvedValue({
+      period: {
+        id: "period-1",
+        month: 9,
+        year: 2099,
+        status: "PENDING_EMPLOYEE",
+        confirmDeadline: null,
+      },
+      confirmation: null,
+      days: [
+        day("2099-09-01", {
+          paidDays: 1,
+          displaySymbol: "L1",
+          source: "DEVICE",
+          needsExplanation: false,
+        }),
+      ],
+      summary: { totalPaidDays: 1, totalLeaveDays: 0, countBySymbol: {} },
+    });
+  });
+
+  it("renders every date and fills only dates returned by the server", async () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={["/timesheet?month=2099-09"]}>
+        <MyTimesheetPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(getMyTimesheet).toHaveBeenCalled());
+    expect(container.querySelectorAll("[data-date]")).toHaveLength(30);
+    expect(
+      container.querySelector('[data-date="2099-09-01"]')?.textContent,
+    ).toContain("L1");
+    expect(
+      container.querySelector('[data-date="2099-09-30"]')?.textContent,
+    ).toContain("Chưa tới");
+  });
+});
+
 describe("MyTimesheetPage — Chat approval visibility", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -388,6 +430,40 @@ describe("MyTimesheetPage — Chat approval visibility", () => {
     expect(await screen.findByText("Chờ duyệt giải trình")).toBeTruthy();
     expect(await screen.findByText("Trần An")).toBeTruthy();
     expect(getPendingAttendanceExplanations).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the full approval queue outside the narrow action sidebar", async () => {
+    authState.permissions = ["hr.attendance.read", "hr.attendance.update"];
+    getPendingAttendanceExplanations.mockResolvedValueOnce({
+      items: Array.from({ length: 6 }, (_, index) => ({
+        id: `explanation-${index + 1}`,
+        employeeId: `employee-${index + 1}`,
+        type: index === 0 ? "LATE" : "OTHER",
+        reason: `Lý do giải trình ${index + 1}`,
+        status: "SUBMITTED",
+        employee: {
+          employeeCode: `HC000${index + 1}`,
+          fullName: `Nhân viên ${index + 1}`,
+        },
+        timesheetDay: {
+          workDate: `2026-08-${String(index + 10).padStart(2, "0")}`,
+        },
+      })),
+    });
+
+    render(
+      <MemoryRouter>
+        <MyTimesheetPage />
+      </MemoryRouter>,
+    );
+
+    const heading = await screen.findByText("Chờ duyệt giải trình");
+    const queue = heading.closest("section");
+    expect(queue).toBeTruthy();
+    expect(queue?.closest("aside")).toBeNull();
+    expect(screen.getByText("6 yêu cầu")).toBeTruthy();
+    expect(screen.getByText("Nhân viên 6")).toBeTruthy();
+    expect(screen.getByText("Đi muộn")).toBeTruthy();
   });
 
   it("shows the team link only with attendance read permission", async () => {

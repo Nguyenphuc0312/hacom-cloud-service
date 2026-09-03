@@ -33,6 +33,7 @@ import {
 } from "../../auth/utils/workTimeLeaveCapabilities";
 import { useAuthStore } from "../../../stores/authStore";
 import {
+  datesInMonth,
   gridColumnFor,
   LG_COLUMN_START,
   todayIso,
@@ -73,6 +74,14 @@ const explanationStatusLabel: Record<AttendanceExplanation["status"], string> =
     REJECTED: "Từ chối",
     CANCELLED: "Đã hủy",
   };
+
+const explanationTypeLabel: Record<AttendanceExplanation["type"], string> = {
+  MISSING_PUNCH: "Thiếu chấm công",
+  LATE: "Đi muộn",
+  EARLY_LEAVE: "Về sớm",
+  OUT_OF_OFFICE: "Đi công tác",
+  OTHER: "Khác",
+};
 
 const explanationStatusClass = (status: AttendanceExplanation["status"]) => {
   if (status === "APPROVED")
@@ -166,6 +175,7 @@ const DayCell: React.FC<{
 
   return (
     <div
+      data-date={day.date}
       className={[
         "min-h-[92px] rounded-lg border p-2 text-left transition-colors",
         isFuture
@@ -303,6 +313,49 @@ const ExplainableDayCell: React.FC<{
   </div>
 );
 
+const EmptyDayCell: React.FC<{
+  date: string;
+  isFuture: boolean;
+  firstColumn?: number;
+}> = ({ date, isFuture, firstColumn }) => {
+  const weekdayLabel = WEEKDAY_LABELS[weekdayIndex(date)];
+
+  return (
+    <div
+      className={`flex flex-col ${
+        firstColumn && firstColumn > 1 ? LG_COLUMN_START[firstColumn] : ""
+      }`}
+    >
+      <div
+        data-date={date}
+        title={`${weekdayLabel} ${formatShortDate(date)} · ${
+          isFuture ? "Ngày chưa tới" : "Chưa có dữ liệu chấm công"
+        }`}
+        className="min-h-[92px] rounded-lg border border-dashed border-[#dbe3ed] bg-[#f8fafc] p-2 text-left"
+      >
+        <div className="mb-2 flex items-baseline gap-1.5">
+          <span
+            className={`text-sm font-semibold tabular-nums ${
+              isFuture ? "text-[#94a3b8]" : "text-[#475569]"
+            }`}
+          >
+            {dayNumber(date)}
+          </span>
+          <span className="text-[11px] font-medium text-[#94a3b8]">
+            {weekdayLabel}
+          </span>
+        </div>
+        <span className="text-sm text-[#cbd5e1]" aria-hidden="true">
+          ···
+        </span>
+        <div className="mt-2 text-xs text-[#94a3b8]">
+          {isFuture ? "Chưa tới" : "Chưa có dữ liệu"}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SummaryTile: React.FC<{
   label: string;
   value: string;
@@ -342,28 +395,35 @@ const PendingExplanationItem: React.FC<{
     status: "APPROVED" | "REJECTED",
   ) => void;
 }> = ({ item, reviewingId, onReview }) => (
-  <div className="rounded-lg border border-[#e2e8f0] bg-white px-3 py-2">
+  <article className="flex min-h-[190px] flex-col bg-white p-4">
     <div className="flex items-start justify-between gap-3">
-      <div>
+      <div className="min-w-0">
         <div className="text-sm font-semibold text-[#0f172a]">
           {item.employee?.fullName ?? item.employeeId}
         </div>
-        <div className="text-xs text-[#64748b]">
+        <div className="mt-0.5 text-xs text-[#64748b]">
           {item.employee?.employeeCode ?? "-"} ·{" "}
           {formatShortDate(item.timesheetDay?.workDate)}
         </div>
       </div>
-      <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
-        {item.type}
+      <span className="shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
+        {explanationTypeLabel[item.type]}
       </span>
     </div>
-    <div className="mt-2 line-clamp-2 text-xs text-[#475569]">
+    {item.timesheetDay?.firstPunch || item.timesheetDay?.lastPunch ? (
+      <div className="mt-3 text-xs font-medium tabular-nums text-[#475569]">
+        {item.timesheetDay.firstPunch ?? "--:--"} –{" "}
+        {item.timesheetDay.lastPunch ?? "--:--"}
+      </div>
+    ) : null}
+    <div className="mt-2 line-clamp-3 text-sm leading-5 text-[#475569]">
       {item.reason}
     </div>
-    <div className="mt-3 grid grid-cols-2 gap-2">
+    <div className="mt-auto grid grid-cols-2 gap-2 pt-4">
       <button
         type="button"
-        className="inline-flex h-8 items-center justify-center gap-1 rounded-lg bg-[#1565C0] px-2 text-xs font-semibold text-white hover:bg-[#1976D2] disabled:cursor-not-allowed disabled:bg-[#94a3b8]"
+        aria-label={`Duyệt giải trình của ${item.employee?.fullName ?? item.employeeId}`}
+        className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#1565C0] px-3 text-xs font-semibold text-white outline-none hover:bg-[#1976D2] focus-visible:ring-2 focus-visible:ring-[#1565C0]/40 disabled:cursor-not-allowed disabled:bg-[#94a3b8]"
         disabled={reviewingId !== null}
         onClick={() => onReview(item, "APPROVED")}
       >
@@ -372,7 +432,8 @@ const PendingExplanationItem: React.FC<{
       </button>
       <button
         type="button"
-        className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-rose-200 bg-white px-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:text-[#94a3b8]"
+        aria-label={`Từ chối giải trình của ${item.employee?.fullName ?? item.employeeId}`}
+        className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 outline-none hover:bg-rose-50 focus-visible:ring-2 focus-visible:ring-rose-300 disabled:cursor-not-allowed disabled:text-[#94a3b8]"
         disabled={reviewingId !== null}
         onClick={() => onReview(item, "REJECTED")}
       >
@@ -380,7 +441,7 @@ const PendingExplanationItem: React.FC<{
         Từ chối
       </button>
     </div>
-  </div>
+  </article>
 );
 
 export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
@@ -485,7 +546,18 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
   const canAct =
     period?.status === "PENDING_EMPLOYEE" &&
     (!confirmation || confirmation.status === "PENDING");
-  const days = data?.days ?? [];
+  const days = React.useMemo(
+    () => data?.days ?? [],
+    [data?.days],
+  );
+  const calendarDates = React.useMemo(
+    () => datesInMonth(year, month),
+    [month, year],
+  );
+  const daysByDate = React.useMemo(
+    () => new Map(days.map((day) => [day.date, day])),
+    [days],
+  );
   // Mốc so sánh ngày tương lai. Tính một lần cho cả lưới để mọi ô dùng chung
   // một "hôm nay", tránh lệch nếu render vắt qua nửa đêm.
   const today = React.useMemo(() => todayIso(), []);
@@ -706,25 +778,28 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
             />
           </div>
 
-          {!period ? (
-            <div className="rounded-lg border border-[#d7dce3] bg-white px-4 py-10 text-center">
-              <Clock3
-                size={28}
-                className="mx-auto text-[#64748b]"
-                aria-hidden="true"
-              />
-              <p className="mt-3 font-medium text-[#334155]">
-                {data?.message ?? "Chưa có bảng công tháng này."}
-              </p>
-            </div>
-          ) : state.status === "loading" && !days.length ? (
+          {state.status === "idle" ||
+          (state.status === "loading" && data === null) ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-              {Array.from({ length: 28 }, (_, index) => (
-                <div key={index} className="skeleton h-[92px] rounded-lg" />
+              {calendarDates.map((date) => (
+                <div key={date} className="skeleton h-[92px] rounded-lg" />
               ))}
             </div>
           ) : (
             <>
+              {!period ? (
+                <div className="mb-4 flex items-center gap-3 rounded-lg border border-[#d7dce3] bg-white px-4 py-3 text-sm text-[#475569]">
+                  <Clock3
+                    size={18}
+                    className="shrink-0 text-[#64748b]"
+                    aria-hidden="true"
+                  />
+                  <p>
+                    {data?.message ??
+                      "Chưa có bảng công tháng này; lịch vẫn hiển thị đủ để bạn theo dõi."}
+                  </p>
+                </div>
+              ) : null}
               {/*
                 Hàng thứ chỉ có nghĩa khi ô thật sự nằm đúng cột của thứ đó,
                 nên chỉ hiện từ `lg` — đúng breakpoint mà lưới chuyển sang 7 cột.
@@ -747,23 +822,32 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-                {days.map((day, index) => (
-                  <ExplainableDayCell
-                    key={day.date}
-                    day={day}
-                    isFuture={day.date > today}
-                    onExplain={(item) => {
-                      setExplainingDay(item);
-                      setExplanationReason("");
-                    }}
-                    onShiftCodeSelect={setSelectedShiftCode}
-                    // Chỉ ngày đầu tháng cần đẩy vào đúng cột thứ của nó; các
-                    // ngày sau tự chảy tiếp. Chỉ áp dụng ở lưới 7 cột.
-                    {...(index === 0
-                      ? { firstColumn: gridColumnFor(day.date) }
-                      : {})}
-                  />
-                ))}
+                {calendarDates.map((date, index) => {
+                  const day = daysByDate.get(date);
+                  const firstColumn =
+                    index === 0 ? gridColumnFor(date) : undefined;
+
+                  return day ? (
+                    <ExplainableDayCell
+                      key={date}
+                      day={day}
+                      isFuture={date > today}
+                      onExplain={(item) => {
+                        setExplainingDay(item);
+                        setExplanationReason("");
+                      }}
+                      onShiftCodeSelect={setSelectedShiftCode}
+                      {...(firstColumn ? { firstColumn } : {})}
+                    />
+                  ) : (
+                    <EmptyDayCell
+                      key={date}
+                      date={date}
+                      isFuture={date > today}
+                      {...(firstColumn ? { firstColumn } : {})}
+                    />
+                  );
+                })}
               </div>
             </>
           )}
@@ -857,31 +941,6 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
             </div>
           </div>
 
-          {canReviewOnChat && pendingExplanations.length > 0 ? (
-            <div className="rounded-lg border border-[#d7dce3] bg-white p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-[#0f172a]">
-                  Chờ duyệt giải trình
-                </div>
-                <span className="text-xs font-medium text-[#64748b]">
-                  {pendingExplanations.length}
-                </span>
-              </div>
-              <div className="mt-3 space-y-2">
-                {pendingExplanations.slice(0, 5).map((item) => (
-                  <PendingExplanationItem
-                    key={item.id}
-                    item={item}
-                    reviewingId={reviewingExplanationId}
-                    onReview={(target, status) =>
-                      void handleReviewExplanation(target, status)
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-          ) : null}
-
           {explainingDay ? (
             <div className="rounded-lg border border-amber-200 bg-white p-4">
               <div className="text-sm font-semibold text-[#0f172a]">
@@ -926,6 +985,42 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
           ) : null}
         </aside>
       </section>
+
+      {canReviewOnChat && pendingExplanations.length > 0 ? (
+        <section
+          aria-labelledby="pending-explanations-title"
+          className="overflow-hidden rounded-xl border border-[#d7dce3] bg-white"
+        >
+          <div className="flex flex-col gap-2 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div>
+              <h2
+                id="pending-explanations-title"
+                className="text-base font-semibold text-[#0f172a]"
+              >
+                Chờ duyệt giải trình
+              </h2>
+              <p className="mt-1 text-sm text-[#64748b]">
+                Kiểm tra ngày công và lý do trước khi quyết định.
+              </p>
+            </div>
+            <span className="inline-flex w-fit items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+              {pendingExplanations.length} yêu cầu
+            </span>
+          </div>
+          <div className="grid gap-px border-t border-[#e2e8f0] bg-[#e2e8f0] md:grid-cols-2 xl:grid-cols-3">
+            {pendingExplanations.map((item) => (
+              <PendingExplanationItem
+                key={item.id}
+                item={item}
+                reviewingId={reviewingExplanationId}
+                onReview={(target, status) =>
+                  void handleReviewExplanation(target, status)
+                }
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
       {selectedShiftCode ? (
         <ShiftCatalogModal
           code={selectedShiftCode}
