@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Message, UserSummary } from "../../../types";
@@ -120,7 +120,26 @@ vi.mock("../../../features/chat/hooks/useGlobalSearch", () => ({
   useConversationSenders: () => [mocks.friend],
 }));
 
-describe("GlobalSearchOverlay result context", () => {
+describe("GlobalSearchOverlay", () => {
+  it("closes when Escape is pressed", () => {
+    const onClose = vi.fn();
+
+    render(
+      <GlobalSearchOverlay
+        currentUser={
+          { id: "me", username: "me", displayName: "Tôi" } as UserSummary
+        }
+        query=""
+        onQueryChange={vi.fn()}
+        onClose={onClose}
+      />,
+    );
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
   it("shows aliases and the conversation containing each result", () => {
     render(
       <GlobalSearchOverlay

@@ -13,6 +13,7 @@ import {
 } from "../features/chat/events/chatUiEvents";
 import { useReminderStore } from "../stores/reminderStore";
 import { useFriendshipStore } from "../stores/friendshipStore";
+import { useChatSidebarStore } from "../features/chat/state/chatSidebarStore";
 import { AuthenticatedRouteFallback } from "./AuthenticatedRouteFallback";
 
 /**
@@ -25,6 +26,11 @@ export const AuthenticatedLayout: React.FC = () => {
   const currentUser = useAuthStore((state) => state.user);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = React.useState(false);
   const checkReminder = useReminderStore((s) => s.checkReminder);
+
+  React.useEffect(() => {
+    const sidebarState = useChatSidebarStore.getState();
+    if (sidebarState.isSearchOpen) sidebarState.closeSearch();
+  }, [location.key]);
 
   // Bootstrap ALL friend aliases on page load so ChatHeader/RoomItem show the
   // "tên gợi nhớ" immediately. Large limit → the alias index (friendByUserId)
