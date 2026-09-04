@@ -2,11 +2,11 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { useWorkShiftCatalog } from "../../hooks/useWorkShiftCatalog";
+import { ShiftCatalogModal } from "./ShiftCodeReference";
 import {
   linkifyShiftCodesInHtml,
   renderShiftCodeText,
-  ShiftCatalogModal,
-} from "./ShiftCodeReference";
+} from "./shiftCodeReferenceUtils";
 import {
   sanitizeMessageHtml,
   shouldTreatMessageContentAsRichText,

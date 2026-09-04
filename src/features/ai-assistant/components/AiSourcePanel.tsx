@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState } from "react";
 import {
   XIcon,
   ExternalLinkIcon,
@@ -59,7 +59,7 @@ export const AiSourcePanel: React.FC = () => {
       )
     : sources;
 
-  const handleRefresh = useCallback(async () => {
+  const handleRefresh = async () => {
     if (!lastQuestion || !activeConversationId || isRefreshing) return;
 
     setIsRefreshing(true);
@@ -111,7 +111,7 @@ export const AiSourcePanel: React.FC = () => {
     } finally {
       setIsRefreshing(false);
     }
-  }, [lastQuestion, activeConversationId, isRefreshing, selectedEndpoint, user, lastAssistantWithSources]);
+  };
 
   if (sources.length === 0) return null;
 

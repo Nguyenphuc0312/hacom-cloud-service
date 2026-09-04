@@ -13,7 +13,8 @@ import remarkGfm from "remark-gfm";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { useTranslation } from "react-i18next";
 import { useWorkShiftCatalog } from "../../hooks/useWorkShiftCatalog";
-import { renderShiftCodeText, ShiftCatalogModal } from "./ShiftCodeReference";
+import { ShiftCatalogModal } from "./ShiftCodeReference";
+import { renderShiftCodeText } from "./shiftCodeReferenceUtils";
 
 const sanitizeSchema = {
   ...defaultSchema,
