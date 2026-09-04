@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import {
+  getCompactPreviewFromMessage,
   getPreviewFromMessage,
   hasRichFormatting,
   sanitizeMessageHtml,
@@ -10,7 +11,10 @@ describe("sanitizeMessageHtml", () => {
   it.each([
     ['<a href="javascript:alert(1)">x</a>', "javascript:"],
     ['<a href="JaVaScRiPt:alert(1)">x</a>', "javascript: viết hoa lẫn thường"],
-    ['<a href="  javascript:alert(1)">x</a>', "javascript: có khoảng trắng đầu"],
+    [
+      '<a href="  javascript:alert(1)">x</a>',
+      "javascript: có khoảng trắng đầu",
+    ],
     ['<a href="java\tscript:alert(1)">x</a>', "javascript: chèn tab"],
     ['<a href="data:text/html,<script>alert(1)</script>">x</a>', "data:"],
     ['<a href="vbscript:msgbox(1)">x</a>', "vbscript:"],
@@ -22,9 +26,9 @@ describe("sanitizeMessageHtml", () => {
   });
 
   it("giữ text hiển thị khi gỡ href độc", () => {
-    expect(sanitizeMessageHtml('<a href="javascript:alert(1)">Bấm vào đây</a>')).toContain(
-      "Bấm vào đây",
-    );
+    expect(
+      sanitizeMessageHtml('<a href="javascript:alert(1)">Bấm vào đây</a>'),
+    ).toContain("Bấm vào đây");
   });
 
   it.each([
@@ -142,5 +146,11 @@ describe("getPreviewFromMessage", () => {
         content: "<p><strong>QA-rich-bold-red</strong></p>",
       }),
     ).toBe("QA-rich-bold-red");
+  });
+
+  it("giới hạn payload dài trong preview kết quả tìm kiếm", () => {
+    expect(getCompactPreviewFromMessage({ content: "0123456789" }, 6)).toBe(
+      "01234…",
+    );
   });
 });

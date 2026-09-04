@@ -89,6 +89,22 @@ export const useMessageJumpTargetRTK = (
       const requestGeneration = generationRef.current;
       const isStale = () => generationRef.current !== requestGeneration;
 
+      // A newly opened conversation may still be loading its initial tail. That
+      // request uses replace semantics, so inserting an older search target
+      // before it settles lets the late response erase the target from cache.
+      // Await the existing bootstrap query; context pages can then merge safely.
+      const runningHistoryQuery = dispatch(
+        chatApi.util.getRunningQueryThunk("getMessages", {
+          conversationId: requestConversationId,
+        }),
+      );
+      if (runningHistoryQuery) {
+        await runningHistoryQuery;
+        if (isStale()) {
+          return { message: null, status: "stale", stale: true };
+        }
+      }
+
       const cachedMessage = findCachedMessage(
         reduxStore.getState(),
         requestConversationId,
