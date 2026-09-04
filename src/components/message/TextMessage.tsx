@@ -19,7 +19,8 @@ import {
   type WorkShiftCodeMatcher,
   useWorkShiftCatalog,
 } from "../../hooks/useWorkShiftCatalog";
-import { renderShiftCodeText, ShiftCatalogModal } from "./ShiftCodeReference";
+import { ShiftCatalogModal } from "./ShiftCodeReference";
+import { renderShiftCodeText } from "./shiftCodeReferenceUtils";
 
 // Lazy-load the markdown renderer so the entire react-markdown + unified
 // ecosystem is split into a separate async chunk (~100 kB).
