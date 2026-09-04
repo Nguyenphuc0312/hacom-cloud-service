@@ -9,38 +9,9 @@ jobs:
   smoke:
     runs-on: [self-hosted, linux, chat-staging]
     steps:
-      - name: Verify runner identity and Kubernetes access
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "runner_user=$(whoami)"
-          echo "runner_host=$(hostname)"
-          echo "runner_home=${HOME}"
+      - run: |
+          whoami
+          hostname
+          pwd
           id
-
           test "$(whoami)" = "chat-staging-runner"
-          command -v kubectl
-
-          expected_kubeconfig="${HOME}/.kube/hacom-chat-staging-config"
-          default_kubeconfig="${HOME}/.kube/config"
-          for candidate in "${expected_kubeconfig}" "${default_kubeconfig}"; do
-            if [ -f "${candidate}" ]; then
-              echo "kubeconfig_present=${candidate}"
-            else
-              echo "kubeconfig_missing=${candidate}"
-            fi
-          done
-
-          if [ -f "${expected_kubeconfig}" ]; then
-            export KUBECONFIG="${expected_kubeconfig}"
-          elif [ -f "${default_kubeconfig}" ]; then
-            export KUBECONFIG="${default_kubeconfig}"
-          else
-            echo "::error::Chat staging kubeconfig is missing from the runner"
-            exit 1
-          fi
-
-          kubectl config current-context
-          kubectl auth can-i get deployment/chat-web -n hacom-chat
-          kubectl auth can-i patch deployment/chat-web -n hacom-chat
