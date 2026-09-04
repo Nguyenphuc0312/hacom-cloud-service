@@ -1,0 +1,35 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { dmsApi } from "./dmsApi";
+
+const validToken = (): string => {
+  const payload = btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 120 }))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+  return `header.${payload}.signature`;
+};
+
+describe("DMS API trust boundary", () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    sessionStorage.setItem("hacom.dms.access-token", validToken());
+  });
+
+  it("sends only the resource bearer and server correlation ID for principal resolution", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      subjectId: "subject-1",
+      employeeId: "employee-1",
+      employeeCode: "HC0001",
+      organizationIds: ["org-1"],
+      capabilities: ["document.access"],
+      permissionVersion: 1,
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+
+    await expect(dmsApi.principal()).resolves.toMatchObject({ employeeCode: "HC0001" });
+    const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+    expect(headers.get("authorization")).toMatch(/^Bearer /);
+    expect(headers.get("x-request-id")).toBeTruthy();
+    expect(headers.has("x-organization-id")).toBe(false);
+    expect(headers.has("x-dms-persona")).toBe(false);
+  });
+});

@@ -1,0 +1,358 @@
+import React from "react";
+import { useTranslation } from "react-i18next";
+import {
+  ArrowDownTrayIcon,
+  ArrowPathIcon,
+  ArrowUpTrayIcon,
+  CheckCircleIcon,
+  ChevronRightIcon,
+  DocumentPlusIcon,
+  DocumentTextIcon,
+  EyeIcon,
+  MagnifyingGlassIcon,
+  PaperAirplaneIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
+import { Button, IconButton } from "../../components/ui/Button";
+import { EmptyState, ErrorState } from "../../components/ui/EmptyState";
+import { SkeletonText } from "../../components/ui/Skeleton";
+import { dmsApi, DmsApiError, type DmsDirection, type DmsDocument, type DmsPrincipal } from "./dmsApi";
+import { beginDmsAuthorization, completeDmsAuthorization, getDmsAccessToken } from "./dmsOAuth";
+import { DmsAdministration } from "./DmsAdministration";
+import { DmsReport } from "./DmsReport";
+
+type DirectionFilter = "ALL" | DmsDirection;
+type DetailTab = "summary" | "files" | "history" | "tasks";
+type ActionMode = "submit" | "approve" | "return" | "reject" | "register" | "issue" | "distribute" | "recall" | "archive";
+type WorkspaceView = "documents" | "configuration" | "reports";
+
+const formatDate = (value?: string | null): string => value
+  ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value))
+  : "—";
+
+const statusTone = (status: string): string => {
+  if (["APPROVED", "ISSUED", "COMPLETED", "ARCHIVED", "SIGNED"].includes(status)) return "bg-success/10 text-success";
+  if (["REJECTED", "FAILED"].includes(status)) return "bg-danger/10 text-danger";
+  if (["PENDING", "IN_PROGRESS", "RETURNED"].includes(status)) return "bg-warning/15 text-amber-700 dark:text-amber-300";
+  return "bg-surface-overlay text-text-secondary";
+};
+
+const StatusChip: React.FC<{ value: string }> = ({ value }) => (
+  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${statusTone(value)}`}>{value.replaceAll("_", " ")}</span>
+);
+
+export default function DocumentWorkspace(): React.ReactElement {
+  const { t } = useTranslation("dms");
+  const [authReady, setAuthReady] = React.useState(Boolean(getDmsAccessToken()));
+  const [authError, setAuthError] = React.useState(false);
+  const [principal, setPrincipal] = React.useState<DmsPrincipal | null>(null);
+  const [direction, setDirection] = React.useState<DirectionFilter>("ALL");
+  const [search, setSearch] = React.useState("");
+  const [documents, setDocuments] = React.useState<DmsDocument[]>([]);
+  const [total, setTotal] = React.useState(0);
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [selected, setSelected] = React.useState<DmsDocument | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = React.useState(0);
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const [detailTab, setDetailTab] = React.useState<DetailTab>("summary");
+  const [actionMode, setActionMode] = React.useState<ActionMode | null>(null);
+  const [view, setView] = React.useState<WorkspaceView>("documents");
+
+  React.useEffect(() => {
+    void completeDmsAuthorization()
+      .then((completed) => {
+        if (completed) setAuthReady(true);
+      })
+      .catch(() => setAuthError(true));
+  }, []);
+
+  React.useEffect(() => {
+    if (!authReady) return;
+    void dmsApi.principal()
+      .then(setPrincipal)
+      .catch((cause: unknown) => {
+        if (cause instanceof DmsApiError && cause.status === 401) setAuthReady(false);
+        else setError(t("errors.principal"));
+      });
+  }, [authReady, t]);
+
+  React.useEffect(() => {
+    if (!principal) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      setError(null);
+      void dmsApi.list({ direction: direction === "ALL" ? null : direction, search, pageSize: 50 })
+        .then((result) => {
+          if (controller.signal.aborted) return;
+          setDocuments(result.items);
+          setTotal(result.total);
+        })
+        .catch((cause: unknown) => {
+          if (!controller.signal.aborted) setError(errorMessage(cause, t));
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLoading(false);
+        });
+    }, 200);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [direction, principal, refreshKey, search, t]);
+
+  React.useEffect(() => {
+    if (!selectedId) return;
+    void dmsApi.detail(selectedId)
+      .then(setSelected)
+      .catch((cause: unknown) => setError(errorMessage(cause, t)));
+  }, [selectedId, refreshKey, t]);
+
+  const refresh = (): void => setRefreshKey((value) => value + 1);
+  const capabilities = new Set(principal?.capabilities ?? []);
+
+  if (!authReady) {
+    return (
+      <section className="w-full rounded-xl border border-border bg-surface p-5 shadow-sm" aria-labelledby="dms-title">
+        <div className="mx-auto max-w-xl py-5 text-center">
+          <DocumentTextIcon className="mx-auto h-11 w-11 text-primary" aria-hidden="true" />
+          <h2 id="dms-title" className="mt-3 text-xl font-bold text-text-primary">{t("title")}</h2>
+          <p className="mt-2 text-sm text-text-secondary">{authError ? t("errors.oauth") : t("connect.description")}</p>
+          <Button className="mt-4" onClick={() => void beginDmsAuthorization()}>{t("connect.action")}</Button>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="w-full overflow-hidden rounded-xl border border-border bg-surface shadow-sm" aria-labelledby="dms-title" data-testid="dms-workspace">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <DocumentTextIcon className="h-6 w-6 text-primary" aria-hidden="true" />
+            <h2 id="dms-title" className="text-xl font-bold text-text-primary">{t("title")}</h2>
+          </div>
+          <p className="mt-1 text-sm text-text-secondary">{t("subtitle", { employeeCode: principal?.employeeCode ?? "…" })}</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" size="sm" leftIcon={<ArrowPathIcon />} onClick={refresh}>{t("actions.refresh")}</Button>
+          {view === "documents" && capabilities.has("document.draft.manage") && (
+            <Button size="sm" leftIcon={<DocumentPlusIcon />} onClick={() => setCreateOpen(true)}>{t("actions.create")}</Button>
+          )}
+        </div>
+      </header>
+
+      <nav className="flex overflow-x-auto border-b border-border px-3 sm:px-5" aria-label={t("navigation.label")}>{(["documents", "configuration", "reports"] as const).filter((item) => item !== "reports" || capabilities.has("document.report.read")).map((item) => <button key={item} type="button" aria-current={view === item ? "page" : undefined} onClick={() => setView(item)} className={`min-h-11 shrink-0 border-b-2 px-3 text-sm font-semibold ${view === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>{t(`navigation.${item}`)}</button>)}</nav>
+
+      {view === "configuration" && principal ? <DmsAdministration principal={principal} /> : view === "reports" ? <DmsReport /> : <>
+
+      {createOpen && principal && (
+        <CreateDocumentPanel principal={principal} onClose={() => setCreateOpen(false)} onCreated={(id) => { setCreateOpen(false); setSelectedId(id); refresh(); }} />
+      )}
+
+      <div className="border-b border-border px-3 pt-2 sm:px-5">
+        <div className="flex overflow-x-auto" role="tablist" aria-label={t("filters.direction")}> 
+          {(["ALL", "INCOMING", "OUTGOING", "INTERNAL"] as const).map((item) => (
+            <button key={item} type="button" role="tab" aria-selected={direction === item} onClick={() => setDirection(item)} className={`min-h-10 shrink-0 border-b-2 px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-focus ${direction === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>
+              {t(`directions.${item}`)}
+            </button>
+          ))}
+        </div>
+        <label className="relative my-3 block max-w-xl">
+          <span className="sr-only">{t("filters.search")}</span>
+          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-text-muted" aria-hidden="true" />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} className="min-h-10 w-full rounded-lg border border-border bg-background pl-10 pr-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-border-focus focus:ring-2 focus:ring-focus/20" placeholder={t("filters.searchPlaceholder")} />
+        </label>
+      </div>
+
+      {error ? (
+        <ErrorState title={t("errors.listTitle")} message={error} onRetry={refresh} />
+      ) : (
+        <div className="grid min-h-[420px] lg:grid-cols-[minmax(320px,42%)_minmax(0,1fr)]">
+          <div className="border-b border-border lg:border-b-0 lg:border-r">
+            <div className="flex min-h-10 items-center justify-between border-b border-border px-4 text-sm">
+              <span className="font-semibold text-text-primary">{t("list.title")}</span>
+              <span className="text-text-muted" aria-live="polite">{t("list.total", { count: total })}</span>
+            </div>
+            <div className="max-h-[620px] overflow-y-auto">
+              {loading ? <div className="p-4"><SkeletonText lines={5} /></div> : documents.length === 0 ? (
+                <EmptyState title={t("list.empty")} description={t("list.emptyDescription")} />
+              ) : documents.map((document) => (
+                <button key={document.id} type="button" onClick={() => { setSelectedId(document.id); setDetailTab("summary"); setActionMode(null); }} className={`grid w-full grid-cols-[1fr_auto] gap-3 border-b border-border px-4 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus ${selectedId === document.id ? "bg-primary/8" : "hover:bg-surface-hover"}`}>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-text-primary">{document.subject}</span>
+                    <span className="mt-1 block truncate text-xs text-text-secondary">{document.document_number ?? t("list.noNumber")} · {t(`directions.${document.direction}`)}</span>
+                    <span className="mt-1 block text-xs text-text-muted">{formatDate(document.updated_at)}</span>
+                  </span>
+                  <span className="flex items-center gap-2"><StatusChip value={document.lifecycle_state} /><ChevronRightIcon className="h-4 w-4 text-text-muted" /></span>
+                </button>
+              ))}
+            </div>
+          </div>
+          {selected ? (
+            <DocumentDetail document={selected} capabilities={capabilities} tab={detailTab} onTab={setDetailTab} actionMode={actionMode} onAction={setActionMode} onRefresh={refresh} />
+          ) : (
+            <EmptyState icon={<DocumentTextIcon className="h-full w-full" />} title={t("detail.selectTitle")} description={t("detail.selectDescription")} />
+          )}
+        </div>
+      )}
+      </>}
+    </section>
+  );
+}
+
+const CreateDocumentPanel: React.FC<{ principal: DmsPrincipal; onClose: () => void; onCreated: (id: string) => void }> = ({ principal, onClose, onCreated }) => {
+  const { t } = useTranslation("dms");
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const submit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await dmsApi.create({
+        organizationId: String(data.get("organizationId")),
+        direction: String(data.get("direction")),
+        subject: String(data.get("subject")),
+        documentType: String(data.get("documentType")),
+        confidentiality: String(data.get("confidentiality")),
+        documentDate: String(data.get("documentDate")) || null,
+        dueDate: String(data.get("dueDate")) || null,
+        signingRequired: data.get("signingRequired") === "on",
+      });
+      onCreated(result.id);
+    } catch (cause) {
+      setError(errorMessage(cause, t));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form onSubmit={(event) => void submit(event)} className="border-b border-border bg-background p-4" aria-label={t("create.title")}> 
+      <div className="mb-3 flex items-center justify-between"><h3 className="font-bold text-text-primary">{t("create.title")}</h3><IconButton icon={<XMarkIcon />} aria-label={t("actions.close")} size="sm" onClick={onClose} /></div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Field label={t("fields.organization")}><select name="organizationId" required>{principal.organizationIds.map((id) => <option key={id} value={id}>{id}</option>)}</select></Field>
+        <Field label={t("fields.direction")}><select name="direction" required><option value="INCOMING">{t("directions.INCOMING")}</option><option value="OUTGOING">{t("directions.OUTGOING")}</option><option value="INTERNAL">{t("directions.INTERNAL")}</option></select></Field>
+        <Field label={t("fields.documentType")}><input name="documentType" required maxLength={120} /></Field>
+        <Field label={t("fields.confidentiality")}><select name="confidentiality"><option value="NORMAL">{t("confidentiality.NORMAL")}</option><option value="CONFIDENTIAL">{t("confidentiality.CONFIDENTIAL")}</option><option value="SECRET">{t("confidentiality.SECRET")}</option></select></Field>
+        <Field label={t("fields.subject")} className="sm:col-span-2"><input name="subject" required maxLength={500} /></Field>
+        <Field label={t("fields.documentDate")}><input name="documentDate" type="date" /></Field>
+        <Field label={t("fields.dueDate")}><input name="dueDate" type="date" /></Field>
+      </div>
+      <label className="mt-3 flex items-center gap-2 text-sm text-text-secondary"><input name="signingRequired" type="checkbox" />{t("fields.signingRequired")}</label>
+      {error && <p className="mt-2 text-sm text-danger" role="alert">{error}</p>}
+      <div className="mt-3 flex justify-end gap-2"><Button type="button" variant="secondary" onClick={onClose}>{t("actions.cancel")}</Button><Button type="submit" isLoading={busy}>{t("actions.saveDraft")}</Button></div>
+    </form>
+  );
+};
+
+const Field: React.FC<{ label: string; children: React.ReactElement<{ className?: string }>; className?: string }> = ({ label, children, className }) => (
+  <label className={`grid gap-1 text-xs font-semibold text-text-secondary ${className ?? ""}`}>{label}{React.cloneElement(children, { className: "min-h-10 w-full rounded-md border border-border bg-surface px-3 text-sm font-normal text-text-primary outline-none focus:border-border-focus focus:ring-2 focus:ring-focus/20" })}</label>
+);
+
+const DocumentDetail: React.FC<{ document: DmsDocument; capabilities: Set<string>; tab: DetailTab; onTab: (tab: DetailTab) => void; actionMode: ActionMode | null; onAction: (mode: ActionMode | null) => void; onRefresh: () => void }> = ({ document, capabilities, tab, onTab, actionMode, onAction, onRefresh }) => {
+  const { t } = useTranslation("dms");
+  const available = actionsFor(document, capabilities);
+  return (
+    <article className="min-w-0">
+      <header className="border-b border-border px-4 py-3">
+        <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-primary">{t(`directions.${document.direction}`)}</p><h3 className="mt-1 text-lg font-bold text-text-primary">{document.subject}</h3><p className="mt-1 text-sm text-text-secondary">{document.document_number ?? t("list.noNumber")}</p></div><StatusChip value={document.lifecycle_state} /></div>
+        {available.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{available.map((action) => <Button key={action} size="xs" variant={action === "reject" ? "danger" : "secondary"} onClick={() => onAction(action)}>{t(`actions.${action}`)}</Button>)}</div>}
+      </header>
+      {actionMode && <ActionPanel document={document} mode={actionMode} onClose={() => onAction(null)} onDone={() => { onAction(null); onRefresh(); }} />}
+      <div className="flex overflow-x-auto border-b border-border" role="tablist">{(["summary", "files", "history", "tasks"] as const).map((item) => <button key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => onTab(item)} className={`min-h-10 border-b-2 px-4 text-sm font-semibold ${tab === item ? "border-primary text-primary" : "border-transparent text-text-secondary"}`}>{t(`detail.tabs.${item}`)}</button>)}</div>
+      <div className="max-h-[470px] overflow-y-auto p-4">
+        {tab === "summary" && <dl className="grid gap-3 sm:grid-cols-2"><Datum label={t("fields.organization")} value={document.organization_id} /><Datum label={t("fields.documentType")} value={document.document_type} /><Datum label={t("fields.confidentiality")} value={t(`confidentiality.${document.confidentiality}`)} /><Datum label={t("fields.documentDate")} value={formatDate(document.document_date)} /><Datum label={t("fields.dueDate")} value={formatDate(document.due_date)} /><Datum label={t("fields.approval")} value={document.approval_state} /><Datum label={t("fields.distribution")} value={document.distribution_state} /><Datum label={t("fields.signing")} value={document.signing_state} /></dl>}
+        {tab === "files" && <Files document={document} canUpload={capabilities.has("document.draft.manage") && document.lifecycle_state === "DRAFT"} canPreview={capabilities.has("document.file.read")} canDownload={capabilities.has("document.file.download")} onRefresh={onRefresh} />}
+        {tab === "history" && <div className="space-y-3">{document.history?.map((event) => <div key={event.id} className="rounded-lg border border-border p-3"><div className="flex justify-between gap-3"><span className="font-semibold text-text-primary">{event.action.replaceAll("_", " ")}</span><span className="text-xs text-text-muted">{formatDate(event.occurred_at)}</span></div><p className="mt-1 text-xs text-text-secondary">{event.result}{event.reason_code ? ` · ${event.reason_code}` : ""}</p></div>) ?? null}</div>}
+        {tab === "tasks" && <Tasks document={document} canProcess={capabilities.has("document.process")} onRefresh={onRefresh} />}
+      </div>
+    </article>
+  );
+};
+
+const Datum: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => <div className="rounded-lg bg-background p-3"><dt className="text-xs font-semibold text-text-muted">{label}</dt><dd className="mt-1 break-words text-sm font-medium text-text-primary">{value}</dd></div>;
+
+const Files: React.FC<{ document: DmsDocument; canUpload: boolean; canPreview: boolean; canDownload: boolean; onRefresh: () => void }> = ({ document, canUpload, canPreview, canDownload, onRefresh }) => {
+  const { t } = useTranslation("dms");
+  const [busy, setBusy] = React.useState(false);
+  const open = async (fileId: string, download: boolean): Promise<void> => {
+    setBusy(true);
+    try {
+      const blob = await dmsApi.file(document.id, fileId, download);
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement("a");
+      anchor.href = url;
+      if (download) anchor.download = "";
+      else anchor.target = "_blank";
+      anchor.rel = "noopener";
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } finally { setBusy(false); }
+  };
+  const upload = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    try { await dmsApi.upload(document.id, file); onRefresh(); } finally { setBusy(false); event.target.value = ""; }
+  };
+  return <div className="space-y-3">{canUpload && <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-primary/40 px-3 text-sm font-semibold text-primary"><ArrowUpTrayIcon className="h-4 w-4" />{t("files.upload")}<input className="sr-only" type="file" accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={busy} onChange={(event) => void upload(event)} /></label>}{document.files?.map((file) => <div key={file.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"><div className="min-w-0"><p className="truncate text-sm font-semibold text-text-primary">{file.filename}</p><p className="text-xs text-text-muted">{Math.ceil(file.content_length / 1024)} KB · {file.integrity_state}</p></div><div className="flex gap-1">{canPreview && <IconButton icon={<EyeIcon />} aria-label={t("files.preview")} size="sm" disabled={busy} onClick={() => void open(file.id, false)} />}{canDownload && <IconButton icon={<ArrowDownTrayIcon />} aria-label={t("files.download")} size="sm" disabled={busy} onClick={() => void open(file.id, true)} />}</div></div>)}</div>;
+};
+
+const Tasks: React.FC<{ document: DmsDocument; canProcess: boolean; onRefresh: () => void }> = ({ document, canProcess, onRefresh }) => {
+  const { t } = useTranslation("dms");
+  const run = async (id: string, action: "start" | "complete", revision: number): Promise<void> => { await dmsApi.task(id, action, revision); onRefresh(); };
+  return <div className="space-y-3">{document.tasks?.map((task) => <div key={task.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"><div><p className="text-sm font-semibold text-text-primary">{t(`tasks.roles.${task.role}`)}</p><p className="text-xs text-text-muted">{task.state.replaceAll("_", " ")} · {formatDate(task.due_at)}</p></div>{canProcess && task.state === "ASSIGNED" && <Button size="xs" onClick={() => void run(task.id, "start", task.revision)}>{t("actions.start")}</Button>}{canProcess && task.state === "IN_PROGRESS" && <Button size="xs" leftIcon={<CheckCircleIcon />} onClick={() => void run(task.id, "complete", task.revision)}>{t("actions.complete")}</Button>}</div>)}</div>;
+};
+
+const ActionPanel: React.FC<{ document: DmsDocument; mode: ActionMode; onClose: () => void; onDone: () => void }> = ({ document, mode, onClose, onDone }) => {
+  const { t } = useTranslation("dms");
+  const [workflows, setWorkflows] = React.useState<Array<Record<string, unknown>>>([]);
+  const [books, setBooks] = React.useState<Array<Record<string, unknown>>>([]);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (mode === "submit") void dmsApi.workflows(document.organization_id).then((items) => setWorkflows(items as Array<Record<string, unknown>>));
+    if (mode === "issue" || mode === "register") void dmsApi.books(document.organization_id, document.direction).then((items) => setBooks(items as Array<Record<string, unknown>>));
+  }, [document.direction, document.organization_id, mode]);
+  const submit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    let body: Record<string, unknown> = {};
+    if (mode === "submit") body = { workflowVersionId: String(data.get("workflowVersionId")) };
+    if (["return", "reject", "recall"].includes(mode)) body = { reason: String(data.get("reason")) };
+    if (["register", "issue"].includes(mode)) body = { bookId: String(data.get("bookId")) };
+    if (mode === "distribute") {
+      const recipient = String(data.get("recipientSubjectId") ?? "").trim();
+      const processor = String(data.get("processorSubjectId") ?? "").trim();
+      body = { recipients: recipient ? [{ subjectId: recipient, deliveryMethod: "INTERNAL" }] : [{ organizationId: document.organization_id, deliveryMethod: "INTERNAL" }], tasks: processor ? [{ subjectId: processor, role: "PRIMARY", dueAt: String(data.get("dueAt")) || null }] : [] };
+    }
+    setBusy(true); setError(null);
+    try { await dmsApi.action(document.id, mode, body); onDone(); } catch (cause) { setError(errorMessage(cause, t)); } finally { setBusy(false); }
+  };
+  return <form onSubmit={(event) => void submit(event)} className="border-b border-border bg-primary/5 p-4"><div className="mb-3 flex justify-between"><h4 className="font-bold text-text-primary">{t(`actionPanel.${mode}`)}</h4><IconButton icon={<XMarkIcon />} aria-label={t("actions.close")} size="sm" onClick={onClose} /></div><div className="grid gap-3 sm:grid-cols-2">{mode === "submit" && <Field label={t("fields.workflow")}><select name="workflowVersionId" required>{workflows.map((item) => <option key={String(item.version_id)} value={String(item.version_id)}>{String(item.name)} · v{String(item.version)}</option>)}</select></Field>}{["return", "reject", "recall"].includes(mode) && <Field label={t("fields.reason")} className="sm:col-span-2"><textarea name="reason" required={mode !== "recall"} rows={3} /></Field>}{["register", "issue"].includes(mode) && <Field label={t("fields.book")}><select name="bookId" required>{books.map((item) => <option key={String(item.id)} value={String(item.id)}>{String(item.name)}</option>)}</select></Field>}{mode === "distribute" && <><Field label={t("fields.recipientSubject")}><input name="recipientSubjectId" /></Field><Field label={t("fields.processorSubject")}><input name="processorSubjectId" /></Field><Field label={t("fields.dueDate")}><input name="dueAt" type="datetime-local" /></Field></>}</div>{error && <p className="mt-2 text-sm text-danger" role="alert">{error}</p>}<div className="mt-3 flex justify-end gap-2"><Button type="button" variant="secondary" onClick={onClose}>{t("actions.cancel")}</Button><Button type="submit" isLoading={busy} leftIcon={<PaperAirplaneIcon />}>{t("actions.confirm")}</Button></div></form>;
+};
+
+const actionsFor = (document: DmsDocument, capabilities: Set<string>): ActionMode[] => {
+  const actions: ActionMode[] = [];
+  if (document.lifecycle_state === "DRAFT" && capabilities.has("document.workflow.submit") && ["NOT_REQUIRED", "RETURNED", "REJECTED"].includes(document.approval_state)) actions.push("submit");
+  if (document.approval_state === "PENDING" && capabilities.has("document.workflow.approve")) actions.push("approve", "return", "reject");
+  if (document.lifecycle_state === "DRAFT" && document.direction === "INCOMING" && capabilities.has("document.issue")) actions.push("register");
+  if (document.lifecycle_state === "DRAFT" && document.direction !== "INCOMING" && capabilities.has("document.issue") && ["APPROVED", "NOT_REQUIRED"].includes(document.approval_state)) actions.push("issue");
+  if (["ISSUED", "REGISTERED"].includes(document.lifecycle_state) && capabilities.has("document.distribute")) actions.push("distribute");
+  if (document.distribution_state === "DISTRIBUTED" && capabilities.has("document.distribute")) actions.push("recall");
+  if (["ISSUED", "COMPLETED"].includes(document.lifecycle_state) && capabilities.has("document.archive")) actions.push("archive");
+  return actions;
+};
+
+const errorMessage = (cause: unknown, t: (key: string) => string): string => {
+  if (!(cause instanceof DmsApiError)) return t("errors.unavailable");
+  if (cause.status === 403) return t("errors.forbidden");
+  if (cause.status === 404) return t("errors.notFound");
+  if (cause.status === 409) return t("errors.conflict");
+  if (cause.status === 422) return t("errors.invalid");
+  return t("errors.unavailable");
+};

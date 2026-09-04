@@ -1,0 +1,122 @@
+{
+  "title": "Quản lý văn bản",
+  "subtitle": "Nghiệp vụ văn bản theo quyền của {{employeeCode}}",
+  "connect": {
+    "description": "Kết nối phiên Hacom SSO để truy cập dữ liệu văn bản đúng phạm vi của bạn.",
+    "action": "Kết nối quản lý văn bản"
+  },
+  "navigation": { "label": "Khu vực quản lý văn bản", "documents": "Văn bản", "configuration": "Cấu hình", "reports": "Báo cáo" },
+  "directions": {
+    "ALL": "Tất cả",
+    "INCOMING": "Văn bản đến",
+    "OUTGOING": "Văn bản đi",
+    "INTERNAL": "Văn bản nội bộ"
+  },
+  "confidentiality": {
+    "NORMAL": "Thông thường",
+    "CONFIDENTIAL": "Mật",
+    "SECRET": "Tối mật"
+  },
+  "filters": {
+    "direction": "Loại văn bản",
+    "search": "Tìm văn bản",
+    "searchPlaceholder": "Tìm theo trích yếu hoặc số văn bản"
+  },
+  "list": {
+    "title": "Danh sách văn bản",
+    "total": "{{count}} văn bản",
+    "empty": "Chưa có văn bản phù hợp",
+    "emptyDescription": "Thử đổi bộ lọc hoặc tạo hồ sơ mới nếu bạn có quyền.",
+    "noNumber": "Chưa cấp số"
+  },
+  "detail": {
+    "selectTitle": "Chọn một văn bản",
+    "selectDescription": "Thông tin, tệp, lịch sử và công việc sẽ hiển thị tại đây.",
+    "tabs": {
+      "summary": "Thông tin",
+      "files": "Tệp",
+      "history": "Lịch sử",
+      "tasks": "Xử lý"
+    }
+  },
+  "create": { "title": "Tạo hồ sơ văn bản" },
+  "fields": {
+    "organization": "Đơn vị",
+    "direction": "Loại văn bản",
+    "documentType": "Loại hồ sơ",
+    "confidentiality": "Độ mật",
+    "subject": "Trích yếu",
+    "documentDate": "Ngày văn bản",
+    "dueDate": "Hạn xử lý",
+    "signingRequired": "Yêu cầu ký số khi phát hành",
+    "approval": "Phê duyệt",
+    "distribution": "Phân phối",
+    "signing": "Ký số",
+    "workflow": "Luồng phê duyệt",
+    "reason": "Lý do",
+    "book": "Sổ văn bản",
+    "recipientSubject": "Mã người nhận (không bắt buộc)",
+    "processorSubject": "Mã người xử lý chính (không bắt buộc)"
+  },
+  "actions": {
+    "refresh": "Làm mới",
+    "create": "Tạo văn bản",
+    "close": "Đóng",
+    "cancel": "Hủy",
+    "saveDraft": "Lưu bản nháp",
+    "confirm": "Xác nhận",
+    "submit": "Trình duyệt",
+    "approve": "Phê duyệt",
+    "return": "Trả lại",
+    "reject": "Từ chối",
+    "register": "Đăng ký văn bản đến",
+    "issue": "Phát hành",
+    "distribute": "Phân phối",
+    "recall": "Thu hồi phân phối",
+    "archive": "Lưu trữ",
+    "start": "Bắt đầu",
+    "complete": "Hoàn thành"
+  },
+  "actionPanel": {
+    "submit": "Trình văn bản vào luồng phê duyệt",
+    "approve": "Xác nhận phê duyệt văn bản",
+    "return": "Trả văn bản để chỉnh sửa",
+    "reject": "Từ chối văn bản",
+    "register": "Cấp số văn bản đến",
+    "issue": "Cấp số và phát hành văn bản",
+    "distribute": "Phân phối và giao xử lý",
+    "recall": "Thu hồi phân phối trước khi bắt đầu xử lý",
+    "archive": "Đưa văn bản vào lưu trữ"
+  },
+  "files": {
+    "upload": "Tải tệp lên",
+    "preview": "Xem tệp",
+    "download": "Tải tệp"
+  },
+  "tasks": { "roles": { "PRIMARY": "Xử lý chính", "COORDINATOR": "Phối hợp xử lý" } },
+  "admin": {
+    "title": "Cấu hình nghiệp vụ",
+    "description": "Phiên bản hóa mẫu, luồng duyệt, sổ số và danh mục theo đơn vị.",
+    "tabs": { "templates": "Mẫu văn bản", "workflows": "Luồng duyệt", "books": "Sổ văn bản", "catalogs": "Danh mục" },
+    "loading": "Đang tải cấu hình…",
+    "count": "{{count}} cấu hình",
+    "empty": "Chưa có cấu hình đang hoạt động.",
+    "unnamed": "Cấu hình chưa đặt tên",
+    "readOnly": "Bạn được xem cấu hình nhưng không có quyền thay đổi khu vực này.",
+    "invalid": "Không lưu được cấu hình. Kiểm tra dữ liệu, quyền và mã không trùng.",
+    "save": "Lưu phiên bản",
+    "create": { "templates": "Tạo phiên bản mẫu", "workflows": "Tạo phiên bản luồng", "books": "Tạo sổ văn bản", "catalogs": "Cập nhật danh mục" },
+    "fields": { "code": "Mã", "name": "Tên", "content": "Nội dung JSON", "activate": "Kích hoạt ngay", "actors": "Mã người duyệt theo thứ tự", "actorsHint": "Mỗi mã cách nhau bằng dấu phẩy", "prefix": "Tiền tố", "suffix": "Hậu tố", "catalogType": "Loại danh mục", "displayOrder": "Thứ tự", "status": "Trạng thái" }
+  },
+  "report": { "title": "Báo cáo tổng hợp", "description": "Số lượng văn bản theo loại và trạng thái trong phạm vi được cấp.", "from": "Từ ngày", "to": "Đến ngày", "run": "Xem báo cáo", "total": "Tổng văn bản", "state": "Trạng thái", "count": "Số lượng", "errorTitle": "Không thể tải báo cáo" },
+  "errors": {
+    "oauth": "Không hoàn tất được phiên SSO DMS. Vui lòng kết nối lại.",
+    "principal": "Không xác định được phạm vi và quyền DMS hiện tại.",
+    "listTitle": "Không tải được dữ liệu văn bản",
+    "unavailable": "Dịch vụ quản lý văn bản tạm thời không khả dụng.",
+    "forbidden": "Bạn không có quyền thực hiện thao tác này.",
+    "notFound": "Văn bản không tồn tại hoặc nằm ngoài phạm vi của bạn.",
+    "conflict": "Dữ liệu đã thay đổi. Hãy làm mới rồi thử lại.",
+    "invalid": "Dữ liệu chưa hợp lệ. Hãy kiểm tra các trường bắt buộc."
+  }
+}
