@@ -5,17 +5,20 @@ import { extractApiError, unwrapApiSuccess } from "../../../lib/apiContract";
 import { UserStatus } from "../../../types";
 import { searchUsersUseCase } from "../usecases/searchUsers";
 import { ExpiringLruCache } from "../../../utils/expiringLruCache";
-import { useFriendshipStore, type FriendRecord } from "../../../stores/friendshipStore";
+import {
+  useFriendshipStore,
+  type FriendRecord,
+} from "../../../stores/friendshipStore";
 import { resolveUserDisplayName } from "../identity/resolveUserDisplayName";
 import { USERS_SEARCH_PAGE_SIZE } from "../../../services/api";
 import { asStringValue as asString } from "../../../utils/payloadGuards";
 import { logger } from "../../../utils/logger";
+import { matchesContactQuery } from "../../../utils/contactSearchMatch";
 
 type UnknownRecord = Record<string, unknown>;
 
 const isRecord = (value: unknown): value is UnknownRecord =>
   value !== null && typeof value === "object";
-
 
 const asBoolean = (value: unknown): boolean | undefined =>
   typeof value === "boolean" ? value : undefined;
@@ -36,12 +39,7 @@ export interface ChatSearchUser {
   isFriend: boolean;
   canAddFriend: boolean;
   friendshipStatus:
-    | "none"
-    | "pending"
-    | "accepted"
-    | "declined"
-    | "canceled"
-    | "blocked";
+    "none" | "pending" | "accepted" | "declined" | "canceled" | "blocked";
 }
 
 /** Bóc mảng user khỏi response tìm kiếm (nhiều tầng envelope tuỳ endpoint).
@@ -123,22 +121,17 @@ export const normalizeSearchUser = (value: unknown): ChatSearchUser | null => {
       asString(value.employeeId) ??
       null,
     departmentName:
-      asString(value.departmentName) ??
-      asString(value.department_name) ??
-      null,
-    unitCode:
-      asString(value.unitCode) ??
-      asString(value.unit_code) ??
-      null,
-    title:
-      asString(value.title) ??
-      null,
+      asString(value.departmentName) ?? asString(value.department_name) ?? null,
+    unitCode: asString(value.unitCode) ?? asString(value.unit_code) ?? null,
+    title: asString(value.title) ?? null,
+    alias: asString(value.alias) ?? null,
     isFriend:
       asBoolean(value.isFriend) ??
       asBoolean(value.is_friend) ??
       friendshipStatus === "accepted",
     canAddFriend: acceptedOrPending ? false : rawCanAddFriend,
-    friendshipStatus: (friendshipStatus as ChatSearchUser["friendshipStatus"]) ?? "none",
+    friendshipStatus:
+      (friendshipStatus as ChatSearchUser["friendshipStatus"]) ?? "none",
   };
 };
 
@@ -234,10 +227,14 @@ export const useChatUserSearch = (
   options?: UseChatUserSearchOptions,
 ) => {
   const minQueryLength = options?.minQueryLength ?? 2;
-  const limit = Math.min(options?.limit ?? USERS_SEARCH_PAGE_SIZE, USERS_SEARCH_PAGE_SIZE);
+  const limit = Math.min(
+    options?.limit ?? USERS_SEARCH_PAGE_SIZE,
+    USERS_SEARCH_PAGE_SIZE,
+  );
   const enabled = options?.enabled ?? true;
   const includeSelf = options?.includeSelf ?? false;
-  const excludedUserIdsList = options?.excludeUserIds ?? EMPTY_EXCLUDED_USER_IDS;
+  const excludedUserIdsList =
+    options?.excludeUserIds ?? EMPTY_EXCLUDED_USER_IDS;
   const excludedUserIdsKey = JSON.stringify(excludedUserIdsList);
   const excludedUserIds = useMemo(
     () => new Set<string>(JSON.parse(excludedUserIdsKey) as string[]),
@@ -331,7 +328,14 @@ export const useChatUserSearch = (
       cancelled = true;
       abortController.abort();
     };
-  }, [debouncedQuery, enabled, excludedUserIds, includeSelf, limit, minQueryLength]);
+  }, [
+    debouncedQuery,
+    enabled,
+    excludedUserIds,
+    includeSelf,
+    limit,
+    minQueryLength,
+  ]);
 
   return {
     results,
@@ -343,9 +347,6 @@ export const useChatUserSearch = (
 };
 
 // --- Friend suggestions (reads directly from store, no API call needed) ---
-
-const removeDiacritics = (s: string): string =>
-  s.normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 const friendRecordToSearchUser = (friend: FriendRecord): ChatSearchUser => ({
   id: friend.id,
@@ -364,18 +365,20 @@ const friendRecordToSearchUser = (friend: FriendRecord): ChatSearchUser => ({
   friendshipStatus: "accepted",
 });
 
-const matchesFriendQuery = (user: ChatSearchUser, query: string): boolean => {
-  const q = removeDiacritics(query.toLowerCase().trim());
-  if (!q) return true;
-  const check = (s: string | null | undefined) =>
-    Boolean(s && removeDiacritics(s.toLowerCase()).includes(q));
-  return (
-    check(user.displayName) ||
-    check(user.username) ||
-    check(user.employeeCode) ||
-    check(user.departmentName)
-  );
-};
+export const matchesFriendQuery = (
+  user: ChatSearchUser,
+  query: string,
+): boolean =>
+  matchesContactQuery(query, [
+    user.alias,
+    user.displayName,
+    user.fullName,
+    user.username,
+    user.employeeCode,
+    user.departmentName,
+    user.unitCode,
+    user.title,
+  ]);
 
 interface UseFriendSuggestionsOptions {
   query?: string;
