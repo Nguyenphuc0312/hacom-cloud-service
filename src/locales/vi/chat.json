@@ -117,7 +117,6 @@
     "title": "Tra cứu ca làm việc",
     "description": "Thông tin ca dùng chung từ hệ thống nhân sự.",
     "selectedDescription": "{{code}} · {{name}}",
-    "open": "Xem thông tin ca {{code}}",
     "searchLabel": "Tìm ca làm việc",
     "searchPlaceholder": "Tìm theo mã, tên ca hoặc nhóm",
     "workingTime": "Giờ làm việc",
