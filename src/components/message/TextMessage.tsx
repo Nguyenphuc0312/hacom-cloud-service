@@ -15,12 +15,6 @@ import { enrichUserProfile } from "../../services/enrichUserProfile";
 import { dispatchMentionProfileView } from "../../features/chat/events/chatUiEvents";
 import { buildMentionSegments } from "../../utils/mentionSegments";
 import { useResolvedDisplayName } from "../../stores/useResolvedDisplayName";
-import {
-  type WorkShiftCodeMatcher,
-  useWorkShiftCatalog,
-} from "../../hooks/useWorkShiftCatalog";
-import { ShiftCatalogModal } from "./ShiftCodeReference";
-import { renderShiftCodeText } from "./shiftCodeReferenceUtils";
 
 // Lazy-load the markdown renderer so the entire react-markdown + unified
 // ecosystem is split into a separate async chunk (~100 kB).
@@ -165,35 +159,14 @@ const renderWithMentions = (
     currentUserId?: string;
     mentions?: Mention[];
     currentUsername?: string;
-    isOwn: boolean;
-    onShiftCodeSelect: (code: string) => void;
-    shiftCodeLabel: (code: string) => string;
-    shiftCodeMatcher: WorkShiftCodeMatcher;
   },
 ): React.ReactNode[] => {
-  const {
-    currentUserId,
-    mentions,
-    currentUsername,
-    isOwn,
-    onShiftCodeSelect,
-    shiftCodeLabel,
-    shiftCodeMatcher,
-  } = options;
-  const renderPlain = (value: string, key: string) =>
-    renderShiftCodeText(
-      value,
-      isOwn,
-      onShiftCodeSelect,
-      shiftCodeLabel,
-      shiftCodeMatcher,
-      key,
-    );
+  const { currentUserId, mentions, currentUsername } = options;
 
   // No metadata at all: style bare `@token`s so legacy messages still look like
   // mentions, but they stay inert.
   if (!mentions || mentions.length === 0) {
-    if (!currentUsername) return renderPlain(text, "plain");
+    if (!currentUsername) return [text];
     const out: React.ReactNode[] = [];
     let lastIndex = 0;
     let match: RegExpExecArray | null;
@@ -201,9 +174,7 @@ const renderWithMentions = (
     FALLBACK_MENTION_REGEX.lastIndex = 0;
     while ((match = FALLBACK_MENTION_REGEX.exec(text)) !== null) {
       if (match.index > lastIndex) {
-        out.push(
-          ...renderPlain(text.slice(lastIndex, match.index), `t-${key++}`),
-        );
+        out.push(text.slice(lastIndex, match.index));
       }
       const token = match[0];
       const candidate = token.slice(1);
@@ -220,9 +191,9 @@ const renderWithMentions = (
       lastIndex = match.index + token.length;
     }
     if (lastIndex < text.length) {
-      out.push(...renderPlain(text.slice(lastIndex), `t-${key++}`));
+      out.push(text.slice(lastIndex));
     }
-    return out.length > 0 ? out : renderPlain(text, "plain");
+    return out.length > 0 ? out : [text];
   }
 
   const byUserId = new Map(mentions.map((m) => [m.userId, m] as const));
@@ -230,11 +201,7 @@ const renderWithMentions = (
 
   return segments.map((segment, index) => {
     if (!segment.userId && !segment.isAll) {
-      return (
-        <React.Fragment key={`t-${index}`}>
-          {renderPlain(segment.text, `t-${index}`)}
-        </React.Fragment>
-      );
+      return segment.text;
     }
     const mention = segment.userId ? byUserId.get(segment.userId) : undefined;
     return (
@@ -286,14 +253,6 @@ const TextMessageComponent: React.FC<TextMessageProps> = ({
 
   const isMarkdown = contentFormat === "markdown";
   const { t } = useTranslation();
-  const { matcher: shiftCodeMatcher } = useWorkShiftCatalog();
-  const [selectedShiftCode, setSelectedShiftCode] = React.useState<
-    string | null
-  >(null);
-  const shiftCodeLabel = React.useCallback(
-    (code: string) => t("chat:shiftReference.open", { code }),
-    [t],
-  );
   const displayContent =
     isCollapsible && renderMode === "collapsed"
       ? getCollapsedTextPreview(content)
@@ -447,10 +406,6 @@ const TextMessageComponent: React.FC<TextMessageProps> = ({
                   currentUserId,
                   currentUsername,
                   mentions,
-                  isOwn,
-                  onShiftCodeSelect: setSelectedShiftCode,
-                  shiftCodeLabel,
-                  shiftCodeMatcher,
                 })}
               </React.Fragment>
             );
@@ -473,13 +428,6 @@ const TextMessageComponent: React.FC<TextMessageProps> = ({
             ? t("chat:message.expandLong", { defaultValue: "Xem them" })
             : t("chat:message.collapseLong", { defaultValue: "Thu gon" })}
         </button>
-      ) : null}
-
-      {selectedShiftCode ? (
-        <ShiftCatalogModal
-          code={selectedShiftCode}
-          onClose={() => setSelectedShiftCode(null)}
-        />
       ) : null}
     </div>
   );
