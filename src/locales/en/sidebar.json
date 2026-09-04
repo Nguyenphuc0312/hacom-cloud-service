@@ -16,6 +16,8 @@
   },
   "globalSearch": {
     "close": "Close",
+    "placeholder": "Search contacts, messages and files",
+    "aria": "Search contacts, messages and files",
     "tabs": {
       "all": "All",
       "contacts": "Contacts",
