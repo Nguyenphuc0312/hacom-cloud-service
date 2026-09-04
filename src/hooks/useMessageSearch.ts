@@ -35,6 +35,7 @@ interface UseMessageSearchOptions {
 
 interface UseMessageSearchReturn {
   query: string;
+  debouncedQuery: string;
   setQuery: (q: string) => void;
   results: Message[];
   total: number;
@@ -137,6 +138,11 @@ export const useMessageSearch = (
         }
       }
 
+      if (!append) {
+        setResults([]);
+        setTotal(0);
+        setPage(1);
+      }
       setIsLoading(true);
       setError(null);
 
@@ -243,6 +249,7 @@ export const useMessageSearch = (
 
   return {
     query,
+    debouncedQuery,
     setQuery,
     results,
     total,

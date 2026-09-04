@@ -4,6 +4,8 @@ import {
   listenForOpenConversation,
   dispatchStartDirectMessage,
   listenForStartDirectMessage,
+  createChatRouteState,
+  readChatRouteIntent,
 } from "./chatUiEvents";
 
 describe("chatUiEvents — open conversation / start DM (global search nav)", () => {
@@ -35,5 +37,31 @@ describe("chatUiEvents — open conversation / start DM (global search nav)", ()
     dispatchStartDirectMessage({ userId: "u1" });
     expect(handler).toHaveBeenCalledWith({ userId: "u1" });
     off();
+  });
+
+  it("round-trips durable chat route intents and rejects malformed history state", () => {
+    const open = createChatRouteState({
+      type: "open-conversation",
+      conversationId: "c1",
+      messageId: "m1",
+    });
+    const direct = createChatRouteState({
+      type: "start-direct-message",
+      userId: "u1",
+    });
+
+    expect(readChatRouteIntent(open)).toMatchObject({
+      type: "open-conversation",
+      conversationId: "c1",
+      messageId: "m1",
+    });
+    expect(readChatRouteIntent(direct)).toMatchObject({
+      type: "start-direct-message",
+      userId: "u1",
+    });
+    expect(open.chatIntent.requestId).not.toBe(direct.chatIntent.requestId);
+    expect(
+      readChatRouteIntent({ chatIntent: { type: "open-conversation" } }),
+    ).toBeNull();
   });
 });

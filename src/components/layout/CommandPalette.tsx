@@ -28,7 +28,8 @@ import {
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { useAuthStore, useChatStore, useFriendshipStore } from "../../stores";
 import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
-import type { Conversation } from "../../types";
+import { scoreSearchMatch } from "../../utils/contactSearchMatch";
+import { dispatchStartDirectMessage } from "../../features/chat/events/chatUiEvents";
 
 type CommandGroup = "navigation" | "actions" | "conversations" | "users";
 
@@ -64,6 +65,7 @@ interface GroupBucket {
 interface UserCandidate {
   id: string;
   label: string;
+  searchTerms: string[];
   username?: string;
   avatar?: string;
 }
@@ -89,79 +91,6 @@ const getShortcutForPlatform = (): string => {
   }
 
   return "Ctrl+K";
-};
-
-const normalizeText = (value: string): string => value.trim().toLowerCase();
-
-const fuzzyScore = (query: string, target: string): number => {
-  const normalizedQuery = normalizeText(query);
-  const normalizedTarget = normalizeText(target);
-
-  if (!normalizedQuery) {
-    return 1;
-  }
-
-  if (!normalizedTarget) {
-    return -1;
-  }
-
-  if (normalizedTarget === normalizedQuery) {
-    return 120;
-  }
-
-  if (normalizedTarget.startsWith(normalizedQuery)) {
-    return 96;
-  }
-
-  const tokenMatch = normalizedTarget
-    .split(/\s+/)
-    .some((token) => token.startsWith(normalizedQuery));
-  if (tokenMatch) {
-    return 82;
-  }
-
-  const includesIndex = normalizedTarget.indexOf(normalizedQuery);
-  if (includesIndex >= 0) {
-    return 64 - Math.min(includesIndex, 20);
-  }
-
-  let queryIndex = 0;
-  let lastMatch = -1;
-  let gapPenalty = 0;
-
-  for (
-    let i = 0;
-    i < normalizedTarget.length && queryIndex < normalizedQuery.length;
-    i += 1
-  ) {
-    if (normalizedTarget[i] !== normalizedQuery[queryIndex]) {
-      continue;
-    }
-
-    if (lastMatch >= 0) {
-      gapPenalty += i - lastMatch - 1;
-    }
-
-    lastMatch = i;
-    queryIndex += 1;
-  }
-
-  if (queryIndex < normalizedQuery.length) {
-    return -1;
-  }
-
-  return Math.max(16, 52 - gapPenalty);
-};
-
-const getConversationKeywords = (conversation: Conversation): string[] => {
-  const participants = Array.isArray(conversation.participants)
-    ? conversation.participants
-    : [];
-
-  return participants.flatMap((participant) => [
-    participant.displayName ?? "",
-    participant.username ?? "",
-  ]);
 };
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
@@ -250,14 +179,25 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       if (!friend.id || friend.id === currentUserId) {
         return;
       }
-      const label =
-        nameByUserId[friend.id] ||
+      const realName =
         resolveUserDisplayName(friend, { allowLegacyFallback: true }) ||
         friend.username;
+      const label = friend.alias || nameByUserId[friend.id] || realName;
 
       users.set(friend.id, {
         id: friend.id,
         label,
+        searchTerms: [
+          friend.alias ?? "",
+          nameByUserId[friend.id] ?? "",
+          realName,
+          friend.fullName ?? "",
+          friend.username,
+          friend.employeeCode ?? friend.employee_code ?? "",
+          friend.departmentName ?? "",
+          friend.unitCode ?? "",
+          friend.title ?? "",
+        ],
         username: friend.username,
         avatar: friend.avatar,
       });
@@ -282,6 +222,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               allowLegacyFallback: true,
             }) ||
             participant.username,
+          searchTerms: [
+            ...(existing?.searchTerms ?? []),
+            participant.displayName ?? "",
+            participant.username ?? "",
+          ],
           username: existing?.username || participant.username,
           avatar: existing?.avatar || participant.avatar,
         });
@@ -298,13 +243,18 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               allowLegacyFallback: true,
             }) ||
             other.username,
+          searchTerms: [
+            ...(existing?.searchTerms ?? []),
+            other.displayName ?? "",
+            other.username ?? "",
+          ],
           username: existing?.username || other.username,
           avatar: existing?.avatar || other.avatar,
         });
       }
     });
 
-    return Array.from(users.values()).slice(0, 40);
+    return Array.from(users.values());
   }, [conversations, currentUserId, friends, nameByUserId]);
 
   const navigationCommands = React.useMemo<CommandItem[]>(
@@ -378,7 +328,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           group: "conversations",
           label,
           description,
-          keywords: getConversationKeywords(conversation),
+          keywords: [baseName, label],
           icon: ChatBubbleLeftRightIcon,
           showAvatar: true,
           avatarSrc:
@@ -414,10 +364,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         const directConversationId = directConversationByUserId.get(
           candidate.id,
         );
-        // Only the palette knows whether this person is already a friend, so it
-        // picks the destination tab. `?q=` alone always lands on Khám phá, which
-        // deliberately hides existing friends → "Không tìm thấy người dùng".
-        const isFriend = Boolean(friendByUserId[candidate.id]);
         const displayName = resolveAliasName(candidate.id, candidate.label);
 
         return {
@@ -426,14 +372,19 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           label: displayName,
           description: directConversationId
             ? t("common:commandPalette.openDirectConversation")
-            : isFriend
-              ? t("common:commandPalette.openInFriends")
-              : t("common:commandPalette.searchInFriends"),
-          keywords: [candidate.username ?? "", "user", "person", "friend"],
+            : t("common:commandPalette.newConversation"),
+          keywords: [
+            candidate.label,
+            displayName,
+            ...candidate.searchTerms,
+            candidate.username ?? "",
+            "user",
+            "person",
+            "friend",
+          ],
           icon: UserCircleIcon,
           showAvatar: true,
-          avatarSrc:
-            resolvePublicResourceUrl(candidate.avatar) ?? undefined,
+          avatarSrc: resolvePublicResourceUrl(candidate.avatar) ?? undefined,
           execute: () => {
             if (directConversationId) {
               selectConversation(directConversationId);
@@ -441,25 +392,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               return;
             }
 
-            if (isFriend) {
-              // Filter the Bạn bè tab by NAME, not the raw @HC000123 code — the
-              // code is an identifier, not something a user recognises on screen.
-              navigate(
-                `${ROUTE_PATHS.FRIENDS}?tab=friends&q=${encodeURIComponent(displayName)}`,
-              );
-              return;
-            }
-
-            const searchTerm = candidate.username || candidate.label;
-            navigate(
-              `${ROUTE_PATHS.FRIENDS}?q=${encodeURIComponent(searchTerm)}`,
-            );
+            dispatchStartDirectMessage({ userId: candidate.id });
           },
         } satisfies CommandItem;
       }),
     [
       directConversationByUserId,
-      friendByUserId,
       navigate,
       resolveAliasName,
       selectConversation,
@@ -479,7 +417,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   );
 
   const filteredCommands = React.useMemo(() => {
-    const normalizedQuery = normalizeText(query);
+    const normalizedQuery = query.trim();
 
     if (!normalizedQuery) {
       return [
@@ -492,18 +430,19 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
     return allCommands
       .map((command) => {
-        const haystack = [
+        const includeDescription =
+          command.group === "navigation" || command.group === "actions";
+        const score = scoreSearchMatch(normalizedQuery, [
           command.label,
-          command.description ?? "",
+          includeDescription ? command.description : "",
           ...command.keywords,
-        ].join(" ");
-        const score = fuzzyScore(normalizedQuery, haystack);
+        ]);
         return {
           command,
-          score: score > 0 ? score + (command.baseScore ?? 0) : -1,
+          score: score >= 0 ? score + (command.baseScore ?? 0) : -1,
         };
       })
-      .filter((entry) => entry.score > 0)
+      .filter((entry) => entry.score >= 0)
       .sort((left, right) => right.score - left.score)
       .map((entry) => entry.command)
       .slice(0, 28);

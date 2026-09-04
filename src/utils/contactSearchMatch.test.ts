@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { matchesContactQuery, normalizeSearchText } from "./contactSearchMatch";
+import {
+  matchesContactQuery,
+  normalizeSearchText,
+  scoreSearchMatch,
+} from "./contactSearchMatch";
 
 describe("normalizeSearchText", () => {
   it("bỏ dấu tiếng Việt", () => {
@@ -34,10 +38,14 @@ describe("matchesContactQuery", () => {
   });
 
   it("khớp theo username / mã nhân sự", () => {
-    expect(matchesContactQuery("HC000444", ["Hoàng Đình Chiến", "HC000444"])).toBe(
-      true,
-    );
+    expect(
+      matchesContactQuery("HC000444", ["Hoàng Đình Chiến", "HC000444"]),
+    ).toBe(true);
     expect(matchesContactQuery("hc000444", [null, "HC000444"])).toBe(true);
+  });
+
+  it("chấp nhận username có tiền tố @", () => {
+    expect(matchesContactQuery("@HC000444", ["HC000444"])).toBe(true);
   });
 
   it("từ khóa rỗng thì không lọc", () => {
@@ -47,5 +55,28 @@ describe("matchesContactQuery", () => {
 
   it("không khớp khi mọi trường đều rỗng", () => {
     expect(matchesContactQuery("chien", [null, undefined, ""])).toBe(false);
+  });
+});
+
+describe("scoreSearchMatch", () => {
+  it("xếp exact cao hơn prefix, token và contains", () => {
+    expect(scoreSearchMatch("quoc", ["Quốc"])).toBe(100);
+    expect(scoreSearchMatch("quoc", ["Quốc Minh"])).toBe(80);
+    expect(scoreSearchMatch("quoc", ["Minh Quốc"])).toBe(65);
+    expect(scoreSearchMatch("quoc", ["MinhQuốcTest"])).toBe(50);
+  });
+
+  it("khớp tên gợi nhớ và không phân biệt dấu", () => {
+    expect(
+      scoreSearchMatch("vptct nguyen minh quang", [
+        "VPTCT-Nguyễn Minh Quang",
+        "Nguyễn Minh Quang",
+      ]),
+    ).toBeGreaterThanOrEqual(0);
+  });
+
+  it("không kéo kết quả chỉ vì các ký tự xuất hiện rải rác", () => {
+    expect(scoreSearchMatch("hc000975", ["Phòng Hành chính 0075"])).toBe(-1);
+    expect(scoreSearchMatch("chien", ["Cài đặt chung"])).toBe(-1);
   });
 });
