@@ -34,6 +34,7 @@ import { FileName } from "../../common/FileName";
 import { formatCalendarDate } from "../../../utils/formatTime";
 import { formatFileSize, getFileIconType } from "../../../utils/formatFileSize";
 import { resolvePublicResourceUrl } from "../../../config";
+import { isDirectConversation } from "../../../lib/conversationAdapter";
 import {
   getConversationDisplayName,
   getConversationAvatar,
@@ -61,6 +62,7 @@ import {
   type GlobalSearchFileType,
   type GlobalFileResult,
 } from "../../../features/chat/hooks/useGlobalSearch";
+import { getSearchConversationDisplayName } from "./globalSearchIdentity";
 
 type SearchTab = "all" | "contacts" | "messages" | "files";
 
@@ -70,6 +72,7 @@ interface MessageMeta {
   conversationAvatar?: string | null;
   senderName: string;
   isSelf: boolean;
+  isDirect: boolean;
 }
 type ResolveMessageMeta = (message: Message) => MessageMeta;
 
@@ -154,7 +157,10 @@ const PersonRow: React.FC<{
       className="shrink-0"
     />
     <div className="min-w-0 flex-1">
-      <p className="truncate text-[14px] font-medium text-text-primary">
+      <p
+        className="truncate text-[14px] font-medium text-text-primary"
+        title={user.alias || user.displayName}
+      >
         <Highlight text={user.alias || user.displayName} query={query} />
       </p>
       <p className="truncate text-[12px] text-text-muted">
@@ -180,7 +186,10 @@ const ConversationRow: React.FC<{
         className="shrink-0"
       />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[14px] font-medium text-text-primary">
+        <p
+          className="truncate text-[14px] font-medium text-text-primary"
+          title={name}
+        >
           <Highlight text={name} query={query} />
         </p>
         {conversation.lastMessage?.content ? (
@@ -201,6 +210,7 @@ const MessageRow: React.FC<{
   senderName: string;
   /** True when the sender is the current user (prefix snippet with "Bạn"). */
   isSelf: boolean;
+  isDirect: boolean;
   query: string;
   onClick: () => void;
 }> = ({
@@ -209,6 +219,7 @@ const MessageRow: React.FC<{
   conversationAvatar,
   senderName,
   isSelf,
+  isDirect,
   query,
   onClick,
 }) => {
@@ -221,6 +232,7 @@ const MessageRow: React.FC<{
         : undefined) ??
     (typeof message.createdAt === "string" ? message.createdAt : undefined);
   const senderLabel = isSelf ? t("chat:message.you") : senderName;
+  const showSender = !isDirect || isSelf;
   return (
     <RowButton onClick={onClick}>
       <Avatar
@@ -231,7 +243,10 @@ const MessageRow: React.FC<{
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <p className="truncate text-[14px] font-medium text-text-primary">
+          <p
+            className="truncate text-[14px] font-medium text-text-primary"
+            title={conversationName}
+          >
             {conversationName}
           </p>
           {ts ? (
@@ -241,7 +256,9 @@ const MessageRow: React.FC<{
           ) : null}
         </div>
         <p className="truncate text-[12px] text-text-secondary">
-          <span className="text-text-muted">{senderLabel}: </span>
+          {showSender ? (
+            <span className="text-text-muted">{senderLabel}: </span>
+          ) : null}
           <Highlight
             text={getCompactPreviewFromMessage(message)}
             query={query}
@@ -256,6 +273,7 @@ const FileRow: React.FC<{
   file: GlobalFileResult;
   onClick: () => void;
 }> = ({ file, onClick }) => {
+  const { t } = useTranslation();
   // "tên gợi nhớ" (alias) wins over the uploader's real name.
   const alias = useFriendshipStore(
     (s) => s.friendByUserId[file.senderId]?.alias,
@@ -264,6 +282,14 @@ const FileRow: React.FC<{
     (s) => s.nameByUserId[file.senderId] ?? file.senderName,
   );
   const senderName = alias || enrichedName;
+  const conversationName =
+    file.conversationName || t("common:labels.conversation");
+  const senderContext =
+    senderName.trim().toLocaleLowerCase() ===
+    conversationName.trim().toLocaleLowerCase()
+      ? ""
+      : ` · ${senderName}`;
+  const metadata = `${conversationName}${senderContext} · ${formatFileSize(file.sizeBytes)}`;
   return (
     <RowButton onClick={onClick}>
       <FileTypeIcon
@@ -273,13 +299,18 @@ const FileRow: React.FC<{
         className="h-9 w-9 shrink-0"
       />
       <div className="min-w-0 flex-1">
-        <FileName
-          name={file.fileName}
-          className="text-[14px] font-medium text-text-primary"
-        />
-        <p className="truncate text-[12px] text-text-muted">
-          {formatFileSize(file.sizeBytes)} · {senderName} ·{" "}
-          {formatCalendarDate(new Date(file.createdAt))}
+        <div className="flex items-baseline justify-between gap-2">
+          <FileName
+            name={file.fileName}
+            className="flex-1 text-[14px] font-medium text-text-primary"
+          />
+          <span className="shrink-0 text-[11px] text-text-muted">
+            {formatCalendarDate(new Date(file.createdAt))}
+          </span>
+        </div>
+        <p className="truncate text-[12px] text-text-muted" title={metadata}>
+          <span className="text-text-secondary">{conversationName}</span>
+          {`${senderContext} · ${formatFileSize(file.sizeBytes)}`}
         </p>
       </div>
     </RowButton>
@@ -358,6 +389,31 @@ export const GlobalSearchOverlay: React.FC<GlobalSearchOverlayProps> = ({
   const nameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
   const friendByUserId = useFriendshipStore((s) => s.friendByUserId);
 
+  const displayFiles = useMemo(
+    () =>
+      files.map((file) => {
+        const conversation = conversationById[file.conversationId];
+        if (!conversation) return file;
+
+        return {
+          ...file,
+          conversationName: getSearchConversationDisplayName(
+            conversation,
+            currentUser.id,
+            (userId) =>
+              friendByUserId[userId]?.alias || nameByUserId[userId],
+          ),
+        };
+      }),
+    [
+      conversationById,
+      currentUser.id,
+      files,
+      friendByUserId,
+      nameByUserId,
+    ],
+  );
+
   const senderById = useMemo(() => {
     const map = new Map<string, UserSummary>();
     for (const s of senders) map.set(s.id, s);
@@ -386,7 +442,12 @@ export const GlobalSearchOverlay: React.FC<GlobalSearchOverlayProps> = ({
     // a bare id.
     const conversation = conversationById[message.conversationId];
     const conversationName = conversation
-      ? getConversationDisplayName(conversation, currentUser.id)
+      ? getSearchConversationDisplayName(
+          conversation,
+          currentUser.id,
+          (userId) =>
+            friendByUserId[userId]?.alias || nameByUserId[userId],
+        )
       : senderName;
     const conversationAvatar = conversation
       ? (resolvePublicResourceUrl(
@@ -394,7 +455,13 @@ export const GlobalSearchOverlay: React.FC<GlobalSearchOverlayProps> = ({
         ) ?? null)
       : (resolvePublicResourceUrl(message.senderAvatar ?? undefined) ?? null);
 
-    return { conversationName, conversationAvatar, senderName, isSelf };
+    return {
+      conversationName,
+      conversationAvatar,
+      senderName,
+      isSelf,
+      isDirect: Boolean(conversation && isDirectConversation(conversation)),
+    };
   };
 
   const tabs: Array<{ id: SearchTab; label: string }> = [
@@ -418,9 +485,9 @@ export const GlobalSearchOverlay: React.FC<GlobalSearchOverlayProps> = ({
             type="text"
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            placeholder={t("sidebar:search.placeholder")}
+            placeholder={t("sidebar:globalSearch.placeholder")}
             className="input-surface w-full pl-10 pr-9 text-[13px] text-text-primary placeholder:text-text-muted focus:border-[#1976D2]/60 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-[#1976D2]/15"
-            aria-label={t("sidebar:search.aria")}
+            aria-label={t("sidebar:globalSearch.aria")}
             autoFocus
           />
           {hasQuery ? (
@@ -486,7 +553,7 @@ export const GlobalSearchOverlay: React.FC<GlobalSearchOverlayProps> = ({
             people={people}
             groups={groups}
             messages={messages}
-            files={files}
+            files={displayFiles}
             currentUser={currentUser}
             resolveMessageMeta={resolveMessageMeta}
             isLoading={isContactLoading || isMessageLoading || isFileLoading}
@@ -520,7 +587,7 @@ export const GlobalSearchOverlay: React.FC<GlobalSearchOverlayProps> = ({
           />
         ) : (
           <FilesTab
-            files={files}
+            files={displayFiles}
             filters={fileFilters}
             isLoading={isFileLoading}
             onFiltersChange={setFileFilters}
@@ -649,6 +716,7 @@ const AllTab: React.FC<AllTabProps> = ({
                 conversationAvatar={meta.conversationAvatar}
                 senderName={meta.senderName}
                 isSelf={meta.isSelf}
+                isDirect={meta.isDirect}
                 query={query}
                 onClick={() =>
                   onSelectConversation(message.conversationId, message.id)
@@ -952,6 +1020,7 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
               conversationAvatar={meta.conversationAvatar}
               senderName={meta.senderName}
               isSelf={meta.isSelf}
+              isDirect={meta.isDirect}
               query={query}
               onClick={() =>
                 onSelectConversation(message.conversationId, message.id)

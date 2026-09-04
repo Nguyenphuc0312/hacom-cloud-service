@@ -16,6 +16,8 @@
   },
   "globalSearch": {
     "close": "Đóng",
+    "placeholder": "Tìm liên hệ, tin nhắn, file",
+    "aria": "Tìm liên hệ, tin nhắn và file",
     "tabs": {
       "all": "Tất cả",
       "contacts": "Liên hệ",

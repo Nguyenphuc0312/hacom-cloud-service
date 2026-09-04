@@ -262,7 +262,7 @@ export const useGlobalFileSearch = (
               conversationId,
               conversationName: conversation
                 ? getConversationDisplayName(conversation, currentUser.id)
-                : conversationId,
+                : "",
             };
           }),
         );
