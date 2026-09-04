@@ -16,7 +16,7 @@ import {
 import {
   linkifyShiftCodesInHtml,
   tokenizeShiftCodes,
-} from "./ShiftCodeReference";
+} from "./shiftCodeReferenceUtils";
 import { MessageContentRenderer } from "./MessageContentRenderer";
 import { TextMessage } from "./TextMessage";
 
