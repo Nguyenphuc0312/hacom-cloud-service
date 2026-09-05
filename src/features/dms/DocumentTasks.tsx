@@ -17,10 +17,10 @@ export const DocumentTasks: React.FC<{ tasks: DmsTask[]; subjectId: string; canP
   return <div className="space-y-3">
     {error && <p role="alert" className="text-sm text-danger">{error}</p>}
     {!tasks.length && <p className="text-sm text-text-secondary">{t("tasks.empty")}</p>}
-    {tasks.map((task) => <div key={task.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
+    {tasks.map((task) => { const action = task.state === "ASSIGNED" || (task.state === "OVERDUE" && !task.started_at) ? "start" : task.state === "IN_PROGRESS" || (task.state === "OVERDUE" && task.started_at) ? "complete" : null; return <div key={task.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
       <div className="min-w-0"><p className="text-sm font-semibold text-text-primary">{t(`tasks.roles.${task.role}`)}{task.assignee_subject_id === subjectId ? ` · ${t("tasks.mine")}` : ""}</p>
-        <p className="text-sm text-text-secondary">{t(`tasks.states.${task.state}`)}{task.due_at ? ` · ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(task.due_at))}` : ""}</p></div>
-      {canProcess && task.assignee_subject_id === subjectId && ["ASSIGNED", "IN_PROGRESS"].includes(task.state) && <Button size="sm" disabled={busy !== null} isLoading={busy === task.id} onClick={() => void run(task, task.state === "ASSIGNED" ? "start" : "complete")}>{t(task.state === "ASSIGNED" ? "actions.start" : "actions.complete")}</Button>}
-    </div>)}
+        <p className={`text-sm ${task.state === "OVERDUE" ? "text-danger" : "text-text-secondary"}`}>{t(`tasks.states.${task.state}`)}{task.due_at ? ` · ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(task.due_at))}` : ""}</p></div>
+      {canProcess && task.assignee_subject_id === subjectId && action && <Button size="sm" disabled={busy !== null} isLoading={busy === task.id} onClick={() => void run(task, action)}>{t(action === "start" ? "actions.start" : "actions.complete")}</Button>}
+    </div>; })}
   </div>;
 };

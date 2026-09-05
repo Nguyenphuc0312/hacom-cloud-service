@@ -6,7 +6,7 @@ import { dmsApi, DmsApiError } from "./dmsApi";
 
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
-const task = { id: "one", assignee_subject_id: "me", role: "PRIMARY", state: "ASSIGNED", revision: 2, due_at: null };
+const task = { id: "one", assignee_subject_id: "me", role: "PRIMARY", state: "ASSIGNED", revision: 2, due_at: null, started_at: null };
 
 it("offers actions only for own task and server capability", () => {
   const view = render(<DocumentTasks tasks={[task, { ...task, id: "two", assignee_subject_id: "other", role: "COORDINATOR" }]} subjectId="me" canProcess onRefresh={() => {}} />);
@@ -32,4 +32,11 @@ it("distinguishes stale revision from retryable service errors", async () => {
   render(<DocumentTasks tasks={[{ ...task, state: "IN_PROGRESS" }]} subjectId="me" canProcess onRefresh={() => {}} />);
   fireEvent.click(screen.getByRole("button", { name: "actions.complete" }));
   await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("errors.conflict"));
+});
+
+it("keeps an overdue task actionable according to whether it was started", () => {
+  const { rerender } = render(<DocumentTasks tasks={[{ ...task, state: "OVERDUE" }]} subjectId="me" canProcess onRefresh={() => {}} />);
+  expect(screen.getByRole("button", { name: "actions.start" })).toBeVisible();
+  rerender(<DocumentTasks tasks={[{ ...task, state: "OVERDUE", started_at: "2026-01-01T00:00:00.000Z" }]} subjectId="me" canProcess onRefresh={() => {}} />);
+  expect(screen.getByRole("button", { name: "actions.complete" })).toBeVisible();
 });
