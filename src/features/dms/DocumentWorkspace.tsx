@@ -58,8 +58,17 @@ export default function DocumentWorkspace(): React.ReactElement {
   const [search, setSearch] = React.useState("");
   const [documents, setDocuments] = React.useState<DmsDocument[]>([]);
   const [total, setTotal] = React.useState(0);
-  const [page, setPage] = React.useState(1);
   const [searchParams, setSearchParams] = useSearchParams();
+  const requestedPage = Number(searchParams.get("page"));
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const setPage = (nextPage: number | ((current: number) => number)): void => {
+    const value = typeof nextPage === "function" ? nextPage(page) : nextPage;
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (value > 1) next.set("page", String(value)); else next.delete("page");
+      return next;
+    });
+  };
   const selectedId = dmsDocumentId(searchParams.get("documentId"));
   const setSelectedId = (id: string): void => {
     setSearchParams((current) => { const next = new URLSearchParams(current); next.set("documentId", id); next.set("workspace", "documents"); return next; });
