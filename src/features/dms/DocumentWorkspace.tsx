@@ -30,6 +30,7 @@ type DetailTab = "summary" | "files" | "history" | "tasks";
 type ActionMode = "edit" | "submit" | "approve" | "return" | "reject" | "register" | "issue" | "distribute" | "recall" | "archive";
 type WorkspaceView = "work" | "documents" | "archive" | "configuration" | "reports";
 const DOCUMENT_PAGE_SIZE = 50;
+const LIFECYCLE_STATES = ["DRAFT", "REGISTERED", "ISSUED", "COMPLETED", "ARCHIVED", "CANCELLED"];
 
 const formatDate = (value?: string | null): string => value
   ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value))
@@ -55,7 +56,8 @@ export default function DocumentWorkspace(): React.ReactElement {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialDirection = searchParams.get("direction");
   const [direction, setDirection] = React.useState<DirectionFilter>(["INCOMING", "OUTGOING", "INTERNAL"].includes(initialDirection ?? "") ? initialDirection as DmsDirection : "ALL");
-  const [lifecycleState, setLifecycleState] = React.useState<string | null>(searchParams.get("state") || null);
+  const initialLifecycleState = searchParams.get("state");
+  const [lifecycleState, setLifecycleState] = React.useState<string | null>(LIFECYCLE_STATES.includes(initialLifecycleState ?? "") ? initialLifecycleState : null);
   const [documentType, setDocumentType] = React.useState<string | null>(searchParams.get("documentType") || null);
   const [search, setSearch] = React.useState(searchParams.get("search") || "");
   const [documents, setDocuments] = React.useState<DmsDocument[]>([]);
