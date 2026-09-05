@@ -17,7 +17,7 @@ import {
 import { Button, IconButton } from "../../components/ui/Button";
 import { EmptyState, ErrorState } from "../../components/ui/EmptyState";
 import { SkeletonText } from "../../components/ui/Skeleton";
-import { dmsApi, DmsApiError, type DmsDirection, type DmsDocument, type DmsPrincipal } from "./dmsApi";
+import { dmsApi, DmsApiError, type DmsDirection, type DmsDocument, type DmsPrincipal, type DmsWorkQueue } from "./dmsApi";
 import { beginDmsAuthorization, completeDmsAuthorization, getDmsAccessToken } from "./dmsOAuth";
 import { DmsAdministration } from "./DmsAdministration";
 import { DmsReport } from "./DmsReport";
@@ -57,6 +57,7 @@ export default function DocumentWorkspace(): React.ReactElement {
   const [documentType, setDocumentType] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState("");
   const [documents, setDocuments] = React.useState<DmsDocument[]>([]);
+  const [workQueue, setWorkQueue] = React.useState<DmsWorkQueue | null>(null);
   const [total, setTotal] = React.useState(0);
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedPage = Number(searchParams.get("page"));
@@ -127,6 +128,13 @@ export default function DocumentWorkspace(): React.ReactElement {
   }, [direction, documentType, lifecycleState, page, principal, refreshKey, search, t, view]);
 
   React.useEffect(() => {
+    if (!principal) return;
+    let active = true;
+    void dmsApi.workQueue().then((result) => { if (active) setWorkQueue(result); }).catch(() => { if (active) setWorkQueue(null); });
+    return () => { active = false; };
+  }, [principal, refreshKey]);
+
+  React.useEffect(() => {
     if (!selectedId || !principal) return;
     let active = true;
     void dmsApi.detail(selectedId)
@@ -168,6 +176,10 @@ export default function DocumentWorkspace(): React.ReactElement {
           )}
         </div>
       </header>
+
+      {workQueue && Object.values(workQueue).some((count) => count > 0) && <div className="flex flex-wrap gap-x-5 gap-y-2 border-b border-border bg-surface-overlay px-4 py-2 text-sm sm:px-5" aria-label={t("queue.label")} data-testid="dms-work-queue">
+        {(["processing", "approvals", "incoming", "dueSoon"] as const).filter((key) => workQueue[key] > 0).map((key) => <span key={key} className="text-text-secondary">{t(`queue.${key}`)} <strong className="text-text-primary">{workQueue[key]}</strong></span>)}
+      </div>}
 
       <nav className="flex overflow-x-auto border-b border-border px-3 sm:px-5" aria-label={t("navigation.label")}>{(["documents", "archive", "configuration", "reports"] as const).filter((item) => item !== "reports" || capabilities.has("document.report.read")).map((item) => <button key={item} type="button" aria-current={view === item ? "page" : undefined} onClick={() => { setView(item); setPage(1); if (item === "documents" || item === "archive") setLifecycleState(null); }} className={`min-h-11 shrink-0 border-b-2 px-3 text-sm font-semibold ${view === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>{t(`navigation.${item}`)}</button>)}</nav>
 

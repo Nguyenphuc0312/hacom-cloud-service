@@ -4,6 +4,7 @@
   "title": "Document management",
   "lifecycle": { "DRAFT": "Draft", "REGISTERED": "Registered", "ISSUED": "Issued", "COMPLETED": "Completed", "ARCHIVED": "Archived", "CANCELLED": "Cancelled", "unknown": "Unknown" },
   "subtitle": "Document operations within {{employeeCode}}'s verified scope",
+  "queue": { "label": "My work", "processing": "To process", "approvals": "Awaiting approval", "incoming": "Incoming", "dueSoon": "Due soon" },
   "connect": { "description": "Connect your Hacom SSO session to access documents within your verified scope.", "action": "Connect document management" },
   "navigation": { "label": "Document management areas", "documents": "Documents", "archive": "Repository", "configuration": "Configuration", "reports": "Reports" },
   "directions": { "ALL": "All", "INCOMING": "Incoming", "OUTGOING": "Outgoing", "INTERNAL": "Internal" },

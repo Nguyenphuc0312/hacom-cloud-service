@@ -39,6 +39,12 @@ describe("DMS API trust boundary", () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("archiveState=ARCHIVED");
   });
 
+  it("loads the server-scoped work queue without client-side organization input", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ processing: 1, approvals: 0, incoming: 2, dueSoon: 1 }), { status: 200, headers: { "content-type": "application/json" } }));
+    await expect(dmsApi.workQueue()).resolves.toMatchObject({ processing: 1, incoming: 2 });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(/\/work-queue$/);
+  });
+
   it("passes report dimensions only as query filters", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ groups: [], total: 0 }), { status: 200, headers: { "content-type": "application/json" } }));
     await dmsApi.report({ direction: "OUTGOING", state: "ISSUED", documentType: "CONG_VAN" });

@@ -4,6 +4,7 @@
   "backToMessages": "Trở lại tin nhắn",
   "members": { "coordinators": "Người phối hợp (không bắt buộc)", "searchLabel": "{{label}} — tìm nhân sự", "hint": "Nhập tên hoặc mã nhân viên trong đơn vị.", "search": "Tìm", "results": "Kết quả tìm nhân sự", "choose": "Chọn người để thêm", "limit": "Đã chọn tối đa {{count}} người", "loading": "Đang tìm nhân sự…", "found": "Tìm thấy {{count}} người.", "empty": "Không có nhân sự phù hợp trong đơn vị. Thử tên hoặc mã khác.", "refine": "Hiển thị 50 kết quả đầu tiên. Nhập từ khóa cụ thể hơn.", "unavailable": "Không tải được danh sách nhân sự. Bấm Tìm để thử lại.", "removeLabel": "Bỏ chọn {{name}}", "remove": "Bỏ chọn", "recipients": "Người nhận", "processor": "Người xử lý chính (không bắt buộc)", "approvers": "Người duyệt theo thứ tự" },
   "subtitle": "Nghiệp vụ văn bản theo quyền của {{employeeCode}}",
+  "queue": { "label": "Công việc của tôi", "processing": "Cần xử lý", "approvals": "Chờ duyệt", "incoming": "Văn bản đến", "dueSoon": "Sắp đến hạn" },
   "connect": {
     "description": "Kết nối phiên Hacom SSO để truy cập dữ liệu văn bản đúng phạm vi của bạn.",
     "action": "Kết nối quản lý văn bản"
