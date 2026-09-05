@@ -105,7 +105,7 @@ export const dmsApi = {
     if (!response.ok) throw new DmsApiError(response.status, "DMS_FILE_UNAVAILABLE");
     return response.blob();
   },
-  report: (from?: string, to?: string) => request<{ groups: Array<{ direction: string; lifecycle_state: string; count: number }>; total: number }>(`/reports/summary${query({ from, to })}`),
+  report: (filters: { from?: string; to?: string; direction?: string; state?: string } = {}) => request<{ groups: Array<{ direction: string; lifecycle_state: string; count: number }>; total: number }>(`/reports/summary${query(filters)}`),
   templates: (organizationId: string) => request<unknown[]>(`/templates${query({ organizationId })}`),
   books: (organizationId: string, direction?: string) => request<unknown[]>(`/document-books${query({ organizationId, direction })}`),
   workflows: (organizationId: string) => request<unknown[]>(`/workflows${query({ organizationId })}`),

@@ -38,4 +38,11 @@ describe("DMS API trust boundary", () => {
     await dmsApi.list({ archiveState: "ARCHIVED", pageSize: 50 });
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("archiveState=ARCHIVED");
   });
+
+  it("passes report dimensions only as query filters", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ groups: [], total: 0 }), { status: 200, headers: { "content-type": "application/json" } }));
+    await dmsApi.report({ direction: "OUTGOING", state: "ISSUED" });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("direction=OUTGOING");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("state=ISSUED");
+  });
 });

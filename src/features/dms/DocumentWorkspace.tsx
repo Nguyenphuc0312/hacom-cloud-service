@@ -52,6 +52,7 @@ export default function DocumentWorkspace(): React.ReactElement {
   const [authError, setAuthError] = React.useState(false);
   const [principal, setPrincipal] = React.useState<DmsPrincipal | null>(null);
   const [direction, setDirection] = React.useState<DirectionFilter>("ALL");
+  const [lifecycleState, setLifecycleState] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState("");
   const [documents, setDocuments] = React.useState<DmsDocument[]>([]);
   const [total, setTotal] = React.useState(0);
@@ -94,7 +95,7 @@ export default function DocumentWorkspace(): React.ReactElement {
     const timer = window.setTimeout(() => {
       setLoading(true);
       setError(null);
-      void dmsApi.list({ direction: direction === "ALL" ? null : direction, archiveState: view === "archive" ? "ARCHIVED" : "ACTIVE", search, pageSize: 50 })
+      void dmsApi.list({ direction: direction === "ALL" ? null : direction, state: lifecycleState, archiveState: view === "archive" ? "ARCHIVED" : "ACTIVE", search, pageSize: 50 })
         .then((result) => {
           if (controller.signal.aborted) return;
           setDocuments(result.items);
@@ -111,7 +112,7 @@ export default function DocumentWorkspace(): React.ReactElement {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [direction, principal, refreshKey, search, t, view]);
+  }, [direction, lifecycleState, principal, refreshKey, search, t, view]);
 
   React.useEffect(() => {
     if (!selectedId || !principal) return;
@@ -156,9 +157,9 @@ export default function DocumentWorkspace(): React.ReactElement {
         </div>
       </header>
 
-      <nav className="flex overflow-x-auto border-b border-border px-3 sm:px-5" aria-label={t("navigation.label")}>{(["documents", "archive", "configuration", "reports"] as const).filter((item) => item !== "reports" || capabilities.has("document.report.read")).map((item) => <button key={item} type="button" aria-current={view === item ? "page" : undefined} onClick={() => setView(item)} className={`min-h-11 shrink-0 border-b-2 px-3 text-sm font-semibold ${view === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>{t(`navigation.${item}`)}</button>)}</nav>
+      <nav className="flex overflow-x-auto border-b border-border px-3 sm:px-5" aria-label={t("navigation.label")}>{(["documents", "archive", "configuration", "reports"] as const).filter((item) => item !== "reports" || capabilities.has("document.report.read")).map((item) => <button key={item} type="button" aria-current={view === item ? "page" : undefined} onClick={() => { setView(item); if (item === "documents" || item === "archive") setLifecycleState(null); }} className={`min-h-11 shrink-0 border-b-2 px-3 text-sm font-semibold ${view === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>{t(`navigation.${item}`)}</button>)}</nav>
 
-      {view === "configuration" && principal ? <DmsAdministration principal={principal} /> : view === "reports" ? <DmsReport /> : <>
+      {view === "configuration" && principal ? <DmsAdministration principal={principal} /> : view === "reports" ? <DmsReport onDrillDown={(group) => { setDirection(group.direction as DmsDirection); setLifecycleState(group.lifecycle_state); setView(group.lifecycle_state === "ARCHIVED" ? "archive" : "documents"); }} /> : <>
 
       {createOpen && principal && (
         <CreateDocumentPanel principal={principal} onClose={() => setCreateOpen(false)} onCreated={(id) => { setCreateOpen(false); setSelectedId(id); refresh(); }} />

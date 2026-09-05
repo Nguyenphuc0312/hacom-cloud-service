@@ -118,7 +118,7 @@
     "create": { "templates": "Tạo phiên bản mẫu", "workflows": "Tạo phiên bản luồng", "books": "Tạo sổ văn bản", "catalogs": "Cập nhật danh mục" },
     "fields": { "code": "Mã", "name": "Tên", "content": "Nội dung JSON", "activate": "Kích hoạt ngay", "actors": "Mã người duyệt theo thứ tự", "actorsHint": "Mỗi mã cách nhau bằng dấu phẩy", "prefix": "Tiền tố", "suffix": "Hậu tố", "catalogType": "Loại danh mục", "displayOrder": "Thứ tự", "status": "Trạng thái" }
   },
-  "report": { "title": "Báo cáo tổng hợp", "description": "Số lượng văn bản theo loại và trạng thái trong phạm vi được cấp.", "from": "Từ ngày", "to": "Đến ngày", "run": "Xem báo cáo", "total": "Tổng văn bản", "state": "Trạng thái", "count": "Số lượng", "errorTitle": "Không thể tải báo cáo" },
+  "report": { "title": "Báo cáo tổng hợp", "description": "Số lượng văn bản theo loại và trạng thái trong phạm vi được cấp.", "from": "Từ ngày", "to": "Đến ngày", "run": "Xem báo cáo", "total": "Tổng văn bản", "state": "Trạng thái", "count": "Số lượng", "allDirections": "Tất cả loại văn bản", "allStates": "Tất cả trạng thái", "drillDown": "Xem danh sách", "errorTitle": "Không thể tải báo cáo" },
   "errors": {
     "oauth": "Không hoàn tất được phiên SSO DMS. Vui lòng kết nối lại.",
     "principal": "Không xác định được phạm vi và quyền DMS hiện tại.",
