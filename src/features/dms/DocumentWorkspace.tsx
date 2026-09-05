@@ -25,7 +25,7 @@ const PdfJsViewer = React.lazy(() => import("../../components/preview/PdfJsViewe
 
 type DirectionFilter = "ALL" | DmsDirection;
 type DetailTab = "summary" | "files" | "history" | "tasks";
-type ActionMode = "submit" | "approve" | "return" | "reject" | "register" | "issue" | "distribute" | "recall" | "archive";
+type ActionMode = "edit" | "submit" | "approve" | "return" | "reject" | "register" | "issue" | "distribute" | "recall" | "archive";
 type WorkspaceView = "documents" | "configuration" | "reports";
 
 const formatDate = (value?: string | null): string => value
@@ -258,7 +258,7 @@ const Field: React.FC<{ label: string; children: React.ReactElement<{ className?
 
 const DocumentDetail: React.FC<{ document: DmsDocument; subjectId: string; capabilities: Set<string>; tab: DetailTab; onTab: (tab: DetailTab) => void; actionMode: ActionMode | null; onAction: (mode: ActionMode | null) => void; onRefresh: () => void }> = ({ document, subjectId, capabilities, tab: selectedTab, onTab, actionMode, onAction, onRefresh }) => {
   const { t } = useTranslation("dms");
-  const available = actionsFor(document, capabilities);
+  const available = actionsFor(document, capabilities, subjectId);
   const tabs = (["summary", "files", "history", "tasks"] as const).filter((item) => item !== "history" || document.access?.history === true);
   const tab = tabs.includes(selectedTab) ? selectedTab : "summary";
   return (
@@ -351,6 +351,7 @@ const ActionPanel: React.FC<{ document: DmsDocument; mode: ActionMode; onClose: 
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     let body: Record<string, unknown> = {};
+    if (mode === "edit") body = { revision: document.revision, subject: String(data.get("subject")).trim(), documentType: String(data.get("documentType")).trim() };
     if (mode === "submit") body = { workflowVersionId: String(data.get("workflowVersionId")) };
     if (["return", "reject", "recall"].includes(mode)) body = { reason: String(data.get("reason")) };
     if (["register", "issue"].includes(mode)) body = { bookId: String(data.get("bookId")) };
@@ -363,11 +364,15 @@ const ActionPanel: React.FC<{ document: DmsDocument; mode: ActionMode; onClose: 
       body = { recipients: recipients.map((subjectId) => ({ subjectId, deliveryMethod: "INTERNAL" })), tasks: [...(processor ? [{ subjectId: processor, role: "PRIMARY", dueAt }] : []), ...coordinators.map((subjectId) => ({ subjectId, role: "COORDINATOR", dueAt }))] };
     }
     setBusy(true); setError(null);
-    try { await dmsApi.action(document.id, mode, body); onDone(); } catch (cause) { setError(errorMessage(cause, t)); } finally { setBusy(false); }
+    try { if (mode === "edit") await dmsApi.update(document.id, body); else await dmsApi.action(document.id, mode, body); onDone(); } catch (cause) { setError(errorMessage(cause, t)); } finally { setBusy(false); }
   };
   return <form onSubmit={(event) => void submit(event)} className="border-b border-border bg-primary/5 p-4">
     <div className="mb-3 flex justify-between"><h4 className="font-bold text-text-primary">{t(`actionPanel.${mode}`)}</h4><IconButton icon={<XMarkIcon />} aria-label={t("actions.close")} size="sm" onClick={onClose} /></div>
     <div className="grid gap-3 sm:grid-cols-2">
+      {mode === "edit" && <>
+        <Field label={t("fields.subject")}><input name="subject" required maxLength={500} defaultValue={document.subject} /></Field>
+        <Field label={t("fields.documentType")}><input name="documentType" required maxLength={120} defaultValue={document.document_type} /></Field>
+      </>}
       {mode === "submit" && <Field label={t("fields.workflow")}><select name="workflowVersionId" required>{workflows.map((item) => <option key={String(item.version_id)} value={String(item.version_id)}>{String(item.name)} · v{String(item.version)}</option>)}</select></Field>}
       {["return", "reject", "recall"].includes(mode) && <Field label={t("fields.reason")} className="sm:col-span-2"><textarea name="reason" required={mode !== "recall"} rows={3} /></Field>}
       {["register", "issue"].includes(mode) && <Field label={t("fields.book")}><select name="bookId" required>{books.map((item) => <option key={String(item.id)} value={String(item.id)}>{String(item.name)}</option>)}</select></Field>}
@@ -383,8 +388,9 @@ const ActionPanel: React.FC<{ document: DmsDocument; mode: ActionMode; onClose: 
   </form>;
 };
 
-const actionsFor = (document: DmsDocument, capabilities: Set<string>): ActionMode[] => {
+const actionsFor = (document: DmsDocument, capabilities: Set<string>, subjectId: string): ActionMode[] => {
   const actions: ActionMode[] = [];
+  if (document.created_by_subject_id === subjectId && document.lifecycle_state === "DRAFT" && capabilities.has("document.draft.manage") && ["NOT_REQUIRED", "RETURNED", "REJECTED"].includes(document.approval_state)) actions.push("edit");
   if (document.lifecycle_state === "DRAFT" && capabilities.has("document.workflow.submit") && ["NOT_REQUIRED", "RETURNED", "REJECTED"].includes(document.approval_state)) actions.push("submit");
   if (document.approval_state === "PENDING" && capabilities.has("document.workflow.approve")) actions.push("approve", "return", "reject");
   if (document.lifecycle_state === "DRAFT" && document.direction === "INCOMING" && capabilities.has("document.issue")) actions.push("register");

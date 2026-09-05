@@ -15,6 +15,7 @@ export type DmsDocument = {
   direction: DmsDirection;
   organization_id: string;
   subject: string;
+  created_by_subject_id: string;
   document_type: string;
   document_number: string | null;
   document_date: string | null;

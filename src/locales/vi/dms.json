@@ -62,6 +62,7 @@
     "processorSubject": "Mã người xử lý chính (không bắt buộc)"
   },
   "actions": {
+    "edit": "Chỉnh sửa bản nháp",
     "refresh": "Làm mới",
     "create": "Tạo văn bản",
     "close": "Đóng",
@@ -81,6 +82,7 @@
     "complete": "Hoàn thành"
   },
   "actionPanel": {
+    "edit": "Chỉnh sửa thông tin bản nháp",
     "submit": "Trình văn bản vào luồng phê duyệt",
     "approve": "Xác nhận phê duyệt văn bản",
     "return": "Trả văn bản để chỉnh sửa",
