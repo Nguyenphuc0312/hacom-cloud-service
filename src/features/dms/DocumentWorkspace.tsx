@@ -174,11 +174,17 @@ export default function DocumentWorkspace(): React.ReactElement {
             </button>
           ))}
         </div>
-        <label className="relative my-3 block max-w-xl">
-          <span className="sr-only">{t("filters.search")}</span>
-          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-text-muted" aria-hidden="true" />
-          <input value={search} onChange={(event) => setSearch(event.target.value)} className="min-h-10 w-full rounded-lg border border-border bg-background pl-10 pr-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-border-focus focus:ring-2 focus:ring-focus/20" placeholder={t("filters.searchPlaceholder")} />
-        </label>
+        <div className="my-3 flex flex-wrap gap-3">
+          <label className="relative block min-w-[16rem] max-w-xl flex-1">
+            <span className="sr-only">{t("filters.search")}</span>
+            <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-text-muted" aria-hidden="true" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} className="min-h-10 w-full rounded-lg border border-border bg-background pl-10 pr-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-border-focus focus:ring-2 focus:ring-focus/20" placeholder={t("filters.searchPlaceholder")} />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-text-secondary">
+            {t("fields.documentType")}
+            <input value={documentType ?? ""} onChange={(event) => setDocumentType(event.target.value || null)} className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm font-normal text-text-primary outline-none placeholder:text-text-muted focus:border-border-focus focus:ring-2 focus:ring-focus/20" maxLength={120} />
+          </label>
+        </div>
       </div>
 
       {error ? (
