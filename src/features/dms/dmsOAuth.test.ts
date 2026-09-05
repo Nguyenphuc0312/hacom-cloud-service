@@ -21,6 +21,7 @@ describe("DMS OAuth token boundary", () => {
     sessionStorage.setItem("hacom.dms.oauth-state", "local-state");
     sessionStorage.setItem("hacom.dms.oauth-verifier", "local-verifier");
     sessionStorage.setItem("hacom.dms.oauth-redirect", `${window.location.origin}/chat`);
+    sessionStorage.setItem("hacom.dms.oauth-document", "33333333-3333-4333-8333-333333333333");
     const accessToken = token(Date.now() + 120_000);
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ access_token: accessToken }) });
     vi.stubGlobal("fetch", fetchMock);
@@ -30,7 +31,9 @@ describe("DMS OAuth token boundary", () => {
     expect(await Promise.all([first, second])).toEqual([true, true]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(getDmsAccessToken()).toBe(accessToken);
-    expect(window.location.search).toBe("?view=documents");
+    expect(new URLSearchParams(window.location.search).get("view")).toBe("documents");
+    expect(new URLSearchParams(window.location.search).get("documentId")).toBe("33333333-3333-4333-8333-333333333333");
+    expect(sessionStorage.getItem("hacom.dms.oauth-document")).toBeNull();
     expect(sessionStorage.getItem("hacom.dms.oauth-verifier")).toBeNull();
     expect(await completeDmsAuthorization()).toBe(false);
   });

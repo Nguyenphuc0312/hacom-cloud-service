@@ -1,9 +1,11 @@
 import { DMS_OAUTH_ISSUER_URL } from "../../config";
+import { dmsDocumentId } from "./dmsLinks";
 
 const TOKEN_KEY = "hacom.dms.access-token";
 const STATE_KEY = "hacom.dms.oauth-state";
 const VERIFIER_KEY = "hacom.dms.oauth-verifier";
 const REDIRECT_KEY = "hacom.dms.oauth-redirect";
+const DOCUMENT_KEY = "hacom.dms.oauth-document";
 
 const base64Url = (value: ArrayBuffer): string =>
   btoa(String.fromCharCode(...new Uint8Array(value)))
@@ -50,6 +52,8 @@ export const beginDmsAuthorization = async (): Promise<void> => {
   sessionStorage.setItem(STATE_KEY, state);
   sessionStorage.setItem(VERIFIER_KEY, verifier);
   sessionStorage.setItem(REDIRECT_KEY, callback);
+  const documentId = dmsDocumentId(new URLSearchParams(window.location.search).get("documentId"));
+  if (documentId) sessionStorage.setItem(DOCUMENT_KEY, documentId); else sessionStorage.removeItem(DOCUMENT_KEY);
   const authorize = new URL(`${DMS_OAUTH_ISSUER_URL}/authorize`);
   Object.entries({
     response_type: "code",
@@ -107,11 +111,14 @@ const exchangeDmsAuthorization = async (): Promise<boolean> => {
       throw new Error("DMS_OAUTH_EXCHANGE_FAILED");
     }
     sessionStorage.setItem(TOKEN_KEY, payload.access_token);
+    const documentId = dmsDocumentId(sessionStorage.getItem(DOCUMENT_KEY));
+    if (documentId) { params.set("documentId", documentId); params.set("workspace", "documents"); }
     return true;
   } finally {
     sessionStorage.removeItem(STATE_KEY);
     sessionStorage.removeItem(VERIFIER_KEY);
     sessionStorage.removeItem(REDIRECT_KEY);
+    sessionStorage.removeItem(DOCUMENT_KEY);
     params.delete("code");
     params.delete("state");
     params.delete("error");

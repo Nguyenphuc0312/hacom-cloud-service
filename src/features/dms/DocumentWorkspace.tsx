@@ -1,4 +1,6 @@
 import React from "react";
+import { useSearchParams } from "react-router-dom";
+import { dmsDocumentId } from "./dmsLinks";
 import { useTranslation } from "react-i18next";
 import {
   ArrowDownTrayIcon,
@@ -53,8 +55,13 @@ export default function DocumentWorkspace(): React.ReactElement {
   const [search, setSearch] = React.useState("");
   const [documents, setDocuments] = React.useState<DmsDocument[]>([]);
   const [total, setTotal] = React.useState(0);
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const [selected, setSelected] = React.useState<DmsDocument | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedId = dmsDocumentId(searchParams.get("documentId"));
+  const setSelectedId = (id: string): void => {
+    setSearchParams((current) => { const next = new URLSearchParams(current); next.set("documentId", id); next.set("workspace", "documents"); return next; });
+  };
+  const [loadedDocument, setSelected] = React.useState<DmsDocument | null>(null);
+  const selected = loadedDocument?.id === selectedId ? loadedDocument : null;
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [refreshKey, setRefreshKey] = React.useState(0);
@@ -66,10 +73,10 @@ export default function DocumentWorkspace(): React.ReactElement {
   React.useEffect(() => {
     void completeDmsAuthorization()
       .then((completed) => {
-        if (completed) setAuthReady(true);
+        if (completed) { setAuthReady(true); setSearchParams(new URLSearchParams(window.location.search), { replace: true }); }
       })
       .catch(() => setAuthError(true));
-  }, []);
+  }, [setSearchParams]);
 
   React.useEffect(() => {
     if (!authReady) return;
@@ -107,11 +114,13 @@ export default function DocumentWorkspace(): React.ReactElement {
   }, [direction, principal, refreshKey, search, t]);
 
   React.useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId || !principal) return;
+    let active = true;
     void dmsApi.detail(selectedId)
-      .then(setSelected)
-      .catch((cause: unknown) => setError(errorMessage(cause, t)));
-  }, [selectedId, refreshKey, t]);
+      .then((document) => { if (active) setSelected(document); })
+      .catch((cause: unknown) => { if (active) { setSelected(null); setError(errorMessage(cause, t)); } });
+    return () => { active = false; };
+  }, [selectedId, principal, refreshKey, t]);
 
   const refresh = (): void => setRefreshKey((value) => value + 1);
   const capabilities = new Set(principal?.capabilities ?? []);
