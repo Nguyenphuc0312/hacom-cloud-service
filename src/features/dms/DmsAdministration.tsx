@@ -19,14 +19,16 @@ export const DmsAdministration: React.FC<{ principal: DmsPrincipal }> = ({ princ
 
   React.useEffect(() => {
     if (!organizationId) return;
+    let active = true;
     const loader = tab === "templates" ? dmsApi.templates
       : tab === "workflows" ? dmsApi.workflows
         : tab === "books" ? dmsApi.books
           : dmsApi.catalogs;
     void loader(organizationId)
-      .then((result) => setItems(result as Array<Record<string, unknown>>))
-      .catch(() => setError(t("errors.unavailable")))
-      .finally(() => setLoading(false));
+      .then((result) => { if (active) setItems(result as Array<Record<string, unknown>>); })
+      .catch(() => { if (active) setError(t("errors.unavailable")); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [organizationId, revision, t, tab]);
 
   const canManage = principal.capabilities.includes({ templates: "document.template.manage", workflows: "document.workflow.manage", books: "document.numbering.manage", catalogs: "document.catalog.manage" }[tab]);
