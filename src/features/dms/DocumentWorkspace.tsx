@@ -207,9 +207,9 @@ export default function DocumentWorkspace(): React.ReactElement {
       )}
 
       <div className="border-b border-border px-3 pt-2 sm:px-5">
-        <div className="flex flex-wrap lg:flex-nowrap lg:overflow-x-auto" role="tablist" aria-label={t("filters.direction")} data-testid="dms-direction-tabs">
+        <div className="flex flex-wrap lg:flex-nowrap lg:overflow-x-auto" role="group" aria-label={t("filters.direction")} data-testid="dms-direction-tabs">
           {(["ALL", "INCOMING", "OUTGOING", "INTERNAL"] as const).map((item) => (
-            <button key={item} type="button" role="tab" aria-selected={direction === item} onClick={() => { setDirection(item); setListFilter("direction", item === "ALL" ? null : item); }} className={`min-h-10 shrink-0 border-b-2 px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-focus ${direction === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>
+            <button key={item} type="button" aria-pressed={direction === item} onClick={() => { setDirection(item); setListFilter("direction", item === "ALL" ? null : item); }} className={`min-h-10 shrink-0 border-b-2 px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-focus ${direction === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>
               {t(`directions.${item}`)}
             </button>
           ))}
