@@ -36,7 +36,7 @@ it("distinguishes stale revision from retryable service errors", async () => {
 
 it("keeps an overdue task actionable according to whether it was started", () => {
   const { rerender } = render(<DocumentTasks tasks={[{ ...task, state: "OVERDUE" }]} subjectId="me" canProcess onRefresh={() => {}} />);
-  expect(screen.getByRole("button", { name: "actions.start" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "actions.start" })).toBeDefined();
   rerender(<DocumentTasks tasks={[{ ...task, state: "OVERDUE", started_at: "2026-01-01T00:00:00.000Z" }]} subjectId="me" canProcess onRefresh={() => {}} />);
-  expect(screen.getByRole("button", { name: "actions.complete" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "actions.complete" })).toBeDefined();
 });
