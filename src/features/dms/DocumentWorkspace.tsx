@@ -211,7 +211,7 @@ export default function DocumentWorkspace(): React.ReactElement {
               {loading ? <div className="p-4"><SkeletonText lines={5} /></div> : documents.length === 0 ? (
                 <EmptyState title={t(view === "archive" ? "archive.empty" : "list.empty")} description={t(view === "archive" ? "archive.emptyDescription" : "list.emptyDescription")} />
               ) : documents.map((document) => (
-                <button key={document.id} type="button" onClick={() => { setSelectedId(document.id); setDetailTab("summary"); setActionMode(null); }} className={`grid w-full grid-cols-[1fr_auto] gap-3 border-b border-border px-4 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus ${selectedId === document.id ? "bg-primary/8" : "hover:bg-surface-hover"}`}>
+                <button key={document.id} data-testid="dms-document-row" type="button" onClick={() => { setSelectedId(document.id); setDetailTab("summary"); setActionMode(null); }} className={`grid w-full grid-cols-[1fr_auto] gap-3 border-b border-border px-4 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus ${selectedId === document.id ? "bg-primary/8" : "hover:bg-surface-hover"}`}>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold text-text-primary">{document.subject}</span>
                     <span className="mt-1 block truncate text-xs text-text-secondary">{document.document_number ?? t("list.noNumber")} · {t(`directions.${document.direction}`)}</span>
