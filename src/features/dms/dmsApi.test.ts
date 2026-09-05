@@ -32,4 +32,10 @@ describe("DMS API trust boundary", () => {
     expect(headers.has("x-organization-id")).toBe(false);
     expect(headers.has("x-dms-persona")).toBe(false);
   });
+
+  it("passes the archive scope as a server-side list filter", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ items: [], total: 0, page: 1, pageSize: 50 }), { status: 200, headers: { "content-type": "application/json" } }));
+    await dmsApi.list({ archiveState: "ARCHIVED", pageSize: 50 });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("archiveState=ARCHIVED");
+  });
 });

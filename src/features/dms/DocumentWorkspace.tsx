@@ -28,7 +28,7 @@ const PdfJsViewer = React.lazy(() => import("../../components/preview/PdfJsViewe
 type DirectionFilter = "ALL" | DmsDirection;
 type DetailTab = "summary" | "files" | "history" | "tasks";
 type ActionMode = "edit" | "submit" | "approve" | "return" | "reject" | "register" | "issue" | "distribute" | "recall" | "archive";
-type WorkspaceView = "documents" | "configuration" | "reports";
+type WorkspaceView = "documents" | "archive" | "configuration" | "reports";
 
 const formatDate = (value?: string | null): string => value
   ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value))
@@ -89,12 +89,12 @@ export default function DocumentWorkspace(): React.ReactElement {
   }, [authReady, t]);
 
   React.useEffect(() => {
-    if (!principal) return;
+    if (!principal || !["documents", "archive"].includes(view)) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setLoading(true);
       setError(null);
-      void dmsApi.list({ direction: direction === "ALL" ? null : direction, search, pageSize: 50 })
+      void dmsApi.list({ direction: direction === "ALL" ? null : direction, archiveState: view === "archive" ? "ARCHIVED" : "ACTIVE", search, pageSize: 50 })
         .then((result) => {
           if (controller.signal.aborted) return;
           setDocuments(result.items);
@@ -111,7 +111,7 @@ export default function DocumentWorkspace(): React.ReactElement {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [direction, principal, refreshKey, search, t]);
+  }, [direction, principal, refreshKey, search, t, view]);
 
   React.useEffect(() => {
     if (!selectedId || !principal) return;
@@ -156,7 +156,7 @@ export default function DocumentWorkspace(): React.ReactElement {
         </div>
       </header>
 
-      <nav className="flex overflow-x-auto border-b border-border px-3 sm:px-5" aria-label={t("navigation.label")}>{(["documents", "configuration", "reports"] as const).filter((item) => item !== "reports" || capabilities.has("document.report.read")).map((item) => <button key={item} type="button" aria-current={view === item ? "page" : undefined} onClick={() => setView(item)} className={`min-h-11 shrink-0 border-b-2 px-3 text-sm font-semibold ${view === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>{t(`navigation.${item}`)}</button>)}</nav>
+      <nav className="flex overflow-x-auto border-b border-border px-3 sm:px-5" aria-label={t("navigation.label")}>{(["documents", "archive", "configuration", "reports"] as const).filter((item) => item !== "reports" || capabilities.has("document.report.read")).map((item) => <button key={item} type="button" aria-current={view === item ? "page" : undefined} onClick={() => setView(item)} className={`min-h-11 shrink-0 border-b-2 px-3 text-sm font-semibold ${view === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>{t(`navigation.${item}`)}</button>)}</nav>
 
       {view === "configuration" && principal ? <DmsAdministration principal={principal} /> : view === "reports" ? <DmsReport /> : <>
 
@@ -185,12 +185,12 @@ export default function DocumentWorkspace(): React.ReactElement {
         <div className="grid min-h-[420px] lg:grid-cols-[minmax(320px,42%)_minmax(0,1fr)]">
           <div className="border-b border-border lg:border-b-0 lg:border-r">
             <div className="flex min-h-10 items-center justify-between border-b border-border px-4 text-sm">
-              <span className="font-semibold text-text-primary">{t("list.title")}</span>
+              <span className="font-semibold text-text-primary">{t(view === "archive" ? "archive.title" : "list.title")}</span>
               <span className="text-text-muted" aria-live="polite">{t("list.total", { count: total })}</span>
             </div>
             <div className="max-h-[620px] overflow-y-auto">
               {loading ? <div className="p-4"><SkeletonText lines={5} /></div> : documents.length === 0 ? (
-                <EmptyState title={t("list.empty")} description={t("list.emptyDescription")} />
+                <EmptyState title={t(view === "archive" ? "archive.empty" : "list.empty")} description={t(view === "archive" ? "archive.emptyDescription" : "list.emptyDescription")} />
               ) : documents.map((document) => (
                 <button key={document.id} type="button" onClick={() => { setSelectedId(document.id); setDetailTab("summary"); setActionMode(null); }} className={`grid w-full grid-cols-[1fr_auto] gap-3 border-b border-border px-4 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus ${selectedId === document.id ? "bg-primary/8" : "hover:bg-surface-hover"}`}>
                   <span className="min-w-0">

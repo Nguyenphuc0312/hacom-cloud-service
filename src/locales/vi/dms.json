@@ -8,7 +8,7 @@
     "description": "Kết nối phiên Hacom SSO để truy cập dữ liệu văn bản đúng phạm vi của bạn.",
     "action": "Kết nối quản lý văn bản"
   },
-  "navigation": { "label": "Khu vực quản lý văn bản", "documents": "Văn bản", "configuration": "Cấu hình", "reports": "Báo cáo" },
+  "navigation": { "label": "Khu vực quản lý văn bản", "documents": "Văn bản", "archive": "Kho văn bản", "configuration": "Cấu hình", "reports": "Báo cáo" },
   "directions": {
     "ALL": "Tất cả",
     "INCOMING": "Văn bản đến",
@@ -32,6 +32,7 @@
     "emptyDescription": "Thử đổi bộ lọc hoặc tạo hồ sơ mới nếu bạn có quyền.",
     "noNumber": "Chưa cấp số"
   },
+  "archive": { "title": "Kho văn bản", "empty": "Chưa có văn bản lưu trữ phù hợp", "emptyDescription": "Thử đổi bộ lọc hoặc từ khóa tìm kiếm." },
   "detail": {
     "selectTitle": "Chọn một văn bản",
     "selectDescription": "Thông tin, tệp, lịch sử và công việc sẽ hiển thị tại đây.",
