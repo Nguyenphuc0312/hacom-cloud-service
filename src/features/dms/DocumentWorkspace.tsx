@@ -39,9 +39,10 @@ const statusTone = (status: string): string => {
   return "bg-surface-overlay text-text-secondary";
 };
 
-const StatusChip: React.FC<{ value: string }> = ({ value }) => (
-  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${statusTone(value)}`}>{value.replaceAll("_", " ")}</span>
-);
+const StatusChip: React.FC<{ value: string }> = ({ value }) => {
+  const { t } = useTranslation("dms");
+  return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${statusTone(value)}`}>{t(`lifecycle.${value}`, { defaultValue: t("lifecycle.unknown") })}</span>;
+};
 
 export default function DocumentWorkspace(): React.ReactElement {
   const { t } = useTranslation("dms");
@@ -374,7 +375,7 @@ const ActionPanel: React.FC<{ document: DmsDocument; mode: ActionMode; onClose: 
         <OrganizationMemberPicker organizationId={document.organization_id} name="recipientSubjectId" label={t("members.recipients")} required />
         <OrganizationMemberPicker organizationId={document.organization_id} name="processorSubjectId" label={t("members.processor")} max={1} />
         <OrganizationMemberPicker organizationId={document.organization_id} name="coordinatorSubjectId" label={t("members.coordinators")} max={49} />
-        <Field label={t("fields.dueDate")}><input name="dueAt" type="datetime-local" /></Field>
+        <Field label={t("fields.dueDate")} className="self-start"><input name="dueAt" type="datetime-local" /></Field>
       </>}
     </div>
     {error && <p className="mt-2 text-sm text-danger" role="alert">{error}</p>}
