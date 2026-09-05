@@ -48,6 +48,7 @@
     }
   },
   "create": { "title": "Tạo hồ sơ văn bản", "withoutTemplate": "Không dùng mẫu" },
+  "history": { "actions": { "DOCUMENT_CREATED": "Đã tạo văn bản", "DOCUMENT_VERSION_CREATED": "Đã tạo phiên bản", "DOCUMENT_FILE_ATTACHED": "Đã đính kèm tệp", "WORKFLOW_SUBMITTED": "Đã trình duyệt", "APPROVAL_STEP_COMPLETED": "Đã hoàn thành bước duyệt", "DOCUMENT_APPROVED": "Đã phê duyệt", "DOCUMENT_REJECTED": "Đã từ chối", "DOCUMENT_RETURNED": "Đã trả lại", "DOCUMENT_ISSUED": "Đã phát hành", "INCOMING_DOCUMENT_REGISTERED": "Đã đăng ký văn bản đến", "DOCUMENT_DISTRIBUTED": "Đã phân phối", "DOCUMENT_DISTRIBUTION_RECALLED": "Đã thu hồi phân phối", "PROCESSING_STARTED": "Đã bắt đầu xử lý", "PROCESSING_COMPLETED": "Đã hoàn thành xử lý", "DOCUMENT_ARCHIVED": "Đã lưu trữ", "DOCUMENT_BOOK_CREATED": "Đã tạo sổ văn bản", "WORKFLOW_VERSION_CREATED": "Đã tạo phiên bản luồng", "TEMPLATE_VERSION_CREATED": "Đã tạo phiên bản mẫu", "TEMPLATE_STATUS_CHANGED": "Đã thay đổi trạng thái mẫu", "CATALOG_ITEM_VERSIONED": "Đã cập nhật phiên bản danh mục" } },
   "fields": {
     "organization": "Đơn vị",
     "organizationScope": "Theo quyền truy cập",
