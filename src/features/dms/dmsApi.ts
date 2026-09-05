@@ -35,7 +35,7 @@ export type DmsDocument = {
 };
 export type DmsFile = { id: string; filename: string; content_type: string; content_length: number; file_role: string; integrity_state: string };
 export type DmsHistory = { id: string; action: string; result: string; reason_code: string | null; metadata: Record<string, unknown>; occurred_at: string };
-export type DmsTask = { id: string; role: string; state: string; revision: number; due_at: string | null };
+export type DmsTask = { id: string; assignee_subject_id: string; role: string; state: string; revision: number; due_at: string | null };
 export type DmsList = { items: DmsDocument[]; total: number; page: number; pageSize: number };
 export type DmsOrganizationMember = { subjectId: string; employeeCode: string; displayName: string };
 

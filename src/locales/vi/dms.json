@@ -1,7 +1,7 @@
 {
   "title": "Quản lý văn bản",
   "backToMessages": "Trở lại tin nhắn",
-  "members": { "searchLabel": "{{label}} — tìm nhân sự", "hint": "Nhập tên hoặc mã nhân viên trong đơn vị.", "search": "Tìm", "results": "Kết quả tìm nhân sự", "choose": "Chọn người để thêm", "limit": "Đã chọn tối đa {{count}} người", "loading": "Đang tìm nhân sự…", "found": "Tìm thấy {{count}} người.", "empty": "Không có nhân sự phù hợp trong đơn vị. Thử tên hoặc mã khác.", "refine": "Hiển thị 50 kết quả đầu tiên. Nhập từ khóa cụ thể hơn.", "unavailable": "Không tải được danh sách nhân sự. Bấm Tìm để thử lại.", "removeLabel": "Bỏ chọn {{name}}", "remove": "Bỏ chọn", "recipients": "Người nhận", "processor": "Người xử lý chính (không bắt buộc)", "approvers": "Người duyệt theo thứ tự" },
+  "members": { "coordinators": "Người phối hợp (không bắt buộc)", "searchLabel": "{{label}} — tìm nhân sự", "hint": "Nhập tên hoặc mã nhân viên trong đơn vị.", "search": "Tìm", "results": "Kết quả tìm nhân sự", "choose": "Chọn người để thêm", "limit": "Đã chọn tối đa {{count}} người", "loading": "Đang tìm nhân sự…", "found": "Tìm thấy {{count}} người.", "empty": "Không có nhân sự phù hợp trong đơn vị. Thử tên hoặc mã khác.", "refine": "Hiển thị 50 kết quả đầu tiên. Nhập từ khóa cụ thể hơn.", "unavailable": "Không tải được danh sách nhân sự. Bấm Tìm để thử lại.", "removeLabel": "Bỏ chọn {{name}}", "remove": "Bỏ chọn", "recipients": "Người nhận", "processor": "Người xử lý chính (không bắt buộc)", "approvers": "Người duyệt theo thứ tự" },
   "subtitle": "Nghiệp vụ văn bản theo quyền của {{employeeCode}}",
   "connect": {
     "description": "Kết nối phiên Hacom SSO để truy cập dữ liệu văn bản đúng phạm vi của bạn.",
@@ -98,7 +98,7 @@
     "failed": "Không tải hoặc gửi được tệp. Kiểm tra kết nối và quyền truy cập rồi thử lại.",
     "unsupportedPreview": "Định dạng này chưa xem được tại đây. Bạn có thể tải tệp nếu có quyền."
   },
-  "tasks": { "roles": { "PRIMARY": "Xử lý chính", "COORDINATOR": "Phối hợp xử lý" } },
+  "tasks": { "empty": "Chưa giao công việc xử lý.", "mine": "Công việc của bạn", "retryError": "Chưa cập nhật được công việc. Hãy thử lại thao tác.", "roleConflict": "Người xử lý chính không đồng thời là người phối hợp. Hãy bỏ lựa chọn trùng.", "states": { "ASSIGNED": "Đã giao", "IN_PROGRESS": "Đang xử lý", "COMPLETED": "Hoàn thành", "OVERDUE": "Quá hạn", "CANCELLED": "Đã hủy" }, "roles": { "PRIMARY": "Xử lý chính", "COORDINATOR": "Phối hợp xử lý" } },
   "admin": {
     "title": "Cấu hình nghiệp vụ",
     "description": "Phiên bản hóa mẫu, luồng duyệt, sổ số và danh mục theo đơn vị.",

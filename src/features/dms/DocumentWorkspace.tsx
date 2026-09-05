@@ -4,7 +4,6 @@ import {
   ArrowDownTrayIcon,
   ArrowPathIcon,
   ArrowUpTrayIcon,
-  CheckCircleIcon,
   ChevronRightIcon,
   DocumentPlusIcon,
   DocumentTextIcon,
@@ -21,6 +20,7 @@ import { beginDmsAuthorization, completeDmsAuthorization, getDmsAccessToken } fr
 import { DmsAdministration } from "./DmsAdministration";
 import { DmsReport } from "./DmsReport";
 import { OrganizationMemberPicker } from "./OrganizationMemberPicker";
+import { DocumentTasks } from "./DocumentTasks";
 const PdfJsViewer = React.lazy(() => import("../../components/preview/PdfJsViewer"));
 
 type DirectionFilter = "ALL" | DmsDirection;
@@ -194,7 +194,7 @@ export default function DocumentWorkspace(): React.ReactElement {
             </div>
           </div>
           {selected ? (
-            <DocumentDetail document={selected} capabilities={capabilities} tab={detailTab} onTab={setDetailTab} actionMode={actionMode} onAction={setActionMode} onRefresh={refresh} />
+            <DocumentDetail document={selected} subjectId={principal?.subjectId ?? ""} capabilities={capabilities} tab={detailTab} onTab={setDetailTab} actionMode={actionMode} onAction={setActionMode} onRefresh={refresh} />
           ) : (
             <EmptyState icon={<DocumentTextIcon className="h-full w-full" />} title={t("detail.selectTitle")} description={t("detail.selectDescription")} />
           )}
@@ -255,7 +255,7 @@ const Field: React.FC<{ label: string; children: React.ReactElement<{ className?
   <label className={`grid gap-1 text-xs font-semibold text-text-secondary ${className ?? ""}`}>{label}{React.cloneElement(children, { className: "min-h-10 w-full rounded-md border border-border bg-surface px-3 text-sm font-normal text-text-primary outline-none focus:border-border-focus focus:ring-2 focus:ring-focus/20" })}</label>
 );
 
-const DocumentDetail: React.FC<{ document: DmsDocument; capabilities: Set<string>; tab: DetailTab; onTab: (tab: DetailTab) => void; actionMode: ActionMode | null; onAction: (mode: ActionMode | null) => void; onRefresh: () => void }> = ({ document, capabilities, tab: selectedTab, onTab, actionMode, onAction, onRefresh }) => {
+const DocumentDetail: React.FC<{ document: DmsDocument; subjectId: string; capabilities: Set<string>; tab: DetailTab; onTab: (tab: DetailTab) => void; actionMode: ActionMode | null; onAction: (mode: ActionMode | null) => void; onRefresh: () => void }> = ({ document, subjectId, capabilities, tab: selectedTab, onTab, actionMode, onAction, onRefresh }) => {
   const { t } = useTranslation("dms");
   const available = actionsFor(document, capabilities);
   const tabs = (["summary", "files", "history", "tasks"] as const).filter((item) => item !== "history" || document.access?.history === true);
@@ -272,7 +272,7 @@ const DocumentDetail: React.FC<{ document: DmsDocument; capabilities: Set<string
         {tab === "summary" && <dl className="grid gap-3 sm:grid-cols-2"><Datum label={t("fields.organization")} value={document.organization_id} /><Datum label={t("fields.documentType")} value={document.document_type} /><Datum label={t("fields.confidentiality")} value={t(`confidentiality.${document.confidentiality}`)} /><Datum label={t("fields.documentDate")} value={formatDate(document.document_date)} /><Datum label={t("fields.dueDate")} value={formatDate(document.due_date)} /><Datum label={t("fields.approval")} value={document.approval_state} /><Datum label={t("fields.distribution")} value={document.distribution_state} /><Datum label={t("fields.signing")} value={document.signing_state} /></dl>}
         {tab === "files" && <Files key={document.id} document={document} canUpload={capabilities.has("document.draft.manage") && document.lifecycle_state === "DRAFT"} canPreview={capabilities.has("document.file.read")} canDownload={capabilities.has("document.file.download")} onRefresh={onRefresh} />}
         {tab === "history" && <div className="space-y-3">{document.history?.map((event) => <div key={event.id} className="rounded-lg border border-border p-3"><div className="flex justify-between gap-3"><span className="font-semibold text-text-primary">{event.action.replaceAll("_", " ")}</span><span className="text-xs text-text-muted">{formatDate(event.occurred_at)}</span></div><p className="mt-1 text-xs text-text-secondary">{event.result}{event.reason_code ? ` · ${event.reason_code}` : ""}</p></div>) ?? null}</div>}
-        {tab === "tasks" && <Tasks document={document} canProcess={capabilities.has("document.process")} onRefresh={onRefresh} />}
+        {tab === "tasks" && <DocumentTasks key={document.id} tasks={document.tasks ?? []} subjectId={subjectId} canProcess={capabilities.has("document.process")} onRefresh={onRefresh} />}
       </div>
     </article>
   );
@@ -336,12 +336,6 @@ const Files: React.FC<{ document: DmsDocument; canUpload: boolean; canPreview: b
   return <div className="space-y-3">{canUpload && <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-primary/40 px-3 text-sm font-semibold text-primary"><ArrowUpTrayIcon className="h-4 w-4" />{t("files.upload")}<input className="sr-only" type="file" accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={busy} onChange={(event) => void upload(event)} /></label>}{document.files?.map((file) => <div key={file.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"><div className="min-w-0"><p className="truncate text-sm font-semibold text-text-primary">{file.filename}</p><p className="text-xs text-text-muted">{Math.ceil(file.content_length / 1024)} KB · {file.integrity_state}</p></div><div className="flex gap-1">{canPreview && <IconButton icon={<EyeIcon />} aria-label={t("files.preview")} size="sm" disabled={busy} onClick={() => void open(file.id, false)} />}{canDownload && <IconButton icon={<ArrowDownTrayIcon />} aria-label={t("files.download")} size="sm" disabled={busy} onClick={() => void open(file.id, true)} />}</div></div>)}</div>;
 };
 
-const Tasks: React.FC<{ document: DmsDocument; canProcess: boolean; onRefresh: () => void }> = ({ document, canProcess, onRefresh }) => {
-  const { t } = useTranslation("dms");
-  const run = async (id: string, action: "start" | "complete", revision: number): Promise<void> => { await dmsApi.task(id, action, revision); onRefresh(); };
-  return <div className="space-y-3">{document.tasks?.map((task) => <div key={task.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"><div><p className="text-sm font-semibold text-text-primary">{t(`tasks.roles.${task.role}`)}</p><p className="text-xs text-text-muted">{task.state.replaceAll("_", " ")} · {formatDate(task.due_at)}</p></div>{canProcess && task.state === "ASSIGNED" && <Button size="xs" onClick={() => void run(task.id, "start", task.revision)}>{t("actions.start")}</Button>}{canProcess && task.state === "IN_PROGRESS" && <Button size="xs" leftIcon={<CheckCircleIcon />} onClick={() => void run(task.id, "complete", task.revision)}>{t("actions.complete")}</Button>}</div>)}</div>;
-};
-
 const ActionPanel: React.FC<{ document: DmsDocument; mode: ActionMode; onClose: () => void; onDone: () => void }> = ({ document, mode, onClose, onDone }) => {
   const { t } = useTranslation("dms");
   const [workflows, setWorkflows] = React.useState<Array<Record<string, unknown>>>([]);
@@ -362,7 +356,10 @@ const ActionPanel: React.FC<{ document: DmsDocument; mode: ActionMode; onClose: 
     if (mode === "distribute") {
       const recipients = data.getAll("recipientSubjectId").map(String);
       const processor = String(data.get("processorSubjectId") ?? "").trim();
-      body = { recipients: recipients.map((subjectId) => ({ subjectId, deliveryMethod: "INTERNAL" })), tasks: processor ? [{ subjectId: processor, role: "PRIMARY", dueAt: String(data.get("dueAt")) || null }] : [] };
+      const coordinators = data.getAll("coordinatorSubjectId").map(String);
+      if (coordinators.includes(processor)) { setError(t("tasks.roleConflict")); return; }
+      const dueAt = data.get("dueAt") ? new Date(String(data.get("dueAt"))).toISOString() : null;
+      body = { recipients: recipients.map((subjectId) => ({ subjectId, deliveryMethod: "INTERNAL" })), tasks: [...(processor ? [{ subjectId: processor, role: "PRIMARY", dueAt }] : []), ...coordinators.map((subjectId) => ({ subjectId, role: "COORDINATOR", dueAt }))] };
     }
     setBusy(true); setError(null);
     try { await dmsApi.action(document.id, mode, body); onDone(); } catch (cause) { setError(errorMessage(cause, t)); } finally { setBusy(false); }
@@ -376,6 +373,7 @@ const ActionPanel: React.FC<{ document: DmsDocument; mode: ActionMode; onClose: 
       {mode === "distribute" && <>
         <OrganizationMemberPicker organizationId={document.organization_id} name="recipientSubjectId" label={t("members.recipients")} required />
         <OrganizationMemberPicker organizationId={document.organization_id} name="processorSubjectId" label={t("members.processor")} max={1} />
+        <OrganizationMemberPicker organizationId={document.organization_id} name="coordinatorSubjectId" label={t("members.coordinators")} max={49} />
         <Field label={t("fields.dueDate")}><input name="dueAt" type="datetime-local" /></Field>
       </>}
     </div>
