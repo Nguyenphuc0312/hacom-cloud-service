@@ -32,6 +32,7 @@
     "emptyDescription": "Thử đổi bộ lọc hoặc tạo hồ sơ mới nếu bạn có quyền.",
     "noNumber": "Chưa cấp số"
   },
+  "pagination": { "previous": "Trước", "next": "Sau", "page": "Trang {{page}} / {{count}}" },
   "archive": { "title": "Kho văn bản", "empty": "Chưa có văn bản lưu trữ phù hợp", "emptyDescription": "Thử đổi bộ lọc hoặc từ khóa tìm kiếm." },
   "detail": {
     "selectTitle": "Chọn một văn bản",

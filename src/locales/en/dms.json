@@ -10,6 +10,7 @@
   "confidentiality": { "NORMAL": "Normal", "CONFIDENTIAL": "Confidential", "SECRET": "Secret" },
   "filters": { "direction": "Document direction", "search": "Search documents", "searchPlaceholder": "Search by subject or document number" },
   "list": { "title": "Documents", "total": "{{count}} documents", "empty": "No matching documents", "emptyDescription": "Change the filters or create a draft if permitted.", "noNumber": "Number not assigned" },
+  "pagination": { "previous": "Previous", "next": "Next", "page": "Page {{page}} / {{count}}" },
   "archive": { "title": "Repository", "empty": "No matching archived documents", "emptyDescription": "Change the filters or search term." },
   "detail": { "selectTitle": "Select a document", "selectDescription": "Details, files, history and tasks will appear here.", "tabs": { "summary": "Details", "files": "Files", "history": "History", "tasks": "Tasks" } },
   "create": { "title": "Create document record", "withoutTemplate": "Do not use a template" },

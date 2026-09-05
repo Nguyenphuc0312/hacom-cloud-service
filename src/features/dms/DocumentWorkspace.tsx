@@ -29,6 +29,7 @@ type DirectionFilter = "ALL" | DmsDirection;
 type DetailTab = "summary" | "files" | "history" | "tasks";
 type ActionMode = "edit" | "submit" | "approve" | "return" | "reject" | "register" | "issue" | "distribute" | "recall" | "archive";
 type WorkspaceView = "documents" | "archive" | "configuration" | "reports";
+const DOCUMENT_PAGE_SIZE = 50;
 
 const formatDate = (value?: string | null): string => value
   ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value))
@@ -57,6 +58,7 @@ export default function DocumentWorkspace(): React.ReactElement {
   const [search, setSearch] = React.useState("");
   const [documents, setDocuments] = React.useState<DmsDocument[]>([]);
   const [total, setTotal] = React.useState(0);
+  const [page, setPage] = React.useState(1);
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedId = dmsDocumentId(searchParams.get("documentId"));
   const setSelectedId = (id: string): void => {
@@ -96,7 +98,7 @@ export default function DocumentWorkspace(): React.ReactElement {
     const timer = window.setTimeout(() => {
       setLoading(true);
       setError(null);
-      void dmsApi.list({ direction: direction === "ALL" ? null : direction, state: lifecycleState, documentType, archiveState: view === "archive" ? "ARCHIVED" : "ACTIVE", search, pageSize: 50 })
+      void dmsApi.list({ direction: direction === "ALL" ? null : direction, state: lifecycleState, documentType, archiveState: view === "archive" ? "ARCHIVED" : "ACTIVE", search, page, pageSize: DOCUMENT_PAGE_SIZE })
         .then((result) => {
           if (controller.signal.aborted) return;
           setDocuments(result.items);
@@ -113,7 +115,7 @@ export default function DocumentWorkspace(): React.ReactElement {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [direction, documentType, lifecycleState, principal, refreshKey, search, t, view]);
+  }, [direction, documentType, lifecycleState, page, principal, refreshKey, search, t, view]);
 
   React.useEffect(() => {
     if (!selectedId || !principal) return;
@@ -158,9 +160,9 @@ export default function DocumentWorkspace(): React.ReactElement {
         </div>
       </header>
 
-      <nav className="flex overflow-x-auto border-b border-border px-3 sm:px-5" aria-label={t("navigation.label")}>{(["documents", "archive", "configuration", "reports"] as const).filter((item) => item !== "reports" || capabilities.has("document.report.read")).map((item) => <button key={item} type="button" aria-current={view === item ? "page" : undefined} onClick={() => { setView(item); if (item === "documents" || item === "archive") setLifecycleState(null); }} className={`min-h-11 shrink-0 border-b-2 px-3 text-sm font-semibold ${view === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>{t(`navigation.${item}`)}</button>)}</nav>
+      <nav className="flex overflow-x-auto border-b border-border px-3 sm:px-5" aria-label={t("navigation.label")}>{(["documents", "archive", "configuration", "reports"] as const).filter((item) => item !== "reports" || capabilities.has("document.report.read")).map((item) => <button key={item} type="button" aria-current={view === item ? "page" : undefined} onClick={() => { setView(item); setPage(1); if (item === "documents" || item === "archive") setLifecycleState(null); }} className={`min-h-11 shrink-0 border-b-2 px-3 text-sm font-semibold ${view === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>{t(`navigation.${item}`)}</button>)}</nav>
 
-      {view === "configuration" && principal ? <DmsAdministration principal={principal} /> : view === "reports" ? <DmsReport onDrillDown={(group, filters) => { setDirection(group.direction as DmsDirection); setLifecycleState(group.lifecycle_state); setDocumentType(filters.documentType ?? null); setView(group.lifecycle_state === "ARCHIVED" ? "archive" : "documents"); }} /> : <>
+      {view === "configuration" && principal ? <DmsAdministration principal={principal} /> : view === "reports" ? <DmsReport onDrillDown={(group, filters) => { setDirection(group.direction as DmsDirection); setLifecycleState(group.lifecycle_state); setDocumentType(filters.documentType ?? null); setPage(1); setView(group.lifecycle_state === "ARCHIVED" ? "archive" : "documents"); }} /> : <>
 
       {createOpen && principal && (
         <CreateDocumentPanel principal={principal} onClose={() => setCreateOpen(false)} onCreated={(id) => { setCreateOpen(false); setSelectedId(id); refresh(); }} />
@@ -169,7 +171,7 @@ export default function DocumentWorkspace(): React.ReactElement {
       <div className="border-b border-border px-3 pt-2 sm:px-5">
         <div className="flex overflow-x-auto" role="tablist" aria-label={t("filters.direction")}> 
           {(["ALL", "INCOMING", "OUTGOING", "INTERNAL"] as const).map((item) => (
-            <button key={item} type="button" role="tab" aria-selected={direction === item} onClick={() => setDirection(item)} className={`min-h-10 shrink-0 border-b-2 px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-focus ${direction === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>
+            <button key={item} type="button" role="tab" aria-selected={direction === item} onClick={() => { setDirection(item); setPage(1); }} className={`min-h-10 shrink-0 border-b-2 px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-focus ${direction === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>
               {t(`directions.${item}`)}
             </button>
           ))}
@@ -178,11 +180,11 @@ export default function DocumentWorkspace(): React.ReactElement {
           <label className="relative block min-w-[16rem] max-w-xl flex-1">
             <span className="sr-only">{t("filters.search")}</span>
             <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-text-muted" aria-hidden="true" />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} className="min-h-10 w-full rounded-lg border border-border bg-background pl-10 pr-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-border-focus focus:ring-2 focus:ring-focus/20" placeholder={t("filters.searchPlaceholder")} />
+            <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} className="min-h-10 w-full rounded-lg border border-border bg-background pl-10 pr-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-border-focus focus:ring-2 focus:ring-focus/20" placeholder={t("filters.searchPlaceholder")} />
           </label>
           <label className="grid gap-1 text-xs font-semibold text-text-secondary">
             {t("fields.documentType")}
-            <input value={documentType ?? ""} onChange={(event) => setDocumentType(event.target.value || null)} className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm font-normal text-text-primary outline-none placeholder:text-text-muted focus:border-border-focus focus:ring-2 focus:ring-focus/20" maxLength={120} />
+            <input value={documentType ?? ""} onChange={(event) => { setDocumentType(event.target.value || null); setPage(1); }} className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm font-normal text-text-primary outline-none placeholder:text-text-muted focus:border-border-focus focus:ring-2 focus:ring-focus/20" maxLength={120} />
           </label>
         </div>
       </div>
@@ -210,6 +212,11 @@ export default function DocumentWorkspace(): React.ReactElement {
                 </button>
               ))}
             </div>
+            {Math.ceil(total / DOCUMENT_PAGE_SIZE) > 1 && <div className="flex min-h-12 items-center justify-between gap-2 border-t border-border px-4 text-sm">
+              <Button size="sm" variant="secondary" disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{t("pagination.previous")}</Button>
+              <span className="text-text-secondary" aria-live="polite">{t("pagination.page", { page, count: Math.ceil(total / DOCUMENT_PAGE_SIZE) })}</span>
+              <Button size="sm" variant="secondary" disabled={page >= Math.ceil(total / DOCUMENT_PAGE_SIZE)} onClick={() => setPage((value) => Math.min(Math.ceil(total / DOCUMENT_PAGE_SIZE), value + 1))}>{t("pagination.next")}</Button>
+            </div>}
           </div>
           {selected ? (
             <DocumentDetail document={selected} subjectId={principal?.subjectId ?? ""} capabilities={capabilities} tab={detailTab} onTab={setDetailTab} actionMode={actionMode} onAction={setActionMode} onRefresh={refresh} />
