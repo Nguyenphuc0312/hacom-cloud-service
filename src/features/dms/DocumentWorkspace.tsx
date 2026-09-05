@@ -215,10 +215,17 @@ export default function DocumentWorkspace(): React.ReactElement {
   );
 }
 
-const CreateDocumentPanel: React.FC<{ principal: DmsPrincipal; onClose: () => void; onCreated: (id: string) => void }> = ({ principal, onClose, onCreated }) => {
+export const CreateDocumentPanel: React.FC<{ principal: DmsPrincipal; onClose: () => void; onCreated: (id: string) => void }> = ({ principal, onClose, onCreated }) => {
   const { t } = useTranslation("dms");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [organizationId, setOrganizationId] = React.useState(principal.organizationIds[0] ?? "");
+  const [templates, setTemplates] = React.useState<Array<Record<string, unknown>>>([]);
+  React.useEffect(() => {
+    let active = true;
+    if (organizationId) void dmsApi.templates(organizationId).then((items) => { if (active) setTemplates(items as Array<Record<string, unknown>>); }).catch(() => { if (active) setTemplates([]); });
+    return () => { active = false; };
+  }, [organizationId]);
   const submit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -233,6 +240,7 @@ const CreateDocumentPanel: React.FC<{ principal: DmsPrincipal; onClose: () => vo
         confidentiality: String(data.get("confidentiality")),
         documentDate: String(data.get("documentDate")) || null,
         dueDate: String(data.get("dueDate")) || null,
+        templateVersionId: String(data.get("templateVersionId")) || null,
         signingRequired: data.get("signingRequired") === "on",
       });
       onCreated(result.id);
@@ -246,8 +254,9 @@ const CreateDocumentPanel: React.FC<{ principal: DmsPrincipal; onClose: () => vo
     <form onSubmit={(event) => void submit(event)} className="border-b border-border bg-background p-4" aria-label={t("create.title")}> 
       <div className="mb-3 flex items-center justify-between"><h3 className="font-bold text-text-primary">{t("create.title")}</h3><IconButton icon={<XMarkIcon />} aria-label={t("actions.close")} size="sm" onClick={onClose} /></div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label={t("fields.organization")}><select name="organizationId" required>{principal.organizationIds.map((id) => <option key={id} value={id}>{id}</option>)}</select></Field>
+        <Field label={t("fields.organization")}><select name="organizationId" required value={organizationId} onChange={(event) => setOrganizationId(event.target.value)}>{principal.organizationIds.map((id) => <option key={id} value={id}>{id}</option>)}</select></Field>
         <Field label={t("fields.direction")}><select name="direction" required><option value="INCOMING">{t("directions.INCOMING")}</option><option value="OUTGOING">{t("directions.OUTGOING")}</option><option value="INTERNAL">{t("directions.INTERNAL")}</option></select></Field>
+        <Field label={t("fields.template")}><select name="templateVersionId"><option value="">{t("create.withoutTemplate")}</option>{templates.map((item) => <option key={String(item.latest_version_id)} value={String(item.latest_version_id)}>{String(item.name)} · v{String(item.version)}</option>)}</select></Field>
         <Field label={t("fields.documentType")}><input name="documentType" required maxLength={120} /></Field>
         <Field label={t("fields.confidentiality")}><select name="confidentiality"><option value="NORMAL">{t("confidentiality.NORMAL")}</option><option value="CONFIDENTIAL">{t("confidentiality.CONFIDENTIAL")}</option><option value="SECRET">{t("confidentiality.SECRET")}</option></select></Field>
         <Field label={t("fields.subject")} className="sm:col-span-2"><input name="subject" required maxLength={500} /></Field>

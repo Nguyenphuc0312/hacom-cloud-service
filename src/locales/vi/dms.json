@@ -42,10 +42,11 @@
       "tasks": "Xử lý"
     }
   },
-  "create": { "title": "Tạo hồ sơ văn bản" },
+  "create": { "title": "Tạo hồ sơ văn bản", "withoutTemplate": "Không dùng mẫu" },
   "fields": {
     "organization": "Đơn vị",
     "direction": "Loại văn bản",
+    "template": "Mẫu văn bản",
     "documentType": "Loại hồ sơ",
     "confidentiality": "Độ mật",
     "subject": "Trích yếu",
