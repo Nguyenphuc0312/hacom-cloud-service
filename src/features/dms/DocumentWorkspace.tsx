@@ -339,6 +339,14 @@ const DocumentDetail: React.FC<{ document: DmsDocument; subjectId: string; capab
   const available = actionsFor(document, capabilities, subjectId);
   const tabs = (["summary", "files", "history", "tasks"] as const).filter((item) => item !== "history" || document.access?.history === true);
   const tab = tabs.includes(selectedTab) ? selectedTab : "summary";
+  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const index = tabs.indexOf(tab);
+    const nextIndex = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index - 1 + tabs.length) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : index;
+    if (nextIndex === index && !["Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    onTab(tabs[nextIndex]);
+    event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[nextIndex]?.focus();
+  };
   const template = document.versions?.[0];
   const templateProvenance = template?.template_name_snapshot ? `${template.template_name_snapshot} (${template.template_code_snapshot}) · v${template.template_version_number}` : null;
   return (
@@ -348,7 +356,7 @@ const DocumentDetail: React.FC<{ document: DmsDocument; subjectId: string; capab
         {available.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{available.map((action) => <Button key={action} size="xs" variant={action === "reject" ? "danger" : "secondary"} onClick={() => onAction(action)}>{t(`actions.${action}`)}</Button>)}</div>}
       </header>
       {actionMode && <ActionPanel document={document} mode={actionMode} onClose={() => onAction(null)} onDone={() => { onAction(null); onRefresh(); }} />}
-      <div className="flex overflow-x-auto border-b border-border" role="tablist">{tabs.map((item) => <button key={item} id={`dms-${document.id}-tab-${item}`} type="button" role="tab" aria-controls={`dms-${document.id}-panel-${item}`} aria-selected={tab === item} onClick={() => onTab(item)} className={`min-h-10 border-b-2 px-4 text-sm font-semibold ${tab === item ? "border-primary text-primary" : "border-transparent text-text-secondary"}`}>{t(`detail.tabs.${item}`)}</button>)}</div>
+      <div className="flex overflow-x-auto border-b border-border" role="tablist" onKeyDown={handleTabKeyDown}>{tabs.map((item) => <button key={item} id={`dms-${document.id}-tab-${item}`} type="button" role="tab" aria-controls={`dms-${document.id}-panel-${item}`} aria-selected={tab === item} tabIndex={tab === item ? 0 : -1} onClick={() => onTab(item)} className={`min-h-10 border-b-2 px-4 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-focus ${tab === item ? "border-primary text-primary" : "border-transparent text-text-secondary"}`}>{t(`detail.tabs.${item}`)}</button>)}</div>
       <div id={`dms-${document.id}-panel-${tab}`} role="tabpanel" aria-labelledby={`dms-${document.id}-tab-${tab}`} tabIndex={0} className="max-h-[470px] overflow-y-auto p-4">
         {tab === "summary" && <dl className="grid gap-3 sm:grid-cols-2"><Datum label={t("fields.organization")} value={document.organization_id} /><Datum label={t("fields.documentType")} value={document.document_type} />{templateProvenance && <Datum label={t("fields.templateProvenance")} value={templateProvenance} />}<Datum label={t("fields.confidentiality")} value={t(`confidentiality.${document.confidentiality}`)} /><Datum label={t("fields.documentDate")} value={formatDate(document.document_date)} /><Datum label={t("fields.dueDate")} value={formatDate(document.due_date)} /><Datum label={t("fields.approval")} value={document.approval_state} /><Datum label={t("fields.distribution")} value={document.distribution_state} /><Datum label={t("fields.signing")} value={document.signing_state} /></dl>}
         {tab === "files" && <Files key={document.id} document={document} canUpload={capabilities.has("document.draft.manage") && document.lifecycle_state === "DRAFT"} canPreview={capabilities.has("document.file.read")} canDownload={capabilities.has("document.file.download")} onRefresh={onRefresh} />}
