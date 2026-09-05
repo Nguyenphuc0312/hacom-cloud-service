@@ -174,6 +174,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
       ? storedDownloadState
       : initialDownloadState(downloadIdentity);
   const activeDownloadRef = useRef<AbortController | null>(null);
+  const activeOpenRef = useRef(false);
   const activeDownloadIdentityRef = useRef(downloadIdentity);
   const isDownloadBusy = downloadState.status === "downloading";
   const canAutoOpenFile = canAutoOpenDownloadedFile(attachment.fileName);
@@ -190,7 +191,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   const mediaTransferLabel =
     downloadState.status === "download-error"
       ? t("chat:file.downloadFailed", {
-          defaultValue: "Tải lỗi · Nhấn để thử lại",
+          defaultValue: "Tải lỗi · Thử lại",
         })
       : downloadState.status === "browser-fallback"
         ? t("chat:file.desktopSaveFallback", {
@@ -444,22 +445,28 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           }
           return;
         }
-        const openResult = await openLocal();
-        if (openResult.ok) {
-          setDownloadState(initialDownloadState(downloadIdentity));
+        if (activeOpenRef.current) return;
+        activeOpenRef.current = true;
+        try {
+          const openResult = await openLocal();
+          if (openResult.ok) {
+            setDownloadState(initialDownloadState(downloadIdentity));
+            return;
+          }
+          if (openResult.reason === "missing") {
+            await handleDownload(canAutoOpenFile);
+            return;
+          }
+          setDownloadState({
+            identity: downloadIdentity,
+            status: "open-error",
+            loadedBytes: attachment.fileSize ?? 0,
+            totalBytes: attachment.fileSize,
+          });
           return;
+        } finally {
+          activeOpenRef.current = false;
         }
-        if (openResult.reason === "missing") {
-          await handleDownload(canAutoOpenFile);
-          return;
-        }
-        setDownloadState({
-          identity: downloadIdentity,
-          status: "open-error",
-          loadedBytes: attachment.fileSize ?? 0,
-          totalBytes: attachment.fileSize,
-        });
-        return;
       }
 
       await handleDownload(canAutoOpenFile);
@@ -811,7 +818,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
     downloadState.status === "browser-fallback";
   const statusLabel = hasDownloadError
     ? t("chat:file.downloadFailed", {
-        defaultValue: "Tải lỗi · Nhấn để thử lại",
+        defaultValue: "Tải lỗi · Thử lại",
       })
     : hasOpenError
       ? t("chat:file.openFailed", { defaultValue: "Đã tải · Không thể tự mở" })

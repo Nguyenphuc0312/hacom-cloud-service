@@ -376,7 +376,7 @@
     "downloadingSize": "Downloading {{size}}",
     "downloadingProgress": "Downloading {{progress}}%",
     "downloadingNamed": "Downloading {{name}}",
-    "downloadFailed": "Download failed · Click to retry",
+    "downloadFailed": "Download failed · Retry",
     "openFailed": "Downloaded · Could not open",
     "desktopSaveFallback": "Downloaded in browser",
     "downloadAndOpenFile": "Download and open {{name}}",

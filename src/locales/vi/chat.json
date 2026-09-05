@@ -376,7 +376,7 @@
     "downloadingSize": "Đang tải {{size}}",
     "downloadingProgress": "Đang tải {{progress}}%",
     "downloadingNamed": "Đang tải {{name}}",
-    "downloadFailed": "Tải lỗi · Nhấn để thử lại",
+    "downloadFailed": "Tải lỗi · Thử lại",
     "openFailed": "Đã tải · Không thể tự mở",
     "desktopSaveFallback": "Đã tải qua trình duyệt",
     "downloadAndOpenFile": "Tải và mở {{name}}",

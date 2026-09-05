@@ -123,7 +123,7 @@ describe("FileMessageCard download-only files", () => {
     await user.click(screen.getByRole("button", { name: "Tải PC (1).rar" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Tải lỗi · Nhấn để thử lại",
+      "Tải lỗi · Thử lại",
     );
     expect(testState.downloadResourceWithName).toHaveBeenCalledTimes(1);
     expect(testState.markDownloaded).not.toHaveBeenCalled();
@@ -192,6 +192,29 @@ describe("FileMessageCard download-only files", () => {
     expect(testState.resolveUrl).not.toHaveBeenCalled();
     expect(testState.fetchResourceBlob).not.toHaveBeenCalled();
     expect(testState.saveLocal).not.toHaveBeenCalled();
+  });
+
+  it("opens a cached desktop file only once while the first open is pending", async () => {
+    testState.canOpenLocally = true;
+    testState.localStatus = "downloaded";
+    let finishOpen: ((result: { ok: boolean }) => void) | undefined;
+    testState.openLocal.mockImplementation(
+      () =>
+        new Promise<{ ok: boolean }>((resolve) => {
+          finishOpen = resolve;
+        }),
+    );
+    renderCard();
+    const card = screen.getByRole("button", { name: "Mở PC (1).rar" });
+
+    fireEvent.click(card);
+    fireEvent.click(card);
+
+    expect(testState.openLocal).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      finishOpen?.({ ok: true });
+      await Promise.resolve();
+    });
   });
 
   it("waits for the desktop cache check before enabling either download action", () => {
@@ -408,7 +431,7 @@ describe("FileMessageCard download-only files", () => {
     await user.keyboard("{Enter}");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Tải lỗi · Nhấn để thử lại",
+      "Tải lỗi · Thử lại",
     );
     expect(testState.fetchResourceBlob).toHaveBeenCalledTimes(1);
   });
