@@ -13,6 +13,8 @@ it("uses the supplied direction and creates an outgoing draft from the selected 
   const principal = { organizationIds: ["organization-1"] } as DmsPrincipal;
   render(<CreateDocumentPanel principal={principal} defaultDirection="INCOMING" onClose={() => {}} onCreated={created} />);
   await screen.findByRole("option", { name: "Mẫu đi · v2" });
+  expect(screen.getByRole("option", { name: "fields.organizationScope" }).getAttribute("value")).toBe("organization-1");
+  expect(screen.queryByRole("option", { name: "organization-1" })).toBeNull();
   expect((screen.getByLabelText("fields.direction") as HTMLSelectElement).value).toBe("INCOMING");
   fireEvent.change(screen.getByLabelText("fields.direction"), { target: { value: "OUTGOING" } });
   fireEvent.change(screen.getByLabelText("fields.template"), { target: { value: "template-v2" } });

@@ -50,6 +50,7 @@
   "create": { "title": "Tạo hồ sơ văn bản", "withoutTemplate": "Không dùng mẫu" },
   "fields": {
     "organization": "Đơn vị",
+    "organizationScope": "Theo quyền truy cập",
     "direction": "Loại văn bản",
     "template": "Mẫu văn bản",
     "templateProvenance": "Nguồn mẫu",
