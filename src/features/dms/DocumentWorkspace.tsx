@@ -474,7 +474,7 @@ const actionsFor = (document: DmsDocument, capabilities: Set<string>, subjectId:
   if (document.approval_state === "PENDING" && capabilities.has("document.workflow.approve")) actions.push("approve", "return", "reject");
   if (document.lifecycle_state === "DRAFT" && document.direction === "INCOMING" && capabilities.has("document.issue")) actions.push("register");
   if (document.lifecycle_state === "DRAFT" && document.direction !== "INCOMING" && capabilities.has("document.issue") && ["APPROVED", "NOT_REQUIRED"].includes(document.approval_state)) actions.push("issue");
-  if (["ISSUED", "REGISTERED"].includes(document.lifecycle_state) && capabilities.has("document.distribute")) actions.push("distribute");
+  if (["ISSUED", "REGISTERED"].includes(document.lifecycle_state) && document.distribution_state !== "DISTRIBUTED" && capabilities.has("document.distribute")) actions.push("distribute");
   if (document.distribution_state === "DISTRIBUTED" && capabilities.has("document.distribute")) actions.push("recall");
   if (["ISSUED", "COMPLETED"].includes(document.lifecycle_state) && capabilities.has("document.archive")) actions.push("archive");
   return actions;
