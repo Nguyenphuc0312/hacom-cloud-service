@@ -13,17 +13,25 @@
  * - Edge-case: deleted, scanning, blocked, large files
  */
 
-import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
   ArrowDownTrayIcon,
+  ArrowPathIcon,
   CheckCircleIcon,
-  ClockIcon,
   EyeIcon,
   FolderOpenIcon,
+  ExclamationCircleIcon,
   ExclamationTriangleIcon,
   ShieldExclamationIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import type { Attachment } from "../../types";
 import { useAttachmentDownloadUrl } from "../../hooks";
@@ -39,7 +47,12 @@ import type { PreviewType, FileIconType } from "../../utils/formatFileSize";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { Skeleton, SkeletonCircle } from "../ui";
 import { truncateFilename } from "../../utils/truncateFilename";
-import { downloadResourceWithName } from "../../utils/downloadFile";
+import {
+  canAutoOpenDownloadedFile,
+  downloadBlobWithName,
+  downloadResourceWithName,
+  fetchResourceBlob,
+} from "../../utils/downloadFile";
 import { FileName } from "../common/FileName";
 import { MediaThumbnail } from "../common/MediaThumbnail";
 import { SafeImage } from "../common/SafeImage";
@@ -48,6 +61,32 @@ import { useLocalFile } from "../../hooks/useLocalFile";
 // ── Status types for edge cases ──────────────────────────────────────
 
 type FileStatus = "ready" | "scanning" | "blocked" | "deleted" | "error";
+
+type DownloadStatus =
+  | "idle"
+  | "downloading"
+  | "download-error"
+  | "open-error"
+  | "browser-fallback";
+
+interface DownloadState {
+  identity: string;
+  status: DownloadStatus;
+  loadedBytes: number;
+  totalBytes?: number;
+}
+
+const initialDownloadState = (identity: string): DownloadState => ({
+  identity,
+  status: "idle",
+  loadedBytes: 0,
+});
+
+const throwIfDownloadAborted = (signal: AbortSignal): void => {
+  if (signal.aborted) {
+    throw new DOMException("Download aborted", "AbortError");
+  }
+};
 
 interface FileMessageCardProps {
   conversationId: string;
@@ -76,8 +115,12 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
     attachment.mimeType,
     attachment.fileName,
   ) as PreviewType;
-  const iconType = getFileIconType(attachment.mimeType, attachment.fileName) as FileIconType;
+  const iconType = getFileIconType(
+    attachment.mimeType,
+    attachment.fileName,
+  ) as FileIconType;
   const size = formatFileSize(attachment.fileSize);
+  const displayFileName = attachment.fileName || t("chat:file.unknown");
   // Office documents (Word/Excel/PowerPoint) + PDF/text/csv/media are all
   // previewable in-browser. Only truly opaque types (archives, unknown) and
   // oversized files fall back to download-only.
@@ -92,14 +135,16 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   const showThumbnail = (isImage || isVideo) && fileStatus === "ready";
   const rootRef = useRef<HTMLDivElement | null>(null);
   const isVisible = useInViewport(rootRef, { rootMargin: "240px 0px" });
-  const thumbnailWidth = attachment.width ? Math.min(attachment.width, 280) : 200;
+  const thumbnailWidth = attachment.width
+    ? Math.min(attachment.width, 280)
+    : 200;
   const thumbnailAspectRatio =
     attachment.width && attachment.height
       ? `${attachment.width} / ${attachment.height}`
       : "4 / 3";
 
   // Resolve download URL (lazy — not auto-resolved)
-  const { resolveUrl, isLoading: isDownloading } = useAttachmentDownloadUrl(
+  const { resolveUrl } = useAttachmentDownloadUrl(
     conversationId,
     attachment,
   );
@@ -114,6 +159,74 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
     markDownloaded,
   } = useLocalFile(attachment);
 
+  const downloadIdentity = JSON.stringify([
+    conversationId,
+    attachment.id,
+    attachment.objectKey,
+    attachment.fileName,
+    attachment.fileSize,
+  ]);
+  const [storedDownloadState, setDownloadState] = useState<DownloadState>(
+    () => initialDownloadState(downloadIdentity),
+  );
+  const downloadState =
+    storedDownloadState.identity === downloadIdentity
+      ? storedDownloadState
+      : initialDownloadState(downloadIdentity);
+  const activeDownloadRef = useRef<AbortController | null>(null);
+  const activeOpenRef = useRef(false);
+  const activeDownloadIdentityRef = useRef(downloadIdentity);
+  const isDownloadBusy = downloadState.status === "downloading";
+  const canAutoOpenFile = canAutoOpenDownloadedFile(attachment.fileName);
+  const isCheckingLocalFile =
+    canOpenLocally && localStatus === "unknown";
+  const progressPercent = downloadState.totalBytes
+    ? Math.min(
+        100,
+        Math.round(
+          (downloadState.loadedBytes / downloadState.totalBytes) * 100,
+        ),
+      )
+    : null;
+  const mediaTransferLabel =
+    downloadState.status === "download-error"
+      ? t("chat:file.downloadFailed", {
+          defaultValue: "Tải lỗi · Thử lại",
+        })
+      : downloadState.status === "browser-fallback"
+        ? t("chat:file.desktopSaveFallback", {
+            defaultValue: "Đã tải qua trình duyệt",
+          })
+        : isDownloadBusy
+          ? downloadState.loadedBytes === 0
+            ? t("chat:file.preparingDownload", {
+                defaultValue: "Đang chuẩn bị tải…",
+              })
+            : progressPercent === null
+              ? t("chat:file.downloadingSize", {
+                  defaultValue: "Đang tải {{size}}",
+                  size: formatFileSize(downloadState.loadedBytes),
+                })
+              : t("chat:file.downloadingProgress", {
+                  defaultValue: "Đang tải {{progress}}%",
+                  progress: progressPercent,
+                })
+          : null;
+
+  useEffect(() => {
+    if (activeDownloadIdentityRef.current !== downloadIdentity) {
+      activeDownloadIdentityRef.current = downloadIdentity;
+      // The transfer state belongs to the previous attachment.
+      setDownloadState(initialDownloadState(downloadIdentity));
+    }
+
+    return () => {
+      const activeDownload = activeDownloadRef.current;
+      activeDownloadRef.current = null;
+      activeDownload?.abort();
+    };
+  }, [downloadIdentity]);
+
   const directThumbnailUrl = useMemo(
     () =>
       resolvePublicResourceUrl(attachment.thumbnailUrl, {
@@ -125,10 +238,13 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   );
 
   // Thumbnail URL: use thumbnail if available, otherwise resolve on-demand only
-  const { url: resolvedThumbnailUrl, isLoading: isThumbLoading, resolveUrl: resolveThumbnailUrl } =
-    useAttachmentDownloadUrl(conversationId, attachment, {
-      autoResolve: false,
-    });
+  const {
+    url: resolvedThumbnailUrl,
+    isLoading: isThumbLoading,
+    resolveUrl: resolveThumbnailUrl,
+  } = useAttachmentDownloadUrl(conversationId, attachment, {
+    autoResolve: false,
+  });
   const thumbnailUrl = directThumbnailUrl || resolvedThumbnailUrl;
   const shouldResolveThumbnail = isImage && !directThumbnailUrl;
 
@@ -167,34 +283,139 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
 
   // ─ Handlers ─
 
-  const handleDownload = useCallback(async () => {
-    const downloadUrl = await resolveUrl(true);
-    if (!downloadUrl) return;
+  const handleDownload = useCallback(
+    async (openAfterDownload = false) => {
+      if (activeDownloadRef.current) return;
 
-    // Desktop: lưu thêm một bản vào thư mục app để lần sau mở thẳng bằng Word/
-    // Excel mà không phải tải lại. Lỗi ở bước này không được chặn việc tải về
-    // theo cách thường — user vẫn phải nhận được file.
-    if (canOpenLocally) {
+      const controller = new AbortController();
+      activeDownloadRef.current = controller;
+      setDownloadState({
+        identity: downloadIdentity,
+        status: "downloading",
+        loadedBytes: 0,
+        totalBytes: attachment.fileSize,
+      });
+
       try {
-        const response = await fetch(downloadUrl);
-        if (response.ok) {
-          await saveLocal(await response.blob());
-        }
-      } catch {
-        // Bỏ qua: vẫn tải theo luồng trình duyệt bên dưới.
-      }
-    }
+        const downloadUrl = await resolveUrl(true);
+        if (!downloadUrl) throw new Error("Missing download URL");
+        throwIfDownloadAborted(controller.signal);
 
-    // Tải bằng blob để giữ đúng tên gốc (URL ký khác origin sẽ bỏ qua a.download).
-    await downloadResourceWithName(downloadUrl, attachment.fileName);
-    markDownloaded();
-  }, [
-    resolveUrl,
-    attachment.fileName,
-    canOpenLocally,
-    saveLocal,
-    markDownloaded,
-  ]);
+        const downloadOptions = {
+          signal: controller.signal,
+          totalBytesHint: attachment.fileSize,
+          expectedBytes: attachment.fileSize,
+          onProgress: ({
+            loadedBytes,
+            totalBytes,
+          }: {
+            loadedBytes: number;
+            totalBytes?: number;
+          }) => {
+            if (controller.signal.aborted) return;
+            setDownloadState({
+              identity: downloadIdentity,
+              status: "downloading",
+              loadedBytes,
+              totalBytes,
+            });
+          },
+        };
+
+        if (canOpenLocally) {
+          // The nhat desktop bridge accepts bytes, so fetch exactly once, save
+          // into its managed attachment folder, then open through shell.openPath.
+          const blob = await fetchResourceBlob(downloadUrl, downloadOptions);
+          throwIfDownloadAborted(controller.signal);
+          const saved = await saveLocal(blob);
+          throwIfDownloadAborted(controller.signal);
+          if (!saved) {
+            // Cache native is best-effort. The user must still receive the
+            // already-fetched file when disk permissions or capacity fail.
+            downloadBlobWithName(blob, attachment.fileName);
+            setDownloadState({
+              identity: downloadIdentity,
+              status: "browser-fallback",
+              loadedBytes: blob.size,
+              totalBytes: blob.size,
+            });
+            return;
+          }
+
+          if (showThumbnail) {
+            // Preserve the explicit media-download action while also keeping
+            // the desktop cache; reuse the same bytes instead of fetching twice.
+            downloadBlobWithName(blob, attachment.fileName);
+          } else if (openAfterDownload && canAutoOpenFile) {
+            throwIfDownloadAborted(controller.signal);
+            const openResult = await openLocal();
+            if (!openResult.ok) {
+              setDownloadState({
+                identity: downloadIdentity,
+                status: "open-error",
+                loadedBytes: blob.size,
+                totalBytes: blob.size,
+              });
+              return;
+            }
+          }
+        } else {
+          await downloadResourceWithName(
+            downloadUrl,
+            attachment.fileName,
+            downloadOptions,
+          );
+          throwIfDownloadAborted(controller.signal);
+          markDownloaded();
+        }
+
+        throwIfDownloadAborted(controller.signal);
+        setDownloadState(initialDownloadState(downloadIdentity));
+      } catch {
+        if (controller.signal.aborted) {
+          if (activeDownloadRef.current === controller) {
+            setDownloadState(initialDownloadState(downloadIdentity));
+          }
+        } else {
+          setDownloadState((current) =>
+            current.identity === downloadIdentity
+              ? { ...current, status: "download-error" }
+              : current,
+          );
+        }
+      } finally {
+        if (activeDownloadRef.current === controller) {
+          activeDownloadRef.current = null;
+        }
+      }
+    },
+    [
+      attachment.fileName,
+      attachment.fileSize,
+      canAutoOpenFile,
+      canOpenLocally,
+      downloadIdentity,
+      markDownloaded,
+      openLocal,
+      resolveUrl,
+      saveLocal,
+      showThumbnail,
+    ],
+  );
+
+  const handleCancelDownload = useCallback(() => {
+    const activeDownload = activeDownloadRef.current;
+    activeDownloadRef.current = null;
+    activeDownload?.abort();
+    setDownloadState(initialDownloadState(downloadIdentity));
+  }, [downloadIdentity]);
+
+  const handleReveal = useCallback(async () => {
+    const revealResult = await reveal();
+    if (!revealResult.ok && revealResult.reason === "missing") {
+      await handleDownload(false);
+    }
+  }, [handleDownload, reveal]);
 
   const handlePreview = useCallback(() => {
     if (onPreview && isPreviewable) {
@@ -203,17 +424,76 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   }, [onPreview, isPreviewable, attachment, previewType]);
 
   /**
-   * Bấm vào card — hành vi kiểu Zalo:
-   *  - Desktop + file đã có trên đĩa → mở bằng Word/Excel/Acrobat thật.
-   *  - Còn lại → mở trình xem trong app.
-   * Desktop mở file thất bại (bị xoá tay) thì rơi về trình xem, không im lặng.
+   * Desktop nhat: click a remote file downloads it once into the managed cache
+   * and opens it with the OS app. Web keeps in-app preview where possible and
+   * otherwise hands the file to the browser download flow.
    */
   const handleCardClick = useCallback(async () => {
-    if (canOpenLocally && localStatus === "downloaded") {
-      if (await openLocal()) return;
+    if (isDownloadBusy || isCheckingLocalFile) return;
+
+    if (downloadState.status === "download-error") {
+      await handleDownload(canOpenLocally && canAutoOpenFile);
+      return;
     }
-    handlePreview();
-  }, [canOpenLocally, localStatus, openLocal, handlePreview]);
+
+    if (canOpenLocally) {
+      if (localStatus === "downloaded") {
+        if (!canAutoOpenFile) {
+          const revealResult = await reveal();
+          if (!revealResult.ok && revealResult.reason === "missing") {
+            await handleDownload(false);
+          }
+          return;
+        }
+        if (activeOpenRef.current) return;
+        activeOpenRef.current = true;
+        try {
+          const openResult = await openLocal();
+          if (openResult.ok) {
+            setDownloadState(initialDownloadState(downloadIdentity));
+            return;
+          }
+          if (openResult.reason === "missing") {
+            await handleDownload(canAutoOpenFile);
+            return;
+          }
+          setDownloadState({
+            identity: downloadIdentity,
+            status: "open-error",
+            loadedBytes: attachment.fileSize ?? 0,
+            totalBytes: attachment.fileSize,
+          });
+          return;
+        } finally {
+          activeOpenRef.current = false;
+        }
+      }
+
+      await handleDownload(canAutoOpenFile);
+      return;
+    }
+
+    if (isPreviewable) {
+      handlePreview();
+      return;
+    }
+
+    await handleDownload(false);
+  }, [
+    attachment.fileSize,
+    canAutoOpenFile,
+    canOpenLocally,
+    downloadIdentity,
+    downloadState.status,
+    handleDownload,
+    handlePreview,
+    isDownloadBusy,
+    isPreviewable,
+    localStatus,
+    isCheckingLocalFile,
+    openLocal,
+    reveal,
+  ]);
 
   // ─ Edge-case renderers ─
 
@@ -276,7 +556,9 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           <p
             className={clsx(
               "truncate text-sm font-medium",
-              isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-text-primary",
+              isOwn
+                ? "text-[hsl(var(--chat-bubble-sent-text))]"
+                : "text-text-primary",
             )}
           >
             {attachment.fileName || t("chat:file.unknown")}
@@ -284,7 +566,9 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           <p
             className={clsx(
               "text-xs",
-              isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]" : "text-text-muted",
+              isOwn
+                ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]"
+                : "text-text-muted",
             )}
           >
             {t("chat:filePreview.scanning", { defaultValue: "Scanning…" })}
@@ -300,6 +584,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
     return (
       <div
         ref={rootRef}
+        aria-busy={isDownloadBusy}
         className={clsx(
           "group/file relative overflow-hidden rounded-lg",
           className,
@@ -345,7 +630,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
               <button
                 type="button"
                 onClick={handlePreview}
-                className="pointer-events-auto rounded-full bg-surface/90 p-2 opacity-0 shadow-md backdrop-blur transition-opacity group-hover/file:opacity-100"
+                className="pointer-events-auto rounded-full bg-surface/90 p-2 opacity-0 shadow-md backdrop-blur transition-opacity group-hover/file:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
                 aria-label={t("chat:filePreview.preview", {
                   defaultValue: "Preview",
                 })}
@@ -363,24 +648,56 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           <span
             className={clsx(
               "truncate text-xs",
-              isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]" : "text-text-muted",
+              downloadState.status === "download-error"
+                ? "text-danger"
+                : isOwn
+                  ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]"
+                  : "text-text-muted",
             )}
+            role={
+              mediaTransferLabel
+                ? downloadState.status === "download-error"
+                  ? "alert"
+                  : "status"
+                : undefined
+            }
           >
-            {size}
+            {mediaTransferLabel || size}
           </span>
           <button
             type="button"
-            onClick={() => void handleDownload()}
-            disabled={isDownloading}
+            onClick={
+              isDownloadBusy
+                ? handleCancelDownload
+                : () => void handleDownload()
+            }
             className={clsx(
-              "shrink-0 rounded-full p-1 transition-colors disabled:opacity-50",
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
               isOwn
                 ? "text-[hsl(var(--chat-bubble-sent-text))/0.7] hover:text-[hsl(var(--chat-bubble-sent-text))]"
                 : "text-text-muted hover:text-text-primary",
             )}
-            aria-label={t("chat:file.download")}
+            aria-label={
+              isDownloadBusy
+                ? t("chat:file.cancelDownloadNamed", {
+                    defaultValue: "Hủy tải {{name}}",
+                    name: displayFileName,
+                  })
+                : downloadState.status === "download-error"
+                  ? t("chat:file.retryDownloadNamed", {
+                      defaultValue: "Thử tải lại {{name}}",
+                      name: displayFileName,
+                    })
+                  : t("chat:file.download")
+            }
           >
-            <ArrowDownTrayIcon className="h-4 w-4" />
+            {isDownloadBusy ? (
+              <XMarkIcon className="h-[18px] w-[18px]" />
+            ) : downloadState.status === "download-error" ? (
+              <ExclamationCircleIcon className="h-[18px] w-[18px] text-danger" />
+            ) : (
+              <ArrowDownTrayIcon className="h-[18px] w-[18px]" />
+            )}
           </button>
         </div>
       </div>
@@ -393,6 +710,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
     return (
       <div
         ref={rootRef}
+        aria-busy={isDownloadBusy}
         className={clsx(
           "group/file relative overflow-hidden rounded-lg",
           className,
@@ -401,7 +719,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
         {/* Video placeholder */}
         <div
           className={clsx(
-            "relative flex h-36 w-full max-w-[280px] cursor-pointer items-center justify-center rounded-lg",
+            "relative flex h-36 w-full max-w-[280px] cursor-pointer items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
             isOwn ? "bg-surface/20" : "bg-surface-overlay",
           )}
           onClick={handlePreview}
@@ -430,160 +748,335 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           <span
             className={clsx(
               "truncate text-xs",
-              isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]" : "text-text-muted",
+              downloadState.status === "download-error"
+                ? "text-danger"
+                : isOwn
+                  ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]"
+                  : "text-text-muted",
             )}
+            role={
+              mediaTransferLabel
+                ? downloadState.status === "download-error"
+                  ? "alert"
+                  : "status"
+                : undefined
+            }
           >
-            {truncateFilename(attachment.fileName || t("chat:file.unknown"), 24)} · {size}
+            {mediaTransferLabel ||
+              `${truncateFilename(displayFileName, 24)} · ${size}`}
           </span>
           <button
             type="button"
-            onClick={() => void handleDownload()}
-            disabled={isDownloading}
+            onClick={
+              isDownloadBusy
+                ? handleCancelDownload
+                : () => void handleDownload()
+            }
             className={clsx(
-              "shrink-0 rounded-full p-1 transition-colors disabled:opacity-50",
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
               isOwn
                 ? "text-[hsl(var(--chat-bubble-sent-text))/0.7] hover:text-[hsl(var(--chat-bubble-sent-text))]"
                 : "text-text-muted hover:text-text-primary",
             )}
-            aria-label={t("chat:file.download")}
+            aria-label={
+              isDownloadBusy
+                ? t("chat:file.cancelDownloadNamed", {
+                    defaultValue: "Hủy tải {{name}}",
+                    name: displayFileName,
+                  })
+                : downloadState.status === "download-error"
+                  ? t("chat:file.retryDownloadNamed", {
+                      defaultValue: "Thử tải lại {{name}}",
+                      name: displayFileName,
+                    })
+                  : t("chat:file.download")
+            }
           >
-            <ArrowDownTrayIcon className="h-4 w-4" />
+            {isDownloadBusy ? (
+              <XMarkIcon className="h-[18px] w-[18px]" />
+            ) : downloadState.status === "download-error" ? (
+              <ExclamationCircleIcon className="h-[18px] w-[18px] text-danger" />
+            ) : (
+              <ArrowDownTrayIcon className="h-[18px] w-[18px]" />
+            )}
           </button>
         </div>
       </div>
     );
   }
 
-  // ─ Generic file card (PDF, documents, etc.) ─
-  //
-  // Kiểu Zalo: bấm cả thẻ là mở (không có nút "con mắt" riêng). Dòng phụ đổi
-  // theo trạng thái — bình thường nhắc tải về, khi rê chuột thành "Nhấn để xem
-  // trước", khi đã có trên máy thì báo đã có.
+  // ─ Generic file card (PDF, documents, archives, etc.) ─
 
   const isDownloaded = localStatus === "downloaded";
-  const canClickToOpen = isPreviewable || (canOpenLocally && isDownloaded);
+  const willPreviewInWeb = !canOpenLocally && isPreviewable;
+  const canActivateCard =
+    fileStatus === "ready" && !isDownloadBusy && !isCheckingLocalFile;
 
-  // Nhãn dòng phụ: ưu tiên báo "đã có trên máy" (thông tin đắt giá nhất),
-  // sau đó mới tới lời mời xem trước.
-  const statusLabel = isDownloaded
-    ? canOpenLocally
-      ? t("chat:file.savedOnDevice", { defaultValue: "Đã có trên máy" })
-      : t("chat:file.alreadyDownloaded", { defaultValue: "Đã tải xuống" })
-    : t("chat:file.downloadToKeep", {
-        defaultValue: "Tải về để xem lâu dài",
-      });
+  const hasDownloadError = downloadState.status === "download-error";
+  const hasOpenError = downloadState.status === "open-error";
+  const hasBrowserFallback =
+    downloadState.status === "browser-fallback";
+  const statusLabel = hasDownloadError
+    ? t("chat:file.downloadFailed", {
+        defaultValue: "Tải lỗi · Thử lại",
+      })
+    : hasOpenError
+      ? t("chat:file.openFailed", { defaultValue: "Đã tải · Không thể tự mở" })
+      : hasBrowserFallback
+        ? t("chat:file.desktopSaveFallback", {
+            defaultValue: "Đã tải qua trình duyệt",
+          })
+        : isDownloadBusy
+          ? downloadState.loadedBytes === 0
+            ? t("chat:file.preparingDownload", {
+                defaultValue: "Đang chuẩn bị tải…",
+              })
+            : progressPercent === null
+              ? t("chat:file.downloadingSize", {
+                  defaultValue: "Đang tải {{size}}",
+                  size: formatFileSize(downloadState.loadedBytes),
+                })
+              : t("chat:file.downloadingProgress", {
+                  defaultValue: "Đang tải {{progress}}%",
+                  progress: progressPercent,
+                })
+          : isCheckingLocalFile
+            ? t("chat:file.checkingLocalFile", {
+                defaultValue: "Đang kiểm tra file…",
+              })
+            : isDownloaded
+              ? canOpenLocally
+                ? t("chat:file.savedOnDevice", {
+                    defaultValue: "Đã có trên máy",
+                  })
+                : t("chat:file.alreadyDownloaded", {
+                    defaultValue: "Đã yêu cầu tải",
+                  })
+              : canOpenLocally
+                ? canAutoOpenFile
+                  ? t("chat:file.clickToDownloadAndOpen", {
+                      defaultValue: "Tải và mở",
+                    })
+                  : t("chat:file.clickToDownload", {
+                      defaultValue: "Tải về",
+                    })
+                : isPreviewable
+                  ? t("chat:file.downloadToKeep", {
+                      defaultValue: "Tải về để xem lâu dài",
+                    })
+                  : t("chat:file.clickToDownload", {
+                      defaultValue: "Tải về",
+                    });
+
+  const cardActionLabel = hasDownloadError
+    ? t("chat:file.retryDownloadNamed", {
+        defaultValue: "Thử tải lại {{name}}",
+        name: displayFileName,
+      })
+    : isCheckingLocalFile
+      ? t("chat:file.checkingLocalFile", {
+          defaultValue: "Đang kiểm tra file…",
+        })
+      : canOpenLocally && isDownloaded
+        ? canAutoOpenFile
+          ? t("chat:file.openFile", {
+              defaultValue: "Mở {{name}}",
+              name: displayFileName,
+            })
+          : t("chat:file.showInFolderNamed", {
+              defaultValue: "Mở thư mục chứa {{name}}",
+              name: displayFileName,
+            })
+        : canOpenLocally && canAutoOpenFile
+          ? t("chat:file.downloadAndOpenFile", {
+              defaultValue: "Tải và mở {{name}}",
+              name: displayFileName,
+            })
+          : willPreviewInWeb
+            ? t("chat:filePreview.previewNamed", {
+                defaultValue: "Xem trước {{name}}",
+                name: displayFileName,
+              })
+            : t("chat:file.downloadNamed", {
+                defaultValue: "Tải {{name}}",
+                name: displayFileName,
+              });
+
+  const downloadActionLabel = isDownloadBusy
+    ? t("chat:file.cancelDownloadNamed", {
+        defaultValue: "Hủy tải {{name}}",
+        name: displayFileName,
+      })
+    : hasDownloadError
+      ? t("chat:file.retryDownloadNamed", {
+          defaultValue: "Thử tải lại {{name}}",
+          name: displayFileName,
+        })
+      : isDownloaded
+        ? t("chat:file.redownloadNamed", {
+            defaultValue: "Tải lại {{name}}",
+            name: displayFileName,
+          })
+        : t("chat:file.downloadOnlyNamed", {
+            defaultValue: "Chỉ tải {{name}}",
+            name: displayFileName,
+          });
+  const liveStatusLabel =
+    hasDownloadError || hasOpenError || hasBrowserFallback
+      ? statusLabel
+      : isDownloadBusy
+        ? t("chat:file.downloadingNamed", {
+            defaultValue: "Đang tải {{name}}",
+            name: displayFileName,
+          })
+        : null;
 
   return (
     <div
       className={clsx(
-        // Rộng 20rem: 17rem quá chật nên tên file và dòng trạng thái đều bị cắt
-        // cụt ("Tải về để xe..."). Nền TRẮNG cho cả hai phía như Zalo — thẻ nền
-        // mờ đục đặt trên bong bóng xanh của người gửi nhìn đục và khó đọc.
-        "group/file flex min-w-0 w-[20rem] max-w-full items-center gap-3 rounded-2xl border border-black/5 bg-white p-3 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
-        canClickToOpen && "cursor-pointer",
+        "group/file relative flex min-w-0 w-[24rem] max-w-full items-center overflow-hidden rounded-2xl border border-border/80 bg-surface p-3 transition-colors duration-150 hover:border-primary/30",
         className,
       )}
-      onClick={canClickToOpen ? () => void handleCardClick() : undefined}
-      role={canClickToOpen ? "button" : undefined}
-      tabIndex={canClickToOpen ? 0 : undefined}
-      onKeyDown={
-        canClickToOpen
-          ? (event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                void handleCardClick();
-              }
-            }
-          : undefined
-      }
-      aria-label={
-        canClickToOpen
-          ? t("chat:file.openFile", {
-              defaultValue: "Mở {{name}}",
-              name: attachment.fileName || t("chat:file.unknown"),
-            })
-          : undefined
-      }
+      aria-busy={isDownloadBusy || isCheckingLocalFile}
     >
-      {/* Icon — khối đặc chiếm trọn ô, cỡ 48px như Zalo (không nền nhạt bao ngoài
-          cho các loại Office, vì glyph đã là khối màu). */}
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center transition-transform duration-200 group-hover/file:scale-105">
-        <FileTypeIcon type={iconType} fileName={attachment.fileName} variant="tile" />
-      </div>
+      <button
+        type="button"
+        onClick={() => void handleCardClick()}
+        disabled={!canActivateCard}
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 disabled:cursor-progress"
+        aria-label={cardActionLabel}
+      >
+        <span className="flex h-14 w-14 shrink-0 items-center justify-center">
+          <FileTypeIcon
+            type={iconType}
+            fileName={attachment.fileName}
+            variant="tile"
+          />
+        </span>
 
-      {/* File info — nền thẻ luôn trắng nên màu chữ không phụ thuộc isOwn nữa. */}
-      <div className="min-w-0 flex-1">
-        <FileName
-          name={attachment.fileName || t("chat:file.unknown")}
-          title={attachment.fileName}
-          className="text-sm font-semibold text-text-primary"
-        />
-        <div className="mt-1 flex items-center gap-1.5 text-xs">
-          <span className="shrink-0 text-text-muted">{size}</span>
-          <span className="shrink-0 text-text-muted/50">·</span>
-          <span
-            className={clsx(
-              // `min-w-0` để phần chữ tự co, nhưng KHÔNG truncate: dòng này ngắn,
-              // cắt cụt thành "Tải về để xe..." là lỗi thẩm mỹ thấy rõ nhất.
-              "flex min-w-0 items-center gap-1",
-              isDownloaded ? "text-emerald-600" : "text-[#1565C0]",
-            )}
-          >
-            {isDownloaded ? (
-              <CheckCircleIcon className="h-3.5 w-3.5 shrink-0" />
-            ) : (
-              <ClockIcon className="h-3.5 w-3.5 shrink-0" />
-            )}
-            {/* Rê chuột lên thẻ xem được → đổi thành lời mời bấm, như Zalo. */}
-            <span className="whitespace-nowrap">
-              {isPreviewable && (
-                <span className="hidden group-hover/file:inline">
-                  {t("chat:file.clickToPreview", {
-                    defaultValue: "Nhấn để xem trước",
-                  })}
-                </span>
+        <span className="min-w-0 flex-1">
+          <FileName
+            name={displayFileName}
+            title={attachment.fileName}
+            className="text-sm font-semibold text-text-primary"
+          />
+          <span className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden text-xs">
+            <span className="shrink-0 text-text-muted">{size}</span>
+            <span className="shrink-0 text-text-muted/50">·</span>
+            <span
+              className={clsx(
+                "flex min-w-0 items-center gap-1 overflow-hidden",
+                hasDownloadError || hasOpenError
+                  ? "text-danger"
+                  : isDownloaded || hasBrowserFallback
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : "text-primary",
               )}
-              <span className={clsx(isPreviewable && "group-hover/file:hidden")}>
-                {statusLabel}
+            >
+              {isDownloadBusy ? null : isCheckingLocalFile ? (
+                <ArrowPathIcon className="h-3.5 w-3.5 shrink-0 animate-spin motion-reduce:animate-none" />
+              ) : hasDownloadError || hasOpenError ? (
+                <ExclamationCircleIcon className="h-3.5 w-3.5 shrink-0" />
+              ) : isDownloaded || hasBrowserFallback ? (
+                <CheckCircleIcon className="h-3.5 w-3.5 shrink-0" />
+              ) : null}
+              <span className="min-w-0 truncate tabular-nums" title={statusLabel}>
+                {willPreviewInWeb &&
+                !hasDownloadError &&
+                !hasOpenError &&
+                !isDownloadBusy ? (
+                  <>
+                    <span className="hidden group-hover/file:inline">
+                      {t("chat:file.clickToPreview", {
+                        defaultValue: "Nhấn để xem trước",
+                      })}
+                    </span>
+                    <span className="group-hover/file:hidden">
+                      {statusLabel}
+                    </span>
+                  </>
+                ) : (
+                  statusLabel
+                )}
               </span>
             </span>
           </span>
-        </div>
-      </div>
+        </span>
+      </button>
 
-      {/* Action buttons — click phải dừng nổi bọt, tránh kích hoạt mở thẻ. */}
-      <div className="flex shrink-0 items-center gap-1">
-        {canOpenLocally && isDownloaded && (
+      {liveStatusLabel && (
+        <span
+          className="sr-only"
+          role={hasDownloadError || hasOpenError ? "alert" : "status"}
+          aria-live={hasDownloadError || hasOpenError ? "assertive" : "polite"}
+          aria-atomic="true"
+        >
+          {liveStatusLabel}
+        </span>
+      )}
+      <div className="ml-3 flex min-w-[5.75rem] shrink-0 items-center justify-end gap-1">
+        {canOpenLocally && isDownloaded && !isDownloadBusy && (
           <button
             type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              void reveal();
-            }}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-secondary transition-colors hover:border-[#1976D2]/40 hover:bg-[#1976D2]/8 hover:text-[#1565C0] active:scale-95"
-            aria-label={t("chat:file.showInFolder", {
-              defaultValue: "Mở thư mục chứa file",
+            onClick={() => void handleReveal()}
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-border text-text-secondary transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary active:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+            aria-label={t("chat:file.showInFolderNamed", {
+              defaultValue: "Mở thư mục chứa {{name}}",
+              name: displayFileName,
             })}
           >
             <FolderOpenIcon className="h-[18px] w-[18px]" />
           </button>
         )}
 
-        {/* Nút tải: khung vuông bo góc, viền nhạt — đúng kiểu Zalo, không phải
-            nút tròn nổi bật (thẻ file không nên tranh chú ý với nội dung chat). */}
         <button
           type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            void handleDownload();
-          }}
-          disabled={isDownloading}
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-secondary transition-colors hover:border-[#1976D2]/40 hover:bg-[#1976D2]/8 hover:text-[#1565C0] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label={t("chat:file.download")}
+          onClick={
+            isDownloadBusy
+              ? handleCancelDownload
+              : () => void handleDownload(false)
+          }
+          disabled={isCheckingLocalFile}
+          className={clsx(
+            "flex h-11 w-11 items-center justify-center rounded-full border border-border text-text-secondary transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary active:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-50",
+            isDownloadBusy &&
+              "border-primary/40 bg-primary/5 text-primary",
+          )}
+          aria-label={downloadActionLabel}
         >
-          <ArrowDownTrayIcon className="h-[18px] w-[18px]" />
+          {isDownloadBusy ? (
+            <XMarkIcon className="h-[18px] w-[18px]" />
+          ) : (
+            <ArrowDownTrayIcon className="h-[18px] w-[18px]" />
+          )}
         </button>
       </div>
+
+      {isDownloadBusy && (
+        <span
+          className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-primary/10"
+          role="progressbar"
+          aria-label={statusLabel}
+          aria-valuetext={statusLabel}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progressPercent ?? undefined}
+        >
+          <span
+            className={clsx(
+              "block h-full bg-primary transition-[width] duration-150",
+              progressPercent === null &&
+                "animate-pulse motion-reduce:animate-none",
+            )}
+            style={{
+              width:
+                progressPercent === null
+                  ? "35%"
+                  : String(progressPercent) + "%",
+            }}
+          />
+        </span>
+      )}
     </div>
   );
 };

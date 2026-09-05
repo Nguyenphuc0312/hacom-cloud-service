@@ -65,6 +65,28 @@ const mediaCaption = (message: Message | MessageSummary): string => {
   return trimmed;
 };
 
+const GENERATED_FILE_SUMMARY_RE =
+  /^Đã gửi (?:một|\d+) tệp(?: đính kèm)?\.?$/iu;
+
+// Last-message projections intentionally stay lightweight and may only carry
+// the filename in `content`. Keep that useful name, but mark it as a file so a
+// conversation row cannot be mistaken for a regular text message.
+const filePreview = (message: Message | MessageSummary): string => {
+  const caption = mediaCaption(message);
+  const attachments = (message as Message).attachments;
+  if (attachments?.length && caption) return caption;
+  const label = i18n.t("chat:preview.file");
+  const attachmentName = attachments?.find((attachment) =>
+    Boolean(attachment.fileName?.trim()),
+  )?.fileName?.trim();
+  const content = message.content?.trim() ?? "";
+  const name = attachmentName || content;
+
+  if (!name) return label;
+  if (!attachmentName && GENERATED_FILE_SUMMARY_RE.test(name)) return name;
+  return `${label} · ${name}`;
+};
+
 export type MessagePreviewState =
   | "queued"
   | "sending"
@@ -118,7 +140,7 @@ export function getMessagePreview(
       preview = mediaCaption(message) || i18n.t("chat:preview.video");
       break;
     case MessageType.FILE:
-      preview = mediaCaption(message) || i18n.t("chat:preview.file");
+      preview = filePreview(message);
       break;
     case MessageType.VOICE:
       preview = i18n.t("chat:preview.voice");
