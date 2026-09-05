@@ -108,6 +108,13 @@ export const dmsApi = {
     return response.blob();
   },
   report: (filters: { from?: string; to?: string; direction?: string; state?: string; documentType?: string } = {}) => request<{ groups: Array<{ direction: string; lifecycle_state: string; count: number }>; total: number }>(`/reports/summary${query(filters)}`),
+  exportReport: async (filters: { from?: string; to?: string; direction?: string; state?: string; documentType?: string } = {}): Promise<Blob> => {
+    const token = getDmsAccessToken();
+    if (!token) throw new DmsApiError(401, "DMS_AUTH_REQUIRED");
+    const response = await fetch(`${DMS_API_BASE_URL}/reports/export${query(filters)}`, { headers: { authorization: `Bearer ${token}`, "x-request-id": crypto.randomUUID() }, signal: AbortSignal.timeout(20_000) });
+    if (!response.ok) throw new DmsApiError(response.status, "DMS_REPORT_EXPORT_UNAVAILABLE");
+    return response.blob();
+  },
   templates: (organizationId: string) => request<unknown[]>(`/templates${query({ organizationId })}`),
   adminTemplates: (organizationId: string, search?: string) => request<unknown[]>(`/admin/templates${query({ organizationId, search })}`),
   books: (organizationId: string, direction?: string) => request<unknown[]>(`/document-books${query({ organizationId, direction })}`),

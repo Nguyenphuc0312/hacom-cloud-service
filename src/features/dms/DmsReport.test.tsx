@@ -20,3 +20,12 @@ it("filters grouped reports and drills into the selected authorized result set",
   fireEvent.click(screen.getByRole("button", { name: "report.drillDown" }));
   expect(onDrillDown).toHaveBeenCalledWith({ direction: "OUTGOING", lifecycle_state: "ISSUED", count: 2 }, { direction: "OUTGOING", state: "ISSUED", documentType: "CONG_VAN", from: undefined, to: undefined });
 });
+
+it("shows export only when the server-granted capability is present", async () => {
+  vi.spyOn(dmsApi, "report").mockResolvedValue({ groups: [], total: 0 });
+  const onDrillDown = vi.fn();
+  const { rerender } = render(<DmsReport onDrillDown={onDrillDown} />);
+  expect(screen.queryByRole("button", { name: "report.export" })).toBeNull();
+  rerender(<DmsReport canExport onDrillDown={onDrillDown} />);
+  expect(screen.getByRole("button", { name: "report.export" })).toBeDefined();
+});
