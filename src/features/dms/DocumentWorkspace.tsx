@@ -29,8 +29,10 @@ type DirectionFilter = "ALL" | DmsDirection;
 type DetailTab = "summary" | "files" | "history" | "tasks";
 type ActionMode = "edit" | "submit" | "approve" | "return" | "reject" | "register" | "issue" | "distribute" | "recall" | "archive";
 type WorkspaceView = "work" | "documents" | "archive" | "configuration" | "reports";
+type WorkType = "PROCESSING" | "APPROVAL" | "INCOMING" | "DUE_SOON";
 const DOCUMENT_PAGE_SIZE = 50;
 const LIFECYCLE_STATES = ["DRAFT", "REGISTERED", "ISSUED", "COMPLETED", "ARCHIVED", "CANCELLED"];
+const WORK_TYPES: WorkType[] = ["PROCESSING", "APPROVAL", "INCOMING", "DUE_SOON"];
 
 const formatDate = (value?: string | null): string => value
   ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value))
@@ -60,6 +62,8 @@ export default function DocumentWorkspace(): React.ReactElement {
   const [lifecycleState, setLifecycleState] = React.useState<string | null>(LIFECYCLE_STATES.includes(initialLifecycleState ?? "") ? initialLifecycleState : null);
   const [documentType, setDocumentType] = React.useState<string | null>(searchParams.get("documentType") || null);
   const [search, setSearch] = React.useState(searchParams.get("search") || "");
+  const initialWorkType = searchParams.get("workType");
+  const [workType, setWorkType] = React.useState<WorkType | null>(WORK_TYPES.includes(initialWorkType as WorkType) ? initialWorkType as WorkType : null);
   const [documents, setDocuments] = React.useState<DmsDocument[]>([]);
   const [workQueue, setWorkQueue] = React.useState<DmsWorkQueue | null>(null);
   const [total, setTotal] = React.useState(0);
@@ -122,7 +126,7 @@ export default function DocumentWorkspace(): React.ReactElement {
     const timer = window.setTimeout(() => {
       setLoading(true);
       setError(null);
-      void dmsApi.list({ direction: direction === "ALL" ? null : direction, state: lifecycleState, documentType, archiveState: view === "archive" ? "ARCHIVED" : "ACTIVE", queue: view === "work" ? "WORK" : null, search, page, pageSize: DOCUMENT_PAGE_SIZE })
+      void dmsApi.list({ direction: direction === "ALL" ? null : direction, state: lifecycleState, documentType, archiveState: view === "archive" ? "ARCHIVED" : "ACTIVE", queue: view === "work" ? "WORK" : null, workType: view === "work" ? workType : null, search, page, pageSize: DOCUMENT_PAGE_SIZE })
         .then((result) => {
           if (controller.signal.aborted) return;
           setDocuments(result.items);
@@ -139,7 +143,7 @@ export default function DocumentWorkspace(): React.ReactElement {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [direction, documentType, lifecycleState, page, principal, refreshKey, search, t, view]);
+  }, [direction, documentType, lifecycleState, page, principal, refreshKey, search, t, view, workType]);
 
   React.useEffect(() => {
     if (!principal) return;
@@ -192,7 +196,7 @@ export default function DocumentWorkspace(): React.ReactElement {
       </header>
 
       {workQueue && Object.values(workQueue).some((count) => count > 0) && <div className="flex flex-wrap gap-x-5 gap-y-2 border-b border-border bg-surface-overlay px-4 py-2 text-sm sm:px-5" aria-label={t("queue.label")} data-testid="dms-work-queue">
-        {(["processing", "approvals", "incoming", "dueSoon"] as const).filter((key) => workQueue[key] > 0).map((key) => <button key={key} type="button" onClick={() => { setView("work"); setPage(1); }} className="text-left text-text-secondary hover:text-text-primary focus-visible:ring-2 focus-visible:ring-focus">{t(`queue.${key}`)} <strong className="text-text-primary">{workQueue[key]}</strong></button>)}
+        {(["processing", "approvals", "incoming", "dueSoon"] as const).filter((key) => workQueue[key] > 0).map((key) => <button key={key} type="button" onClick={() => { const type = ({ processing: "PROCESSING", approvals: "APPROVAL", incoming: "INCOMING", dueSoon: "DUE_SOON" } as const)[key]; setView("work"); setWorkType(type); setSearchParams((current) => { const next = new URLSearchParams(current); next.set("workspace", "work"); next.set("workType", type); next.delete("page"); return next; }); }} className="text-left text-text-secondary hover:text-text-primary focus-visible:ring-2 focus-visible:ring-focus">{t(`queue.${key}`)} <strong className="text-text-primary">{workQueue[key]}</strong></button>)}
       </div>}
 
       <nav className="flex overflow-x-auto border-b border-border px-3 sm:px-5" aria-label={t("navigation.label")}>{(["work", "documents", "archive", "configuration", "reports"] as const).filter((item) => item !== "reports" || capabilities.has("document.report.read")).map((item) => <button key={item} type="button" aria-current={view === item ? "page" : undefined} onClick={() => { setView(item); setSearchParams((current) => { const next = new URLSearchParams(current); next.set("workspace", item); next.delete("page"); return next; }); if (["work", "documents", "archive"].includes(item)) setLifecycleState(null); }} className={`min-h-11 shrink-0 border-b-2 px-3 text-sm font-semibold ${view === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>{t(`navigation.${item}`)}</button>)}</nav>
