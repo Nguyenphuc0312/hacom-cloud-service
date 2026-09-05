@@ -87,6 +87,7 @@ export default function DocumentWorkspace(): React.ReactElement {
   };
   const selectedId = dmsDocumentId(searchParams.get("documentId"));
   const [loadedDocument, setSelected] = React.useState<DmsDocument | null>(null);
+  const [createDirection, setCreateDirection] = React.useState<DmsDirection>("INTERNAL");
   const selected = loadedDocument?.id === selectedId ? loadedDocument : null;
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -189,9 +190,7 @@ export default function DocumentWorkspace(): React.ReactElement {
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" size="sm" leftIcon={<ArrowPathIcon />} onClick={refresh}>{t("actions.refresh")}</Button>
-          {view === "documents" && capabilities.has("document.draft.manage") && (
-            <Button size="sm" leftIcon={<DocumentPlusIcon />} onClick={() => setCreateOpen(true)}>{t("actions.create")}</Button>
-          )}
+          {view === "documents" && capabilities.has("document.draft.manage") && <><Button size="sm" variant="secondary" leftIcon={<ArrowUpTrayIcon />} onClick={() => { setCreateDirection("INCOMING"); setCreateOpen(true); }}>{t("actions.digitize")}</Button><Button size="sm" leftIcon={<DocumentPlusIcon />} onClick={() => { setCreateDirection("INTERNAL"); setCreateOpen(true); }}>{t("actions.createDraft")}</Button></>}
         </div>
       </header>
 
@@ -204,7 +203,7 @@ export default function DocumentWorkspace(): React.ReactElement {
       {view === "configuration" && principal ? <DmsAdministration principal={principal} /> : view === "reports" ? <DmsReport onDrillDown={(group, filters) => { const nextView = group.lifecycle_state === "ARCHIVED" ? "archive" : "documents"; setDirection(group.direction as DmsDirection); setLifecycleState(group.lifecycle_state); setDocumentType(filters.documentType ?? null); setView(nextView); setSearchParams((current) => { const next = new URLSearchParams(current); next.set("workspace", nextView); next.set("direction", group.direction); next.set("state", group.lifecycle_state); if (filters.documentType) next.set("documentType", filters.documentType); else next.delete("documentType"); next.delete("page"); return next; }); }} /> : <>
 
       {createOpen && principal && (
-        <CreateDocumentPanel principal={principal} onClose={() => setCreateOpen(false)} onCreated={(id) => { setCreateOpen(false); setSelectedId(id); refresh(); }} />
+        <CreateDocumentPanel key={createDirection} principal={principal} defaultDirection={createDirection} onClose={() => setCreateOpen(false)} onCreated={(id) => { setCreateOpen(false); setSelectedId(id); refresh(); }} />
       )}
 
       <div className="border-b border-border px-3 pt-2 sm:px-5">
@@ -276,7 +275,7 @@ export default function DocumentWorkspace(): React.ReactElement {
   );
 }
 
-export const CreateDocumentPanel: React.FC<{ principal: DmsPrincipal; onClose: () => void; onCreated: (id: string) => void }> = ({ principal, onClose, onCreated }) => {
+export const CreateDocumentPanel: React.FC<{ principal: DmsPrincipal; defaultDirection?: DmsDirection; onClose: () => void; onCreated: (id: string) => void }> = ({ principal, defaultDirection = "INTERNAL", onClose, onCreated }) => {
   const { t } = useTranslation("dms");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -316,7 +315,7 @@ export const CreateDocumentPanel: React.FC<{ principal: DmsPrincipal; onClose: (
       <div className="mb-3 flex items-center justify-between"><h3 className="font-bold text-text-primary">{t("create.title")}</h3><IconButton icon={<XMarkIcon />} aria-label={t("actions.close")} size="sm" onClick={onClose} /></div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Field label={t("fields.organization")}><select name="organizationId" required value={organizationId} onChange={(event) => setOrganizationId(event.target.value)}>{principal.organizationIds.map((id) => <option key={id} value={id}>{id}</option>)}</select></Field>
-        <Field label={t("fields.direction")}><select name="direction" required><option value="INCOMING">{t("directions.INCOMING")}</option><option value="OUTGOING">{t("directions.OUTGOING")}</option><option value="INTERNAL">{t("directions.INTERNAL")}</option></select></Field>
+        <Field label={t("fields.direction")}><select name="direction" required defaultValue={defaultDirection}><option value="INCOMING">{t("directions.INCOMING")}</option><option value="OUTGOING">{t("directions.OUTGOING")}</option><option value="INTERNAL">{t("directions.INTERNAL")}</option></select></Field>
         <Field label={t("fields.template")}><select name="templateVersionId"><option value="">{t("create.withoutTemplate")}</option>{templates.map((item) => <option key={String(item.latest_version_id)} value={String(item.latest_version_id)}>{String(item.name)} · v{String(item.version)}</option>)}</select></Field>
         <Field label={t("fields.documentType")}><input name="documentType" required maxLength={120} /></Field>
         <Field label={t("fields.confidentiality")}><select name="confidentiality"><option value="NORMAL">{t("confidentiality.NORMAL")}</option><option value="CONFIDENTIAL">{t("confidentiality.CONFIDENTIAL")}</option><option value="SECRET">{t("confidentiality.SECRET")}</option></select></Field>
