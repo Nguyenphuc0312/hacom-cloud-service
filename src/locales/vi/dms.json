@@ -52,6 +52,7 @@
     "organization": "Đơn vị",
     "direction": "Loại văn bản",
     "template": "Mẫu văn bản",
+    "templateProvenance": "Nguồn mẫu",
     "documentType": "Loại hồ sơ",
     "confidentiality": "Độ mật",
     "subject": "Trích yếu",

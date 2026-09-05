@@ -32,7 +32,7 @@ export type DmsDocument = {
   history?: DmsHistory[];
   access?: { history: boolean };
   tasks?: DmsTask[];
-  versions?: Array<{ id: string; version: number; metadata: Record<string, unknown>; created_at: string }>;
+  versions?: Array<{ id: string; version: number; metadata: Record<string, unknown>; created_at: string; template_code_snapshot: string | null; template_name_snapshot: string | null; template_version_number: number | null }>;
 };
 export type DmsFile = { id: string; filename: string; content_type: string; content_length: number; file_role: string; integrity_state: string };
 export type DmsHistory = { id: string; action: string; result: string; reason_code: string | null; metadata: Record<string, unknown>; occurred_at: string };
