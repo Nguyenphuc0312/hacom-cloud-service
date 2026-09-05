@@ -20,6 +20,7 @@ import { dmsApi, DmsApiError, type DmsDirection, type DmsDocument, type DmsPrinc
 import { beginDmsAuthorization, completeDmsAuthorization, getDmsAccessToken } from "./dmsOAuth";
 import { DmsAdministration } from "./DmsAdministration";
 import { DmsReport } from "./DmsReport";
+import { OrganizationMemberPicker } from "./OrganizationMemberPicker";
 const PdfJsViewer = React.lazy(() => import("../../components/preview/PdfJsViewer"));
 
 type DirectionFilter = "ALL" | DmsDirection;
@@ -359,14 +360,28 @@ const ActionPanel: React.FC<{ document: DmsDocument; mode: ActionMode; onClose: 
     if (["return", "reject", "recall"].includes(mode)) body = { reason: String(data.get("reason")) };
     if (["register", "issue"].includes(mode)) body = { bookId: String(data.get("bookId")) };
     if (mode === "distribute") {
-      const recipient = String(data.get("recipientSubjectId") ?? "").trim();
+      const recipients = data.getAll("recipientSubjectId").map(String);
       const processor = String(data.get("processorSubjectId") ?? "").trim();
-      body = { recipients: recipient ? [{ subjectId: recipient, deliveryMethod: "INTERNAL" }] : [{ organizationId: document.organization_id, deliveryMethod: "INTERNAL" }], tasks: processor ? [{ subjectId: processor, role: "PRIMARY", dueAt: String(data.get("dueAt")) || null }] : [] };
+      body = { recipients: recipients.map((subjectId) => ({ subjectId, deliveryMethod: "INTERNAL" })), tasks: processor ? [{ subjectId: processor, role: "PRIMARY", dueAt: String(data.get("dueAt")) || null }] : [] };
     }
     setBusy(true); setError(null);
     try { await dmsApi.action(document.id, mode, body); onDone(); } catch (cause) { setError(errorMessage(cause, t)); } finally { setBusy(false); }
   };
-  return <form onSubmit={(event) => void submit(event)} className="border-b border-border bg-primary/5 p-4"><div className="mb-3 flex justify-between"><h4 className="font-bold text-text-primary">{t(`actionPanel.${mode}`)}</h4><IconButton icon={<XMarkIcon />} aria-label={t("actions.close")} size="sm" onClick={onClose} /></div><div className="grid gap-3 sm:grid-cols-2">{mode === "submit" && <Field label={t("fields.workflow")}><select name="workflowVersionId" required>{workflows.map((item) => <option key={String(item.version_id)} value={String(item.version_id)}>{String(item.name)} · v{String(item.version)}</option>)}</select></Field>}{["return", "reject", "recall"].includes(mode) && <Field label={t("fields.reason")} className="sm:col-span-2"><textarea name="reason" required={mode !== "recall"} rows={3} /></Field>}{["register", "issue"].includes(mode) && <Field label={t("fields.book")}><select name="bookId" required>{books.map((item) => <option key={String(item.id)} value={String(item.id)}>{String(item.name)}</option>)}</select></Field>}{mode === "distribute" && <><Field label={t("fields.recipientSubject")}><input name="recipientSubjectId" /></Field><Field label={t("fields.processorSubject")}><input name="processorSubjectId" /></Field><Field label={t("fields.dueDate")}><input name="dueAt" type="datetime-local" /></Field></>}</div>{error && <p className="mt-2 text-sm text-danger" role="alert">{error}</p>}<div className="mt-3 flex justify-end gap-2"><Button type="button" variant="secondary" onClick={onClose}>{t("actions.cancel")}</Button><Button type="submit" isLoading={busy} leftIcon={<PaperAirplaneIcon />}>{t("actions.confirm")}</Button></div></form>;
+  return <form onSubmit={(event) => void submit(event)} className="border-b border-border bg-primary/5 p-4">
+    <div className="mb-3 flex justify-between"><h4 className="font-bold text-text-primary">{t(`actionPanel.${mode}`)}</h4><IconButton icon={<XMarkIcon />} aria-label={t("actions.close")} size="sm" onClick={onClose} /></div>
+    <div className="grid gap-3 sm:grid-cols-2">
+      {mode === "submit" && <Field label={t("fields.workflow")}><select name="workflowVersionId" required>{workflows.map((item) => <option key={String(item.version_id)} value={String(item.version_id)}>{String(item.name)} · v{String(item.version)}</option>)}</select></Field>}
+      {["return", "reject", "recall"].includes(mode) && <Field label={t("fields.reason")} className="sm:col-span-2"><textarea name="reason" required={mode !== "recall"} rows={3} /></Field>}
+      {["register", "issue"].includes(mode) && <Field label={t("fields.book")}><select name="bookId" required>{books.map((item) => <option key={String(item.id)} value={String(item.id)}>{String(item.name)}</option>)}</select></Field>}
+      {mode === "distribute" && <>
+        <OrganizationMemberPicker organizationId={document.organization_id} name="recipientSubjectId" label={t("members.recipients")} required />
+        <OrganizationMemberPicker organizationId={document.organization_id} name="processorSubjectId" label={t("members.processor")} max={1} />
+        <Field label={t("fields.dueDate")}><input name="dueAt" type="datetime-local" /></Field>
+      </>}
+    </div>
+    {error && <p className="mt-2 text-sm text-danger" role="alert">{error}</p>}
+    <div className="mt-3 flex justify-end gap-2"><Button type="button" variant="secondary" onClick={onClose}>{t("actions.cancel")}</Button><Button type="submit" isLoading={busy} leftIcon={<PaperAirplaneIcon />}>{t("actions.confirm")}</Button></div>
+  </form>;
 };
 
 const actionsFor = (document: DmsDocument, capabilities: Set<string>): ActionMode[] => {

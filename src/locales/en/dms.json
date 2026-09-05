@@ -1,4 +1,6 @@
 {
+  "backToMessages": "Back to messages",
+  "members": { "searchLabel": "{{label}} — find employee", "hint": "Enter an employee name or code within your organization.", "search": "Find", "results": "Employee search results", "choose": "Select a person to add", "limit": "Maximum {{count}} people selected", "loading": "Finding employees…", "found": "Found {{count}} people.", "empty": "No matching employees in this organization. Try another name or code.", "refine": "Showing the first 50 results. Enter a more specific search.", "unavailable": "Could not load employees. Select Find to retry.", "removeLabel": "Remove {{name}}", "remove": "Remove", "recipients": "Recipients", "processor": "Primary processor (optional)", "approvers": "Approvers in order" },
   "title": "Document management",
   "subtitle": "Document operations within {{employeeCode}}'s verified scope",
   "connect": { "description": "Connect your Hacom SSO session to access documents within your verified scope.", "action": "Connect document management" },

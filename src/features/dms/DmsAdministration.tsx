@@ -2,6 +2,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../../components/ui/Button";
 import { dmsApi, type DmsPrincipal } from "./dmsApi";
+import { OrganizationMemberPicker } from "./OrganizationMemberPicker";
 
 type ConfigTab = "templates" | "workflows" | "books" | "catalogs";
 
@@ -41,7 +42,7 @@ export const DmsAdministration: React.FC<{ principal: DmsPrincipal }> = ({ princ
           <div className="border-b border-border bg-background px-3 py-2 text-xs font-semibold text-text-secondary">{loading ? t("admin.loading") : t("admin.count", { count: items.length })}</div>
           {error ? <p className="p-4 text-sm text-danger" role="alert">{error}</p> : items.length === 0 && !loading ? <p className="p-4 text-sm text-text-muted">{t("admin.empty")}</p> : <div className="max-h-[420px] divide-y divide-border overflow-y-auto">{items.map((item, index) => <div key={String(item.id ?? item.version_id ?? index)} className="p-3"><p className="text-sm font-semibold text-text-primary">{String(item.name ?? item.code ?? item.catalog_type ?? t("admin.unnamed"))}</p><p className="mt-1 text-xs text-text-muted">{summary(item)}</p></div>)}</div>}
         </section>
-        {canManage ? <ConfigForm tab={tab} organizationId={organizationId} onSaved={() => { setLoading(true); setRevision((value) => value + 1); }} /> : <aside className="rounded-lg border border-border bg-background p-4 text-sm text-text-secondary">{t("admin.readOnly")}</aside>}
+        {canManage ? <ConfigForm key={`${organizationId}:${tab}`} tab={tab} organizationId={organizationId} onSaved={() => { setLoading(true); setRevision((value) => value + 1); }} /> : <aside className="rounded-lg border border-border bg-background p-4 text-sm text-text-secondary">{t("admin.readOnly")}</aside>}
       </div>
     </div>
   );
@@ -51,6 +52,7 @@ const ConfigForm: React.FC<{ tab: ConfigTab; organizationId: string; onSaved: ()
   const { t } = useTranslation("dms");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [savedRevision, setSavedRevision] = React.useState(0);
   const submit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -66,15 +68,15 @@ const ConfigForm: React.FC<{ tab: ConfigTab; organizationId: string; onSaved: ()
       } else if (tab === "catalogs") {
         await dmsApi.upsertCatalog({ ...common, catalogType: String(data.get("catalogType")), displayOrder: Number(data.get("displayOrder") || 0), status: String(data.get("status")) });
       } else {
-        const actors = String(data.get("actors")).split(/[\s,]+/).filter(Boolean);
+        const actors = data.getAll("actors").map(String);
         await dmsApi.createWorkflow({ ...common, activate: data.get("activate") === "on", steps: actors.map((actorSubjectId, index) => ({ order: index + 1, mode: "SEQUENTIAL", actorType: "PERSON", actorSubjectId })) });
       }
-      form.reset(); onSaved();
+      form.reset(); setSavedRevision((value) => value + 1); onSaved();
     } catch {
       setError(t("admin.invalid"));
     } finally { setBusy(false); }
   };
-  return <form onSubmit={(event) => void submit(event)} className="rounded-lg border border-border bg-background p-4"><h4 className="font-bold text-text-primary">{t(`admin.create.${tab}`)}</h4><div className="mt-3 grid gap-3"><Label text={t("admin.fields.code")}><input className={inputClass} name="code" required /></Label><Label text={t("admin.fields.name")}><input className={inputClass} name="name" required /></Label>{tab === "templates" && <><Label text={t("admin.fields.content")}><textarea className={inputClass} name="content" rows={4} defaultValue="{}" required /></Label><Checkbox name="activate" label={t("admin.fields.activate")} /></>}{tab === "workflows" && <><Label text={t("admin.fields.actors")}><textarea className={inputClass} name="actors" rows={3} required placeholder={t("admin.fields.actorsHint")} /></Label><Checkbox name="activate" label={t("admin.fields.activate")} /></>}{tab === "books" && <><Label text={t("fields.direction")}><select className={inputClass} name="direction"><option value="INCOMING">{t("directions.INCOMING")}</option><option value="OUTGOING">{t("directions.OUTGOING")}</option><option value="INTERNAL">{t("directions.INTERNAL")}</option></select></Label><div className="grid grid-cols-2 gap-3"><Label text={t("admin.fields.prefix")}><input className={inputClass} name="prefix" /></Label><Label text={t("admin.fields.suffix")}><input className={inputClass} name="suffix" /></Label></div></>}{tab === "catalogs" && <><Label text={t("admin.fields.catalogType")}><input className={inputClass} name="catalogType" required /></Label><div className="grid grid-cols-2 gap-3"><Label text={t("admin.fields.displayOrder")}><input className={inputClass} name="displayOrder" type="number" defaultValue="0" /></Label><Label text={t("admin.fields.status")}><select className={inputClass} name="status"><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></Label></div></>}</div>{error && <p className="mt-2 text-sm text-danger" role="alert">{error}</p>}<Button className="mt-4" type="submit" isLoading={busy}>{t("admin.save")}</Button></form>;
+  return <form onSubmit={(event) => void submit(event)} className="rounded-lg border border-border bg-background p-4"><h4 className="font-bold text-text-primary">{t(`admin.create.${tab}`)}</h4><div className="mt-3 grid gap-3"><Label text={t("admin.fields.code")}><input className={inputClass} name="code" required /></Label><Label text={t("admin.fields.name")}><input className={inputClass} name="name" required /></Label>{tab === "templates" && <><Label text={t("admin.fields.content")}><textarea className={inputClass} name="content" rows={4} defaultValue="{}" required /></Label><Checkbox name="activate" label={t("admin.fields.activate")} /></>}{tab === "workflows" && <><OrganizationMemberPicker key={savedRevision} organizationId={organizationId} name="actors" label={t("members.approvers")} required max={20} /><Checkbox name="activate" label={t("admin.fields.activate")} /></>}{tab === "books" && <><Label text={t("fields.direction")}><select className={inputClass} name="direction"><option value="INCOMING">{t("directions.INCOMING")}</option><option value="OUTGOING">{t("directions.OUTGOING")}</option><option value="INTERNAL">{t("directions.INTERNAL")}</option></select></Label><div className="grid grid-cols-2 gap-3"><Label text={t("admin.fields.prefix")}><input className={inputClass} name="prefix" /></Label><Label text={t("admin.fields.suffix")}><input className={inputClass} name="suffix" /></Label></div></>}{tab === "catalogs" && <><Label text={t("admin.fields.catalogType")}><input className={inputClass} name="catalogType" required /></Label><div className="grid grid-cols-2 gap-3"><Label text={t("admin.fields.displayOrder")}><input className={inputClass} name="displayOrder" type="number" defaultValue="0" /></Label><Label text={t("admin.fields.status")}><select className={inputClass} name="status"><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></Label></div></>}</div>{error && <p className="mt-2 text-sm text-danger" role="alert">{error}</p>}<Button className="mt-4" type="submit" isLoading={busy}>{t("admin.save")}</Button></form>;
 };
 
 const Label: React.FC<{ text: string; children: React.ReactNode }> = ({ text, children }) => <label className="grid gap-1 text-xs font-semibold text-text-secondary">{text}{children}</label>;

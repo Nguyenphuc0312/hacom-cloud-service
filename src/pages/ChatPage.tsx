@@ -27,6 +27,7 @@ import {
 } from "../components/ui";
 import { toast } from "../components/ui";
 import { ErrorState, NoChatSelected } from "../components/ui/EmptyState";
+import { Button } from "../components/ui/Button";
 import {
   useAuthStore,
   useChatStore,
@@ -512,6 +513,12 @@ export const ChatPage: React.FC = () => {
   const routeConversationId = conversationId ?? null;
   const navigate = useNavigate();
   const location = useLocation();
+  const mobileDocumentsOpen = !routeConversationId && new URLSearchParams(location.search).get("workspace") === "documents";
+  const setMobileDocumentsOpen = (open: boolean): void => {
+    const search = new URLSearchParams(location.search);
+    if (open) search.set("workspace", "documents"); else search.delete("workspace");
+    navigate({ pathname: location.pathname, search: search.toString() });
+  };
   const routeIntent = readChatRouteIntent(location.state);
   const shouldTraceRenderLoop = import.meta.env.DEV;
 
@@ -1480,10 +1487,12 @@ export const ChatPage: React.FC = () => {
       data-chat-layout-state={chatLayoutState}
       moduleSidebar={
         <ModuleSidebar
-          className="chat-page-module-sidebar"
+          className={clsx("chat-page-module-sidebar", mobileDocumentsOpen && "!hidden md:!flex")}
           contentClassName="min-h-0"
         >
-          <div className="h-full min-h-0 w-full">
+          <div className="flex h-full min-h-0 w-full flex-col">
+            {!routeConversationId && <div className="border-b border-border p-2 md:hidden"><Button type="button" variant="secondary" fullWidth onClick={() => setMobileDocumentsOpen(true)}>{t("dms:title")}</Button></div>}
+            <div className="min-h-0 flex-1">
             <FeatureErrorBoundary name="Danh sách hội thoại">
               <Sidebar
                 layoutState={sidebarLayoutState}
@@ -1500,6 +1509,7 @@ export const ChatPage: React.FC = () => {
                 onAddFriendClick={handleOpenAddFriendModal}
               />
             </FeatureErrorBoundary>
+            </div>
           </div>
         </ModuleSidebar>
       }
@@ -1511,9 +1521,10 @@ export const ChatPage: React.FC = () => {
         tabIndex={-1}
         className={clsx(
           "relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden bg-[hsl(var(--chat-panel-bg))]",
-          !selectedConversation && "hidden md:flex",
+          !selectedConversation && !mobileDocumentsOpen && "hidden md:flex",
         )}
       >
+        {mobileDocumentsOpen && <div className="border-b border-border p-2 md:hidden"><Button type="button" variant="secondary" onClick={() => setMobileDocumentsOpen(false)}>{t("dms:backToMessages")}</Button></div>}
         {isRoutePersonalCloud ? (
           <React.Suspense fallback={<PersonalCloudSurfaceSkeleton />}>
             <PersonalCloudConversationSurface onBack={handleBack} conversationId={routeConversationId ?? undefined} />

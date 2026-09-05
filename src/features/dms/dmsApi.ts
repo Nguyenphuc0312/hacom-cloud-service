@@ -37,6 +37,7 @@ export type DmsFile = { id: string; filename: string; content_type: string; cont
 export type DmsHistory = { id: string; action: string; result: string; reason_code: string | null; metadata: Record<string, unknown>; occurred_at: string };
 export type DmsTask = { id: string; role: string; state: string; revision: number; due_at: string | null };
 export type DmsList = { items: DmsDocument[]; total: number; page: number; pageSize: number };
+export type DmsOrganizationMember = { subjectId: string; employeeCode: string; displayName: string };
 
 export class DmsApiError extends Error {
   readonly status: number;
@@ -79,6 +80,7 @@ const query = (values: Record<string, string | number | null | undefined>): stri
 };
 
 export const dmsApi = {
+  organizationMembers: (organizationId: string, search: string, signal: AbortSignal) => request<{ items: DmsOrganizationMember[] }>(`/organization-members${query({ organizationId, query: search })}`, { signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]) }),
   principal: () => request<DmsPrincipal>("/principal"),
   list: (filters: Record<string, string | number | null | undefined>) => request<DmsList>(`/documents${query(filters)}`),
   detail: (id: string) => request<DmsDocument>(`/documents/${encodeURIComponent(id)}`),
