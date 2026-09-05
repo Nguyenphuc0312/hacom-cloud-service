@@ -24,7 +24,9 @@
   "filters": {
     "direction": "Loại văn bản",
     "search": "Tìm văn bản",
-    "searchPlaceholder": "Tìm theo trích yếu hoặc số văn bản"
+    "searchPlaceholder": "Tìm theo trích yếu hoặc số văn bản",
+    "state": "Trạng thái",
+    "allStates": "Mọi trạng thái"
   },
   "list": {
     "title": "Danh sách văn bản",

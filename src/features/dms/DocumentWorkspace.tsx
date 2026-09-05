@@ -52,14 +52,15 @@ export default function DocumentWorkspace(): React.ReactElement {
   const [authReady, setAuthReady] = React.useState(Boolean(getDmsAccessToken()));
   const [authError, setAuthError] = React.useState(false);
   const [principal, setPrincipal] = React.useState<DmsPrincipal | null>(null);
-  const [direction, setDirection] = React.useState<DirectionFilter>("ALL");
-  const [lifecycleState, setLifecycleState] = React.useState<string | null>(null);
-  const [documentType, setDocumentType] = React.useState<string | null>(null);
-  const [search, setSearch] = React.useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialDirection = searchParams.get("direction");
+  const [direction, setDirection] = React.useState<DirectionFilter>(["INCOMING", "OUTGOING", "INTERNAL"].includes(initialDirection ?? "") ? initialDirection as DmsDirection : "ALL");
+  const [lifecycleState, setLifecycleState] = React.useState<string | null>(searchParams.get("state") || null);
+  const [documentType, setDocumentType] = React.useState<string | null>(searchParams.get("documentType") || null);
+  const [search, setSearch] = React.useState(searchParams.get("search") || "");
   const [documents, setDocuments] = React.useState<DmsDocument[]>([]);
   const [workQueue, setWorkQueue] = React.useState<DmsWorkQueue | null>(null);
   const [total, setTotal] = React.useState(0);
-  const [searchParams, setSearchParams] = useSearchParams();
   const requestedPage = Number(searchParams.get("page"));
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const setPage = (nextPage: number | ((current: number) => number)): void => {
@@ -67,6 +68,14 @@ export default function DocumentWorkspace(): React.ReactElement {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       if (value > 1) next.set("page", String(value)); else next.delete("page");
+      return next;
+    });
+  };
+  const setListFilter = (name: "direction" | "state" | "documentType" | "search", value: string | null): void => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (value) next.set(name, value); else next.delete(name);
+      next.delete("page");
       return next;
     });
   };
@@ -195,7 +204,7 @@ export default function DocumentWorkspace(): React.ReactElement {
       <div className="border-b border-border px-3 pt-2 sm:px-5">
         <div className="flex overflow-x-auto" role="tablist" aria-label={t("filters.direction")}> 
           {(["ALL", "INCOMING", "OUTGOING", "INTERNAL"] as const).map((item) => (
-            <button key={item} type="button" role="tab" aria-selected={direction === item} onClick={() => { setDirection(item); setPage(1); }} className={`min-h-10 shrink-0 border-b-2 px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-focus ${direction === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>
+            <button key={item} type="button" role="tab" aria-selected={direction === item} onClick={() => { setDirection(item); setListFilter("direction", item === "ALL" ? null : item); }} className={`min-h-10 shrink-0 border-b-2 px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-focus ${direction === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>
               {t(`directions.${item}`)}
             </button>
           ))}
@@ -204,11 +213,18 @@ export default function DocumentWorkspace(): React.ReactElement {
           <label className="relative block min-w-[16rem] max-w-xl flex-1">
             <span className="sr-only">{t("filters.search")}</span>
             <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-text-muted" aria-hidden="true" />
-            <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} className="min-h-10 w-full rounded-lg border border-border bg-background pl-10 pr-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-border-focus focus:ring-2 focus:ring-focus/20" placeholder={t("filters.searchPlaceholder")} />
+            <input value={search} onChange={(event) => { const value = event.target.value; setSearch(value); setListFilter("search", value || null); }} className="min-h-10 w-full rounded-lg border border-border bg-background pl-10 pr-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-border-focus focus:ring-2 focus:ring-focus/20" placeholder={t("filters.searchPlaceholder")} />
           </label>
           <label className="grid gap-1 text-xs font-semibold text-text-secondary">
             {t("fields.documentType")}
-            <input value={documentType ?? ""} onChange={(event) => { setDocumentType(event.target.value || null); setPage(1); }} className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm font-normal text-text-primary outline-none placeholder:text-text-muted focus:border-border-focus focus:ring-2 focus:ring-focus/20" maxLength={120} />
+            <input value={documentType ?? ""} onChange={(event) => { const value = event.target.value || null; setDocumentType(value); setListFilter("documentType", value); }} className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm font-normal text-text-primary outline-none placeholder:text-text-muted focus:border-border-focus focus:ring-2 focus:ring-focus/20" maxLength={120} />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-text-secondary">
+            {t("filters.state")}
+            <select value={lifecycleState ?? ""} onChange={(event) => { const value = event.target.value || null; setLifecycleState(value); setListFilter("state", value); }} className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm font-normal text-text-primary outline-none focus:border-border-focus focus:ring-2 focus:ring-focus/20">
+              <option value="">{t("filters.allStates")}</option>
+              {["DRAFT", "REGISTERED", "ISSUED", "COMPLETED"].map((state) => <option key={state} value={state}>{t(`lifecycle.${state}`, { defaultValue: state })}</option>)}
+            </select>
           </label>
         </div>
       </div>

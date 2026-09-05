@@ -9,7 +9,7 @@
   "navigation": { "label": "Document management areas", "work": "My work", "documents": "Documents", "archive": "Repository", "configuration": "Configuration", "reports": "Reports" },
   "directions": { "ALL": "All", "INCOMING": "Incoming", "OUTGOING": "Outgoing", "INTERNAL": "Internal" },
   "confidentiality": { "NORMAL": "Normal", "CONFIDENTIAL": "Confidential", "SECRET": "Secret" },
-  "filters": { "direction": "Document direction", "search": "Search documents", "searchPlaceholder": "Search by subject or document number" },
+  "filters": { "direction": "Document direction", "search": "Search documents", "searchPlaceholder": "Search by subject or document number", "state": "Status", "allStates": "All statuses" },
   "list": { "title": "Documents", "total": "{{count}} documents", "empty": "No matching documents", "emptyDescription": "Change the filters or create a draft if permitted.", "noNumber": "Number not assigned" },
   "pagination": { "previous": "Previous", "next": "Next", "page": "Page {{page}} / {{count}}" },
   "archive": { "title": "Repository", "empty": "No matching archived documents", "emptyDescription": "Change the filters or search term." },
