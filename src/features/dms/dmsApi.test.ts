@@ -41,8 +41,9 @@ describe("DMS API trust boundary", () => {
 
   it("passes report dimensions only as query filters", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ groups: [], total: 0 }), { status: 200, headers: { "content-type": "application/json" } }));
-    await dmsApi.report({ direction: "OUTGOING", state: "ISSUED" });
+    await dmsApi.report({ direction: "OUTGOING", state: "ISSUED", documentType: "CONG_VAN" });
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("direction=OUTGOING");
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("state=ISSUED");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("documentType=CONG_VAN");
   });
 });
