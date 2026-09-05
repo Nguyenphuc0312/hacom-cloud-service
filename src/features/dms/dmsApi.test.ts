@@ -46,4 +46,14 @@ describe("DMS API trust boundary", () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("state=ISSUED");
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("documentType=CONG_VAN");
   });
+
+  it("uses the scoped template-administration endpoints for lifecycle changes", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } }));
+    await dmsApi.adminTemplates("org-1", "mẫu đi");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/admin/templates?organizationId=org-1&search=m%E1%BA%ABu+%C4%91i");
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ id: "template-1", status: "INACTIVE" }), { status: 200, headers: { "content-type": "application/json" } }));
+    await dmsApi.changeTemplateStatus("template-1", "INACTIVE");
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/admin/templates/template-1");
+    expect(fetchMock.mock.calls[1]?.[1]?.method).toBe("PATCH");
+  });
 });
