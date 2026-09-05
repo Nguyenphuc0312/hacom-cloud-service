@@ -28,7 +28,7 @@ const PdfJsViewer = React.lazy(() => import("../../components/preview/PdfJsViewe
 type DirectionFilter = "ALL" | DmsDirection;
 type DetailTab = "summary" | "files" | "history" | "tasks";
 type ActionMode = "edit" | "submit" | "approve" | "return" | "reject" | "register" | "issue" | "distribute" | "recall" | "archive";
-type WorkspaceView = "documents" | "archive" | "configuration" | "reports";
+type WorkspaceView = "work" | "documents" | "archive" | "configuration" | "reports";
 const DOCUMENT_PAGE_SIZE = 50;
 
 const formatDate = (value?: string | null): string => value
@@ -71,9 +71,6 @@ export default function DocumentWorkspace(): React.ReactElement {
     });
   };
   const selectedId = dmsDocumentId(searchParams.get("documentId"));
-  const setSelectedId = (id: string): void => {
-    setSearchParams((current) => { const next = new URLSearchParams(current); next.set("documentId", id); next.set("workspace", "documents"); return next; });
-  };
   const [loadedDocument, setSelected] = React.useState<DmsDocument | null>(null);
   const selected = loadedDocument?.id === selectedId ? loadedDocument : null;
   const [loading, setLoading] = React.useState(false);
@@ -82,7 +79,13 @@ export default function DocumentWorkspace(): React.ReactElement {
   const [createOpen, setCreateOpen] = React.useState(false);
   const [detailTab, setDetailTab] = React.useState<DetailTab>("summary");
   const [actionMode, setActionMode] = React.useState<ActionMode | null>(null);
-  const [view, setView] = React.useState<WorkspaceView>("documents");
+  const [view, setView] = React.useState<WorkspaceView>(() => {
+    const workspace = searchParams.get("workspace");
+    return ["documents", "archive", "configuration", "reports"].includes(workspace ?? "") ? workspace as WorkspaceView : "work";
+  });
+  const setSelectedId = (id: string): void => {
+    setSearchParams((current) => { const next = new URLSearchParams(current); next.set("documentId", id); next.set("workspace", view); return next; });
+  };
 
   React.useEffect(() => {
     void completeDmsAuthorization()
@@ -103,12 +106,12 @@ export default function DocumentWorkspace(): React.ReactElement {
   }, [authReady, t]);
 
   React.useEffect(() => {
-    if (!principal || !["documents", "archive"].includes(view)) return;
+    if (!principal || !["work", "documents", "archive"].includes(view)) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setLoading(true);
       setError(null);
-      void dmsApi.list({ direction: direction === "ALL" ? null : direction, state: lifecycleState, documentType, archiveState: view === "archive" ? "ARCHIVED" : "ACTIVE", search, page, pageSize: DOCUMENT_PAGE_SIZE })
+      void dmsApi.list({ direction: direction === "ALL" ? null : direction, state: lifecycleState, documentType, archiveState: view === "archive" ? "ARCHIVED" : "ACTIVE", queue: view === "work" ? "WORK" : null, search, page, pageSize: DOCUMENT_PAGE_SIZE })
         .then((result) => {
           if (controller.signal.aborted) return;
           setDocuments(result.items);
@@ -178,10 +181,10 @@ export default function DocumentWorkspace(): React.ReactElement {
       </header>
 
       {workQueue && Object.values(workQueue).some((count) => count > 0) && <div className="flex flex-wrap gap-x-5 gap-y-2 border-b border-border bg-surface-overlay px-4 py-2 text-sm sm:px-5" aria-label={t("queue.label")} data-testid="dms-work-queue">
-        {(["processing", "approvals", "incoming", "dueSoon"] as const).filter((key) => workQueue[key] > 0).map((key) => <span key={key} className="text-text-secondary">{t(`queue.${key}`)} <strong className="text-text-primary">{workQueue[key]}</strong></span>)}
+        {(["processing", "approvals", "incoming", "dueSoon"] as const).filter((key) => workQueue[key] > 0).map((key) => <button key={key} type="button" onClick={() => { setView("work"); setPage(1); }} className="text-left text-text-secondary hover:text-text-primary focus-visible:ring-2 focus-visible:ring-focus">{t(`queue.${key}`)} <strong className="text-text-primary">{workQueue[key]}</strong></button>)}
       </div>}
 
-      <nav className="flex overflow-x-auto border-b border-border px-3 sm:px-5" aria-label={t("navigation.label")}>{(["documents", "archive", "configuration", "reports"] as const).filter((item) => item !== "reports" || capabilities.has("document.report.read")).map((item) => <button key={item} type="button" aria-current={view === item ? "page" : undefined} onClick={() => { setView(item); setPage(1); if (item === "documents" || item === "archive") setLifecycleState(null); }} className={`min-h-11 shrink-0 border-b-2 px-3 text-sm font-semibold ${view === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>{t(`navigation.${item}`)}</button>)}</nav>
+      <nav className="flex overflow-x-auto border-b border-border px-3 sm:px-5" aria-label={t("navigation.label")}>{(["work", "documents", "archive", "configuration", "reports"] as const).filter((item) => item !== "reports" || capabilities.has("document.report.read")).map((item) => <button key={item} type="button" aria-current={view === item ? "page" : undefined} onClick={() => { setView(item); setSearchParams((current) => { const next = new URLSearchParams(current); next.set("workspace", item); return next; }); setPage(1); if (["work", "documents", "archive"].includes(item)) setLifecycleState(null); }} className={`min-h-11 shrink-0 border-b-2 px-3 text-sm font-semibold ${view === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>{t(`navigation.${item}`)}</button>)}</nav>
 
       {view === "configuration" && principal ? <DmsAdministration principal={principal} /> : view === "reports" ? <DmsReport onDrillDown={(group, filters) => { setDirection(group.direction as DmsDirection); setLifecycleState(group.lifecycle_state); setDocumentType(filters.documentType ?? null); setPage(1); setView(group.lifecycle_state === "ARCHIVED" ? "archive" : "documents"); }} /> : <>
 
@@ -216,12 +219,12 @@ export default function DocumentWorkspace(): React.ReactElement {
         <div className="grid min-h-[420px] lg:grid-cols-[minmax(320px,42%)_minmax(0,1fr)]">
           <div className="border-b border-border lg:border-b-0 lg:border-r">
             <div className="flex min-h-10 items-center justify-between border-b border-border px-4 text-sm">
-              <span className="font-semibold text-text-primary">{t(view === "archive" ? "archive.title" : "list.title")}</span>
+              <span className="font-semibold text-text-primary">{t(view === "archive" ? "archive.title" : view === "work" ? "queue.title" : "list.title")}</span>
               <span className="text-text-muted" aria-live="polite">{t("list.total", { count: total })}</span>
             </div>
             <div className="max-h-[620px] overflow-y-auto">
               {loading ? <div className="p-4"><SkeletonText lines={5} /></div> : documents.length === 0 ? (
-                <EmptyState title={t(view === "archive" ? "archive.empty" : "list.empty")} description={t(view === "archive" ? "archive.emptyDescription" : "list.emptyDescription")} />
+                <EmptyState title={t(view === "archive" ? "archive.empty" : view === "work" ? "queue.empty" : "list.empty")} description={t(view === "archive" ? "archive.emptyDescription" : view === "work" ? "queue.emptyDescription" : "list.emptyDescription")} />
               ) : documents.map((document) => (
                 <button key={document.id} data-testid="dms-document-row" type="button" onClick={() => { setSelectedId(document.id); setDetailTab("summary"); setActionMode(null); }} className={`grid w-full grid-cols-[1fr_auto] gap-3 border-b border-border px-4 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus ${selectedId === document.id ? "bg-primary/8" : "hover:bg-surface-hover"}`}>
                   <span className="min-w-0">
