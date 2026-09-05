@@ -29,6 +29,7 @@ export type DmsDocument = {
   updated_at: string;
   files?: DmsFile[];
   history?: DmsHistory[];
+  access?: { history: boolean };
   tasks?: DmsTask[];
   versions?: Array<{ id: string; version: number; metadata: Record<string, unknown>; created_at: string }>;
 };
@@ -93,10 +94,11 @@ export const dmsApi = {
       body: file,
     });
   },
-  file: async (documentId: string, fileId: string, download = false): Promise<Blob> => {
+  file: async (documentId: string, fileId: string, download = false, signal?: AbortSignal): Promise<Blob> => {
     const token = getDmsAccessToken();
     if (!token) throw new DmsApiError(401, "DMS_AUTH_REQUIRED");
-    const response = await fetch(`${DMS_API_BASE_URL}/documents/${encodeURIComponent(documentId)}/files/${encodeURIComponent(fileId)}${download ? "?download=true" : ""}`, { headers: { authorization: `Bearer ${token}`, "x-request-id": crypto.randomUUID() } });
+    const timeout = AbortSignal.timeout(20_000);
+    const response = await fetch(`${DMS_API_BASE_URL}/documents/${encodeURIComponent(documentId)}/files/${encodeURIComponent(fileId)}${download ? "?download=true" : ""}`, { headers: { authorization: `Bearer ${token}`, "x-request-id": crypto.randomUUID() }, signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
     if (!response.ok) throw new DmsApiError(response.status, "DMS_FILE_UNAVAILABLE");
     return response.blob();
   },

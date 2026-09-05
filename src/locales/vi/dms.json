@@ -91,7 +91,10 @@
   "files": {
     "upload": "Tải tệp lên",
     "preview": "Xem tệp",
-    "download": "Tải tệp"
+    "download": "Tải tệp",
+    "closePreview": "Quay lại danh sách tệp",
+    "failed": "Không tải hoặc gửi được tệp. Kiểm tra kết nối và quyền truy cập rồi thử lại.",
+    "unsupportedPreview": "Định dạng này chưa xem được tại đây. Bạn có thể tải tệp nếu có quyền."
   },
   "tasks": { "roles": { "PRIMARY": "Xử lý chính", "COORDINATOR": "Phối hợp xử lý" } },
   "admin": {

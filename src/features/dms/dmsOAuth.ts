@@ -65,7 +65,19 @@ export const beginDmsAuthorization = async (): Promise<void> => {
   window.location.assign(authorize.toString());
 };
 
-export const completeDmsAuthorization = async (): Promise<boolean> => {
+let callbackExchange: Promise<boolean> | null = null;
+
+// React may mount effects twice; an authorization code must be redeemed once.
+export const completeDmsAuthorization = (): Promise<boolean> => {
+  if (!callbackExchange) {
+    callbackExchange = exchangeDmsAuthorization().finally(() => {
+      callbackExchange = null;
+    });
+  }
+  return callbackExchange;
+};
+
+const exchangeDmsAuthorization = async (): Promise<boolean> => {
   const params = new URLSearchParams(window.location.search);
   const code = params.get("code");
   const state = params.get("state");

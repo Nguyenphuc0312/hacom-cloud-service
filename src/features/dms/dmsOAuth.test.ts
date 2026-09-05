@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { getDmsAccessToken } from "./dmsOAuth";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { completeDmsAuthorization, getDmsAccessToken } from "./dmsOAuth";
 
 const token = (expiresAt: number): string => {
   const payload = btoa(JSON.stringify({ exp: Math.floor(expiresAt / 1000) }))
@@ -11,6 +11,41 @@ const token = (expiresAt: number): string => {
 
 describe("DMS OAuth token boundary", () => {
   beforeEach(() => sessionStorage.clear());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("redeems a callback once across concurrent mounts and cleans its state", async () => {
+    window.history.replaceState(null, "", "/chat?code=local-code&state=local-state&view=documents");
+    sessionStorage.setItem("hacom.dms.oauth-state", "local-state");
+    sessionStorage.setItem("hacom.dms.oauth-verifier", "local-verifier");
+    sessionStorage.setItem("hacom.dms.oauth-redirect", `${window.location.origin}/chat`);
+    const accessToken = token(Date.now() + 120_000);
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ access_token: accessToken }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const first = completeDmsAuthorization();
+    const second = completeDmsAuthorization();
+    expect(first).toBe(second);
+    expect(await Promise.all([first, second])).toEqual([true, true]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(getDmsAccessToken()).toBe(accessToken);
+    expect(window.location.search).toBe("?view=documents");
+    expect(sessionStorage.getItem("hacom.dms.oauth-verifier")).toBeNull();
+    expect(await completeDmsAuthorization()).toBe(false);
+  });
+
+  it("rejects a mismatched state without exchanging or retaining callback secrets", async () => {
+    window.history.replaceState(null, "", "/chat?code=local-code&state=wrong");
+    sessionStorage.setItem("hacom.dms.oauth-state", "expected");
+    sessionStorage.setItem("hacom.dms.oauth-verifier", "local-verifier");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(completeDmsAuthorization()).rejects.toThrow("DMS_OAUTH_CALLBACK_INVALID");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(window.location.search).toBe("");
+    expect(sessionStorage.getItem("hacom.dms.oauth-verifier")).toBeNull();
+  });
 
   it("keeps a short-lived DMS resource token in tab storage only", () => {
     const accessToken = token(Date.now() + 120_000);

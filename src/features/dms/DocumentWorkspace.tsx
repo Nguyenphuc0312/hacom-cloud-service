@@ -20,6 +20,7 @@ import { dmsApi, DmsApiError, type DmsDirection, type DmsDocument, type DmsPrinc
 import { beginDmsAuthorization, completeDmsAuthorization, getDmsAccessToken } from "./dmsOAuth";
 import { DmsAdministration } from "./DmsAdministration";
 import { DmsReport } from "./DmsReport";
+const PdfJsViewer = React.lazy(() => import("../../components/preview/PdfJsViewer"));
 
 type DirectionFilter = "ALL" | DmsDirection;
 type DetailTab = "summary" | "files" | "history" | "tasks";
@@ -253,9 +254,11 @@ const Field: React.FC<{ label: string; children: React.ReactElement<{ className?
   <label className={`grid gap-1 text-xs font-semibold text-text-secondary ${className ?? ""}`}>{label}{React.cloneElement(children, { className: "min-h-10 w-full rounded-md border border-border bg-surface px-3 text-sm font-normal text-text-primary outline-none focus:border-border-focus focus:ring-2 focus:ring-focus/20" })}</label>
 );
 
-const DocumentDetail: React.FC<{ document: DmsDocument; capabilities: Set<string>; tab: DetailTab; onTab: (tab: DetailTab) => void; actionMode: ActionMode | null; onAction: (mode: ActionMode | null) => void; onRefresh: () => void }> = ({ document, capabilities, tab, onTab, actionMode, onAction, onRefresh }) => {
+const DocumentDetail: React.FC<{ document: DmsDocument; capabilities: Set<string>; tab: DetailTab; onTab: (tab: DetailTab) => void; actionMode: ActionMode | null; onAction: (mode: ActionMode | null) => void; onRefresh: () => void }> = ({ document, capabilities, tab: selectedTab, onTab, actionMode, onAction, onRefresh }) => {
   const { t } = useTranslation("dms");
   const available = actionsFor(document, capabilities);
+  const tabs = (["summary", "files", "history", "tasks"] as const).filter((item) => item !== "history" || document.access?.history === true);
+  const tab = tabs.includes(selectedTab) ? selectedTab : "summary";
   return (
     <article className="min-w-0">
       <header className="border-b border-border px-4 py-3">
@@ -263,10 +266,10 @@ const DocumentDetail: React.FC<{ document: DmsDocument; capabilities: Set<string
         {available.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{available.map((action) => <Button key={action} size="xs" variant={action === "reject" ? "danger" : "secondary"} onClick={() => onAction(action)}>{t(`actions.${action}`)}</Button>)}</div>}
       </header>
       {actionMode && <ActionPanel document={document} mode={actionMode} onClose={() => onAction(null)} onDone={() => { onAction(null); onRefresh(); }} />}
-      <div className="flex overflow-x-auto border-b border-border" role="tablist">{(["summary", "files", "history", "tasks"] as const).map((item) => <button key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => onTab(item)} className={`min-h-10 border-b-2 px-4 text-sm font-semibold ${tab === item ? "border-primary text-primary" : "border-transparent text-text-secondary"}`}>{t(`detail.tabs.${item}`)}</button>)}</div>
+      <div className="flex overflow-x-auto border-b border-border" role="tablist">{tabs.map((item) => <button key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => onTab(item)} className={`min-h-10 border-b-2 px-4 text-sm font-semibold ${tab === item ? "border-primary text-primary" : "border-transparent text-text-secondary"}`}>{t(`detail.tabs.${item}`)}</button>)}</div>
       <div className="max-h-[470px] overflow-y-auto p-4">
         {tab === "summary" && <dl className="grid gap-3 sm:grid-cols-2"><Datum label={t("fields.organization")} value={document.organization_id} /><Datum label={t("fields.documentType")} value={document.document_type} /><Datum label={t("fields.confidentiality")} value={t(`confidentiality.${document.confidentiality}`)} /><Datum label={t("fields.documentDate")} value={formatDate(document.document_date)} /><Datum label={t("fields.dueDate")} value={formatDate(document.due_date)} /><Datum label={t("fields.approval")} value={document.approval_state} /><Datum label={t("fields.distribution")} value={document.distribution_state} /><Datum label={t("fields.signing")} value={document.signing_state} /></dl>}
-        {tab === "files" && <Files document={document} canUpload={capabilities.has("document.draft.manage") && document.lifecycle_state === "DRAFT"} canPreview={capabilities.has("document.file.read")} canDownload={capabilities.has("document.file.download")} onRefresh={onRefresh} />}
+        {tab === "files" && <Files key={document.id} document={document} canUpload={capabilities.has("document.draft.manage") && document.lifecycle_state === "DRAFT"} canPreview={capabilities.has("document.file.read")} canDownload={capabilities.has("document.file.download")} onRefresh={onRefresh} />}
         {tab === "history" && <div className="space-y-3">{document.history?.map((event) => <div key={event.id} className="rounded-lg border border-border p-3"><div className="flex justify-between gap-3"><span className="font-semibold text-text-primary">{event.action.replaceAll("_", " ")}</span><span className="text-xs text-text-muted">{formatDate(event.occurred_at)}</span></div><p className="mt-1 text-xs text-text-secondary">{event.result}{event.reason_code ? ` · ${event.reason_code}` : ""}</p></div>) ?? null}</div>}
         {tab === "tasks" && <Tasks document={document} canProcess={capabilities.has("document.process")} onRefresh={onRefresh} />}
       </div>
@@ -279,26 +282,56 @@ const Datum: React.FC<{ label: string; value: React.ReactNode }> = ({ label, val
 const Files: React.FC<{ document: DmsDocument; canUpload: boolean; canPreview: boolean; canDownload: boolean; onRefresh: () => void }> = ({ document, canUpload, canPreview, canDownload, onRefresh }) => {
   const { t } = useTranslation("dms");
   const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [preview, setPreview] = React.useState<{ url: string; name: string; size: number } | null>(null);
+  const requestRef = React.useRef<AbortController | null>(null);
+  React.useEffect(() => () => { requestRef.current?.abort(); }, []);
+  React.useEffect(() => () => { if (preview) URL.revokeObjectURL(preview.url); }, [preview]);
   const open = async (fileId: string, download: boolean): Promise<void> => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setBusy(true);
+    setError(null);
     try {
-      const blob = await dmsApi.file(document.id, fileId, download);
+      const blob = await dmsApi.file(document.id, fileId, download, controller.signal);
+      if (controller.signal.aborted) return;
+      const file = document.files?.find((item) => item.id === fileId);
+      if (!download && blob.type !== "application/pdf") {
+        setError(t("files.unsupportedPreview"));
+        return;
+      }
       const url = URL.createObjectURL(blob);
+      if (!download) {
+        setPreview({ url, name: file?.filename ?? "document.pdf", size: blob.size });
+        return;
+      }
       const anchor = window.document.createElement("a");
       anchor.href = url;
-      if (download) anchor.download = "";
-      else anchor.target = "_blank";
+      anchor.download = file?.filename ?? "document.pdf";
       anchor.rel = "noopener";
       anchor.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
-    } finally { setBusy(false); }
+    } catch {
+      if (!controller.signal.aborted) setError(t("files.failed"));
+    } finally { if (!controller.signal.aborted) setBusy(false); }
   };
   const upload = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = event.target.files?.[0];
     if (!file) return;
     setBusy(true);
-    try { await dmsApi.upload(document.id, file); onRefresh(); } finally { setBusy(false); event.target.value = ""; }
+    setError(null);
+    try { await dmsApi.upload(document.id, file); onRefresh(); } catch { setError(t("files.failed")); } finally { setBusy(false); event.target.value = ""; }
   };
+  if (error) return <ErrorState title={t("files.failed")} message={error} onRetry={() => setError(null)} />;
+  if (preview && canPreview) return (
+    <section aria-label={t("files.preview")} className="min-w-0" data-testid="dms-pdf-preview">
+      <Button size="sm" variant="secondary" onClick={() => setPreview(null)}>{t("files.closePreview")}</Button>
+      <React.Suspense fallback={<SkeletonText lines={5} />}>
+        <PdfJsViewer url={preview.url} fileName={preview.name} fileSize={preview.size} embedded allowExport={false} />
+      </React.Suspense>
+    </section>
+  );
   return <div className="space-y-3">{canUpload && <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-primary/40 px-3 text-sm font-semibold text-primary"><ArrowUpTrayIcon className="h-4 w-4" />{t("files.upload")}<input className="sr-only" type="file" accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={busy} onChange={(event) => void upload(event)} /></label>}{document.files?.map((file) => <div key={file.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"><div className="min-w-0"><p className="truncate text-sm font-semibold text-text-primary">{file.filename}</p><p className="text-xs text-text-muted">{Math.ceil(file.content_length / 1024)} KB · {file.integrity_state}</p></div><div className="flex gap-1">{canPreview && <IconButton icon={<EyeIcon />} aria-label={t("files.preview")} size="sm" disabled={busy} onClick={() => void open(file.id, false)} />}{canDownload && <IconButton icon={<ArrowDownTrayIcon />} aria-label={t("files.download")} size="sm" disabled={busy} onClick={() => void open(file.id, true)} />}</div></div>)}</div>;
 };
 
