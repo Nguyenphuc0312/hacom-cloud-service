@@ -53,21 +53,24 @@ import {
   downloadResourceWithName,
   fetchResourceBlob,
 } from "../../utils/downloadFile";
+import type {
+  ResourceDownloadOptions,
+  ResourceDownloadProgress,
+} from "../../utils/downloadFile";
 import { FileName } from "../common/FileName";
 import { MediaThumbnail } from "../common/MediaThumbnail";
 import { SafeImage } from "../common/SafeImage";
 import { useLocalFile } from "../../hooks/useLocalFile";
+import { useAuthStore } from "../../stores/authStore";
 
 // ── Status types for edge cases ──────────────────────────────────────
 
 type FileStatus = "ready" | "scanning" | "blocked" | "deleted" | "error";
 
 type DownloadStatus =
-  | "idle"
-  | "downloading"
-  | "download-error"
-  | "open-error"
-  | "browser-fallback";
+  "idle" | "downloading" | "download-error" | "open-error" | "browser-fallback";
+
+type FileTransferIntent = "open" | "cache" | "save-as";
 
 interface DownloadState {
   identity: string;
@@ -86,6 +89,130 @@ const throwIfDownloadAborted = (signal: AbortSignal): void => {
   if (signal.aborted) {
     throw new DOMException("Download aborted", "AbortError");
   }
+};
+
+interface SharedBlobDownload {
+  controller: AbortController;
+  consumers: Map<symbol, ResourceDownloadOptions["onProgress"]>;
+  promise: Promise<Blob>;
+  progress: { latest?: ResourceDownloadProgress };
+  settled: boolean;
+}
+
+interface SharedBlobLease {
+  promise: Promise<Blob>;
+  release: () => void;
+}
+
+const activeBlobDownloads = new Map<string, SharedBlobDownload>();
+
+/** Share the byte transfer when the same attachment is rendered more than once. */
+const acquireAttachmentBlob = (
+  identity: string,
+  resolveUrl: () => Promise<string | undefined>,
+  options: ResourceDownloadOptions,
+): SharedBlobLease => {
+  const consumerId = Symbol(identity);
+  let shared = activeBlobDownloads.get(identity);
+  if (!shared) {
+    const controller = new AbortController();
+    const consumers = new Map<symbol, ResourceDownloadOptions["onProgress"]>();
+    const progress: SharedBlobDownload["progress"] = {};
+    consumers.set(consumerId, options.onProgress);
+    const promise = Promise.resolve()
+      .then(() => {
+        throwIfDownloadAborted(controller.signal);
+        return resolveUrl();
+      })
+      .then((url) => {
+        throwIfDownloadAborted(controller.signal);
+        if (!url) throw new Error("Missing download URL");
+        return fetchResourceBlob(url, {
+          ...options,
+          signal: controller.signal,
+          onProgress: (nextProgress: ResourceDownloadProgress) => {
+            progress.latest = nextProgress;
+            for (const notify of consumers.values()) {
+              notify?.(nextProgress);
+            }
+          },
+        });
+      })
+      .finally(() => {
+        created.settled = true;
+        if (
+          created.consumers.size === 0 &&
+          activeBlobDownloads.get(identity) === created
+        ) {
+          activeBlobDownloads.delete(identity);
+        }
+      });
+    const created: SharedBlobDownload = {
+      controller,
+      consumers,
+      promise,
+      progress,
+      settled: false,
+    };
+    activeBlobDownloads.set(identity, created);
+    shared = created;
+  } else {
+    shared.consumers.set(consumerId, options.onProgress);
+    if (!options.signal?.aborted && shared.progress.latest) {
+      options.onProgress?.(shared.progress.latest);
+    }
+  }
+
+  const operation = shared;
+  let released = false;
+  let handleAbort: (() => void) | undefined;
+  const release = () => {
+    if (released) return;
+    released = true;
+    if (handleAbort) {
+      options.signal?.removeEventListener("abort", handleAbort);
+    }
+    operation.consumers.delete(consumerId);
+    if (operation.consumers.size === 0) {
+      if (activeBlobDownloads.get(identity) === operation) {
+        activeBlobDownloads.delete(identity);
+      }
+      if (!operation.settled) {
+        operation.controller.abort();
+      }
+    }
+  };
+
+  const promise = new Promise<Blob>((resolve, reject) => {
+    handleAbort = () => {
+      if (released) return;
+      release();
+      reject(new DOMException("Download aborted", "AbortError"));
+    };
+
+    if (options.signal?.aborted) {
+      handleAbort();
+      return;
+    }
+    options.signal?.addEventListener("abort", handleAbort, { once: true });
+    operation.promise.then(
+      (blob) => {
+        if (released) return;
+        if (handleAbort) {
+          options.signal?.removeEventListener("abort", handleAbort);
+          handleAbort = undefined;
+        }
+        resolve(blob);
+      },
+      (error: unknown) => {
+        if (released) return;
+        release();
+        reject(error);
+      },
+    );
+  });
+
+  return { promise, release };
 };
 
 interface FileMessageCardProps {
@@ -110,6 +237,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
+  const currentUserId = useAuthStore((state) => state.user?.id ?? "");
 
   const previewType = getPreviewType(
     attachment.mimeType,
@@ -144,30 +272,33 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
       : "4 / 3";
 
   // Resolve download URL (lazy — not auto-resolved)
-  const { resolveUrl } = useAttachmentDownloadUrl(
-    conversationId,
-    attachment,
-  );
+  const { resolveUrl } = useAttachmentDownloadUrl(conversationId, attachment);
 
   // Trạng thái "file có trên máy chưa" + mở bằng app hệ thống (chỉ desktop).
   const {
     status: localStatus,
     canOpenLocally,
+    canSaveAsLocally,
     openLocal,
     reveal,
     saveLocal,
+    saveAsLocal,
     markDownloaded,
-  } = useLocalFile(attachment);
+  } = useLocalFile(attachment, {
+    currentUserId,
+    conversationId,
+  });
 
   const downloadIdentity = JSON.stringify([
+    currentUserId,
     conversationId,
     attachment.id,
     attachment.objectKey,
     attachment.fileName,
     attachment.fileSize,
   ]);
-  const [storedDownloadState, setDownloadState] = useState<DownloadState>(
-    () => initialDownloadState(downloadIdentity),
+  const [storedDownloadState, setDownloadState] = useState<DownloadState>(() =>
+    initialDownloadState(downloadIdentity),
   );
   const downloadState =
     storedDownloadState.identity === downloadIdentity
@@ -178,8 +309,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   const activeDownloadIdentityRef = useRef(downloadIdentity);
   const isDownloadBusy = downloadState.status === "downloading";
   const canAutoOpenFile = canAutoOpenDownloadedFile(attachment.fileName);
-  const isCheckingLocalFile =
-    canOpenLocally && localStatus === "unknown";
+  const isCheckingLocalFile = canOpenLocally && localStatus === "unknown";
   const progressPercent = downloadState.totalBytes
     ? Math.min(
         100,
@@ -284,10 +414,11 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   // ─ Handlers ─
 
   const handleDownload = useCallback(
-    async (openAfterDownload = false) => {
+    async (intent: FileTransferIntent = "cache") => {
       if (activeDownloadRef.current) return;
 
       const controller = new AbortController();
+      let blobLease: SharedBlobLease | null = null;
       activeDownloadRef.current = controller;
       setDownloadState({
         identity: downloadIdentity,
@@ -297,9 +428,20 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
       });
 
       try {
-        const downloadUrl = await resolveUrl(true);
-        if (!downloadUrl) throw new Error("Missing download URL");
-        throwIfDownloadAborted(controller.signal);
+        if (intent === "save-as" && canSaveAsLocally) {
+          const copied = await saveAsLocal(undefined);
+          throwIfDownloadAborted(controller.signal);
+          if (copied.ok || copied.reason === "canceled") {
+            setDownloadState(initialDownloadState(downloadIdentity));
+            return;
+          }
+          if (
+            copied.reason !== "missing" &&
+            copied.reason !== "size-mismatch"
+          ) {
+            throw new Error("Could not save a local copy");
+          }
+        }
 
         const downloadOptions = {
           signal: controller.signal,
@@ -325,10 +467,46 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
         if (canOpenLocally) {
           // The nhat desktop bridge accepts bytes, so fetch exactly once, save
           // into its managed attachment folder, then open through shell.openPath.
-          const blob = await fetchResourceBlob(downloadUrl, downloadOptions);
+          blobLease = acquireAttachmentBlob(
+            downloadIdentity,
+            () => resolveUrl(true),
+            downloadOptions,
+          );
+          const blob = await blobLease.promise;
           throwIfDownloadAborted(controller.signal);
-          const saved = await saveLocal(blob);
+
+          let saved: boolean;
+          try {
+            saved = await saveLocal(blob);
+          } finally {
+            blobLease.release();
+            blobLease = null;
+          }
           throwIfDownloadAborted(controller.signal);
+
+          if (intent === "save-as" && canSaveAsLocally) {
+            let copied = await saveAsLocal(saved ? undefined : blob);
+            throwIfDownloadAborted(controller.signal);
+            if (
+              saved &&
+              !copied.ok &&
+              (copied.reason === "missing" || copied.reason === "size-mismatch")
+            ) {
+              copied = await saveAsLocal(blob);
+              throwIfDownloadAborted(controller.signal);
+            }
+            if (copied.reason === "canceled") {
+              setDownloadState(initialDownloadState(downloadIdentity));
+              return;
+            }
+            if (!copied.ok) {
+              throw new Error("Could not save a local copy");
+            }
+            throwIfDownloadAborted(controller.signal);
+            setDownloadState(initialDownloadState(downloadIdentity));
+            return;
+          }
+
           if (!saved) {
             // Cache native is best-effort. The user must still receive the
             // already-fetched file when disk permissions or capacity fail.
@@ -342,11 +520,11 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             return;
           }
 
-          if (showThumbnail) {
-            // Preserve the explicit media-download action while also keeping
-            // the desktop cache; reuse the same bytes instead of fetching twice.
+          if (intent === "save-as") {
+            // Compatibility fallback for older desktop shells without native
+            // Save As: reuse the fetched bytes in Chromium's download flow.
             downloadBlobWithName(blob, attachment.fileName);
-          } else if (openAfterDownload && canAutoOpenFile) {
+          } else if (intent === "open" && canAutoOpenFile) {
             throwIfDownloadAborted(controller.signal);
             const openResult = await openLocal();
             if (!openResult.ok) {
@@ -360,6 +538,9 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             }
           }
         } else {
+          const downloadUrl = await resolveUrl(true);
+          if (!downloadUrl) throw new Error("Missing download URL");
+          throwIfDownloadAborted(controller.signal);
           await downloadResourceWithName(
             downloadUrl,
             attachment.fileName,
@@ -384,6 +565,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           );
         }
       } finally {
+        blobLease?.release();
         if (activeDownloadRef.current === controller) {
           activeDownloadRef.current = null;
         }
@@ -394,12 +576,13 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
       attachment.fileSize,
       canAutoOpenFile,
       canOpenLocally,
+      canSaveAsLocally,
       downloadIdentity,
       markDownloaded,
       openLocal,
       resolveUrl,
+      saveAsLocal,
       saveLocal,
-      showThumbnail,
     ],
   );
 
@@ -411,11 +594,8 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   }, [downloadIdentity]);
 
   const handleReveal = useCallback(async () => {
-    const revealResult = await reveal();
-    if (!revealResult.ok && revealResult.reason === "missing") {
-      await handleDownload(false);
-    }
-  }, [handleDownload, reveal]);
+    await reveal();
+  }, [reveal]);
 
   const handlePreview = useCallback(() => {
     if (onPreview && isPreviewable) {
@@ -431,45 +611,47 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   const handleCardClick = useCallback(async () => {
     if (isDownloadBusy || isCheckingLocalFile) return;
 
+    if (canOpenLocally && localStatus === "downloaded") {
+      if (!canAutoOpenFile) {
+        const revealResult = await reveal();
+        if (!revealResult.ok && revealResult.reason === "missing") {
+          await handleDownload("cache");
+        }
+        return;
+      }
+      if (activeOpenRef.current) return;
+      activeOpenRef.current = true;
+      try {
+        const openResult = await openLocal();
+        if (openResult.ok) {
+          setDownloadState(initialDownloadState(downloadIdentity));
+          return;
+        }
+        if (openResult.reason === "missing") {
+          await handleDownload(canAutoOpenFile ? "open" : "cache");
+          return;
+        }
+        setDownloadState({
+          identity: downloadIdentity,
+          status: "open-error",
+          loadedBytes: attachment.fileSize ?? 0,
+          totalBytes: attachment.fileSize,
+        });
+        return;
+      } finally {
+        activeOpenRef.current = false;
+      }
+    }
+
     if (downloadState.status === "download-error") {
-      await handleDownload(canOpenLocally && canAutoOpenFile);
+      await handleDownload(
+        canOpenLocally && canAutoOpenFile ? "open" : "cache",
+      );
       return;
     }
 
     if (canOpenLocally) {
-      if (localStatus === "downloaded") {
-        if (!canAutoOpenFile) {
-          const revealResult = await reveal();
-          if (!revealResult.ok && revealResult.reason === "missing") {
-            await handleDownload(false);
-          }
-          return;
-        }
-        if (activeOpenRef.current) return;
-        activeOpenRef.current = true;
-        try {
-          const openResult = await openLocal();
-          if (openResult.ok) {
-            setDownloadState(initialDownloadState(downloadIdentity));
-            return;
-          }
-          if (openResult.reason === "missing") {
-            await handleDownload(canAutoOpenFile);
-            return;
-          }
-          setDownloadState({
-            identity: downloadIdentity,
-            status: "open-error",
-            loadedBytes: attachment.fileSize ?? 0,
-            totalBytes: attachment.fileSize,
-          });
-          return;
-        } finally {
-          activeOpenRef.current = false;
-        }
-      }
-
-      await handleDownload(canAutoOpenFile);
+      await handleDownload(canAutoOpenFile ? "open" : "cache");
       return;
     }
 
@@ -478,7 +660,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
       return;
     }
 
-    await handleDownload(false);
+    await handleDownload("cache");
   }, [
     attachment.fileSize,
     canAutoOpenFile,
@@ -669,7 +851,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             onClick={
               isDownloadBusy
                 ? handleCancelDownload
-                : () => void handleDownload()
+                : () => void handleDownload("save-as")
             }
             className={clsx(
               "flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
@@ -770,7 +952,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             onClick={
               isDownloadBusy
                 ? handleCancelDownload
-                : () => void handleDownload()
+                : () => void handleDownload("save-as")
             }
             className={clsx(
               "flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
@@ -814,8 +996,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
 
   const hasDownloadError = downloadState.status === "download-error";
   const hasOpenError = downloadState.status === "open-error";
-  const hasBrowserFallback =
-    downloadState.status === "browser-fallback";
+  const hasBrowserFallback = downloadState.status === "browser-fallback";
   const statusLabel = hasDownloadError
     ? t("chat:file.downloadFailed", {
         defaultValue: "Tải lỗi · Thử lại",
@@ -868,25 +1049,25 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
                       defaultValue: "Tải về",
                     });
 
-  const cardActionLabel = hasDownloadError
-    ? t("chat:file.retryDownloadNamed", {
-        defaultValue: "Thử tải lại {{name}}",
-        name: displayFileName,
+  const cardActionLabel = isCheckingLocalFile
+    ? t("chat:file.checkingLocalFile", {
+        defaultValue: "Đang kiểm tra file…",
       })
-    : isCheckingLocalFile
-      ? t("chat:file.checkingLocalFile", {
-          defaultValue: "Đang kiểm tra file…",
-        })
-      : canOpenLocally && isDownloaded
-        ? canAutoOpenFile
-          ? t("chat:file.openFile", {
-              defaultValue: "Mở {{name}}",
-              name: displayFileName,
-            })
-          : t("chat:file.showInFolderNamed", {
-              defaultValue: "Mở thư mục chứa {{name}}",
-              name: displayFileName,
-            })
+    : canOpenLocally && isDownloaded
+      ? canAutoOpenFile
+        ? t("chat:file.openFile", {
+            defaultValue: "Mở {{name}}",
+            name: displayFileName,
+          })
+        : t("chat:file.showInFolderNamed", {
+            defaultValue: "Mở thư mục chứa {{name}}",
+            name: displayFileName,
+          })
+      : hasDownloadError
+        ? t("chat:file.retryDownloadNamed", {
+            defaultValue: "Thử tải lại {{name}}",
+            name: displayFileName,
+          })
         : canOpenLocally && canAutoOpenFile
           ? t("chat:file.downloadAndOpenFile", {
               defaultValue: "Tải và mở {{name}}",
@@ -980,7 +1161,10 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
               ) : isDownloaded || hasBrowserFallback ? (
                 <CheckCircleIcon className="h-3.5 w-3.5 shrink-0" />
               ) : null}
-              <span className="min-w-0 truncate tabular-nums" title={statusLabel}>
+              <span
+                className="min-w-0 truncate tabular-nums"
+                title={statusLabel}
+              >
                 {willPreviewInWeb &&
                 !hasDownloadError &&
                 !hasOpenError &&
@@ -1034,13 +1218,12 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           onClick={
             isDownloadBusy
               ? handleCancelDownload
-              : () => void handleDownload(false)
+              : () => void handleDownload("save-as")
           }
           disabled={isCheckingLocalFile}
           className={clsx(
             "flex h-11 w-11 items-center justify-center rounded-full border border-border text-text-secondary transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary active:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-50",
-            isDownloadBusy &&
-              "border-primary/40 bg-primary/5 text-primary",
+            isDownloadBusy && "border-primary/40 bg-primary/5 text-primary",
           )}
           aria-label={downloadActionLabel}
         >
