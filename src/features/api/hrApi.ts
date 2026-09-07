@@ -251,11 +251,19 @@ export interface MyTimesheetSummary {
   countBySymbol: Record<string, number>;
 }
 
+export type TimesheetCalculationStatus =
+  "READY" | "PENDING_RECOMPUTE" | "NOT_AVAILABLE";
+
 export interface MyTimesheetResponse {
   period: MyTimesheetPeriod | null;
   confirmation: MyTimesheetConfirmation | null;
   days: MyTimesheetDay[];
   summary: MyTimesheetSummary;
+  /** Server-owned freshness: absence of a result must never be rendered as zero work. */
+  calculation?: {
+    status: TimesheetCalculationStatus;
+    lastComputedAt: string | null;
+  };
   reason?: "PERIOD_NOT_OPEN" | "EMPLOYEE_NOT_LINKED" | string;
   message?: string | null;
 }
