@@ -1619,6 +1619,36 @@ button.cloud-delete-choice--danger:hover {
   border-radius: 10px;
 }
 
+/* The search field owns the visible focus treatment. The global focus-visible
+   rule must not draw a second rectangle around its nested input. */
+.cloud-manage-search-input,
+.cloud-manage-search-input:focus,
+.cloud-manage-search-input:focus-visible {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.cloud-manage-upgrade-card {
+  background: hsl(var(--color-primary) / 0.12);
+  color: hsl(var(--color-text-primary));
+}
+
+.cloud-manage-upgrade-card__icon {
+  background: hsl(var(--color-primary));
+  color: hsl(var(--color-text-inverse));
+}
+
+.cloud-manage-upgrade-card__benefit-icon {
+  background: hsl(var(--color-surface));
+  color: hsl(var(--color-text-primary));
+}
+
+:root[data-theme="dark"] .cloud-manage-upgrade-card {
+  border: 1px solid hsl(var(--color-primary) / 0.24);
+  background: hsl(var(--color-primary) / 0.16);
+}
+
 @media (max-width: 639px) {
   .cloud-manage-page [aria-label="Chế độ hiển thị"] {
     margin-left: auto;
