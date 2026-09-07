@@ -192,6 +192,11 @@ describe("MessageCluster copy action", () => {
       }),
     );
 
+    expect(container.querySelector(".chat-message-surface")).toHaveClass(
+      "!rounded-[1.5rem]",
+      "!p-2",
+    );
+
     openMoreMenu(container);
 
     expect(screen.getByRole("menuitem", { name: "Lưu về máy" })).toBeInTheDocument();
