@@ -25,7 +25,6 @@ import {
   dispatchContactProfileView,
 } from "../features/chat/events/chatUiEvents";
 import { notificationApi, applyAliasToNotification } from "../services/notificationApi";
-import { dmsNotificationDocumentId } from "../features/dms/dmsLinks";
 import { aliasByUserId } from "../utils/mentionAliasText";
 import { formatRelativeTime } from "../utils/formatTime";
 import { ROUTE_PATHS } from "../router/paths";
@@ -123,7 +122,6 @@ const NotificationsPage: React.FC = () => {
             actorId: n.actorUserId,
             targetType: n.targetType ?? undefined,
             targetId: n.targetId ?? undefined,
-            documentId: dmsNotificationDocumentId(n),
           });
         });
         setHasMore(res.meta.hasNext);
@@ -183,9 +181,7 @@ const NotificationsPage: React.FC = () => {
 
       const { targetType, conversationId, messageId, actorId } = item;
 
-      if (item.documentId) {
-        navigate(`${ROUTE_PATHS.CHAT}?workspace=documents&documentId=${encodeURIComponent(item.documentId)}`);
-      } else if (conversationId) {
+      if (conversationId) {
         dispatchNotificationClick({ conversationId, messageId });
         navigate(ROUTE_PATHS.CHAT);
       } else if (targetType === "friend_request" || targetType === "group_invite") {

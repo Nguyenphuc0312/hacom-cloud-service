@@ -22,7 +22,6 @@ export interface NotificationItem {
   actorId?: string | null;
   targetType?: string;
   targetId?: string;
-  documentId?: string;
 }
 
 interface NotificationState {

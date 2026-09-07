@@ -218,16 +218,6 @@ export const AUTH_BASE_URL = resolveHttpBaseUrl(
   "/api/v1/auth",
 );
 
-export const DMS_API_BASE_URL = resolveHttpBaseUrl(
-  import.meta.env.VITE_DMS_API_BASE_URL,
-  "http://localhost:4102/api/v1",
-);
-
-export const DMS_OAUTH_ISSUER_URL = resolveHttpBaseUrl(
-  import.meta.env.VITE_DMS_OAUTH_ISSUER_URL,
-  "http://localhost:3101",
-);
-
 /**
  * HR API base URL for attendance and HRM data
  */
