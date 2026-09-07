@@ -35,8 +35,6 @@ interface PdfJsViewerProps {
   fileName: string;
   fileSize?: number;
   className?: string;
-  embedded?: boolean;
-  allowExport?: boolean;
 }
 
 interface PDFDocumentWrapper {
@@ -239,11 +237,8 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
   fileName,
   fileSize,
   className,
-  embedded = false,
-  allowExport = true,
 }) => {
   const { t } = useTranslation();
-  const panelClass = embedded ? "flex h-[60vh] min-h-80 w-full min-w-0 flex-col bg-surface" : "flex h-[85vh] w-[92vw] max-w-5xl flex-col rounded-xl bg-surface";
   const containerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -393,14 +388,12 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
 
   // Handlers
   const handleDownload = useCallback(async () => {
-    if (!allowExport) return;
     await downloadResourceWithName(url, fileName || "document.pdf");
-  }, [allowExport, fileName, url]);
+  }, [fileName, url]);
 
   const handleOpenInNewTab = useCallback(() => {
-    if (!allowExport) return;
     window.open(url, "_blank", "noopener,noreferrer");
-  }, [allowExport, url]);
+  }, [url]);
 
   const handlePrevPage = useCallback(() => {
     setCurrentPage((p) => {
@@ -429,7 +422,7 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
   // Loading state
   if (isLoading) {
     return (
-      <div className={clsx(panelClass, className)}>
+      <div className={clsx("flex h-[85vh] w-[92vw] max-w-5xl flex-col rounded-xl bg-surface", className)}>
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-500/10">
@@ -454,7 +447,7 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
   // Error state
   if (loadError) {
     return (
-      <div className={clsx(panelClass, className)}>
+      <div className={clsx("flex h-[85vh] w-[92vw] max-w-5xl flex-col rounded-xl bg-surface", className)}>
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-500/10">
@@ -471,9 +464,9 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
             <DocumentTextIcon className="h-16 w-16 text-text-muted" />
             <div>
               <p className="text-sm text-danger font-medium">{t("chat:filePreview.pdfRenderError", { defaultValue: "Failed to load PDF" })}</p>
-              {allowExport && <p className="mt-1 text-xs text-text-muted">{loadError}</p>}
+              <p className="mt-1 text-xs text-text-muted">{loadError}</p>
             </div>
-            {allowExport && <div className="flex gap-2">
+            <div className="flex gap-2">
               <button
                 type="button"
                 onClick={handleOpenInNewTab}
@@ -490,7 +483,7 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
                 <ArrowDownTrayIcon className="h-4 w-4" />
                 {t("chat:file.download")}
               </button>
-            </div>}
+            </div>
           </div>
         </div>
       </div>
@@ -499,7 +492,7 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
 
   return (
     <div className={clsx("flex flex-col", className)}>
-      <div className={panelClass}>
+      <div className="flex h-[85vh] w-[92vw] max-w-5xl flex-col rounded-xl bg-surface">
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -516,7 +509,7 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
           </div>
 
           {/* Controls */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
             {totalPages > 1 && (
               <div className="flex items-center gap-1 mr-2">
                 <IconButton
@@ -591,7 +584,7 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
               defaultValue: "Rendered using PDF.js viewer",
             })}
           </p>
-          {allowExport && <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleDownload}
@@ -608,7 +601,7 @@ export const PdfJsViewer: React.FC<PdfJsViewerProps> = ({
               <ArrowTopRightOnSquareIcon className="h-4 w-4" />
               {t("chat:filePreview.openInNewTab", { defaultValue: "Open in new tab" })}
             </button>
-          </div>}
+          </div>
         </div>
       </div>
     </div>

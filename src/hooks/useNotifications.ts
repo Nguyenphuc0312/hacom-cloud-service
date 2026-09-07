@@ -14,7 +14,6 @@ import {
 } from "../services/notificationApi";
 import { aliasByUserId } from "../utils/mentionAliasText";
 import { logger } from "../utils/logger";
-import { dmsNotificationDocumentId } from "../features/dms/dmsLinks";
 
 const backendTypeToKind = (
   type: BackendNotificationType,
@@ -55,7 +54,6 @@ const backendToItem = (n: BackendNotification): NotificationItem => {
   actorId: n.actorUserId,
   targetType: n.targetType ?? undefined,
   targetId: n.targetId ?? undefined,
-  documentId: dmsNotificationDocumentId(n),
   };
 };
 

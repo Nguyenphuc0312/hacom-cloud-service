@@ -103,16 +103,6 @@ const formatMonthTitle = (month: number, year: number) =>
 
 const formatShortDate = (value?: string | null) => formatWorkDate(value);
 
-const formatCalculationTime = (value: string | null | undefined) => {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat("vi-VN", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
-};
-
 const fromInputMonth = (value: string) => {
   const [year, month] = value.split("-").map(Number);
   const validMonth = Number.isFinite(month) && month >= 1 && month <= 12;
@@ -341,15 +331,9 @@ const ExplainableDayCell: React.FC<{
 const EmptyDayCell: React.FC<{
   date: string;
   isFuture: boolean;
-  calculationPending?: boolean;
   firstColumn?: number;
-}> = ({ date, isFuture, calculationPending = false, firstColumn }) => {
+}> = ({ date, isFuture, firstColumn }) => {
   const weekdayLabel = WEEKDAY_LABELS[weekdayIndex(date)];
-  const unavailableLabel = isFuture
-    ? "Ngày chưa tới"
-    : calculationPending
-      ? "Đang chờ HR cập nhật"
-      : "Chưa có dữ liệu chấm công";
 
   return (
     <div
@@ -359,7 +343,9 @@ const EmptyDayCell: React.FC<{
     >
       <div
         data-date={date}
-        title={`${weekdayLabel} ${formatShortDate(date)} · ${unavailableLabel}`}
+        title={`${weekdayLabel} ${formatShortDate(date)} · ${
+          isFuture ? "Ngày chưa tới" : "Chưa có dữ liệu chấm công"
+        }`}
         className="min-h-[84px] rounded-lg border border-dashed border-[#dbe3ed] bg-[#f8fafc] p-2 text-left"
       >
         <div className="mb-1.5 flex items-baseline gap-1.5">
@@ -378,11 +364,7 @@ const EmptyDayCell: React.FC<{
           ···
         </span>
         <div className="mt-2 text-xs text-[#94a3b8]">
-          {isFuture
-            ? "Chưa tới"
-            : calculationPending
-              ? "Chờ HR cập nhật"
-              : "Chưa có dữ liệu"}
+          {isFuture ? "Chưa tới" : "Chưa có dữ liệu"}
         </div>
       </div>
     </div>
@@ -593,15 +575,6 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
     period?.status === "PENDING_EMPLOYEE" &&
     (!confirmation || confirmation.status === "PENDING");
   const days = React.useMemo(() => data?.days ?? [], [data?.days]);
-  // Backward compatible while HR API and Chat deploy independently: a period
-  // with no persisted day has never been calculated, so it cannot be 0 work.
-  const calculationPending =
-    Boolean(period) &&
-    (data?.calculation?.status === "PENDING_RECOMPUTE" ||
-      (!data?.calculation && days.length === 0));
-  const lastCalculatedAt = formatCalculationTime(
-    data?.calculation?.lastComputedAt,
-  );
   const calendarDates = React.useMemo(
     () => datesInMonth(year, month),
     [month, year],
@@ -838,19 +811,11 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
           <div className="grid gap-3 sm:grid-cols-3">
             <SummaryTile
               label="Tổng công"
-              value={
-                calculationPending
-                  ? "—"
-                  : String(data?.summary.totalPaidDays ?? 0)
-              }
+              value={String(data?.summary.totalPaidDays ?? 0)}
             />
             <SummaryTile
               label="Nghỉ phép"
-              value={
-                calculationPending
-                  ? "—"
-                  : String(data?.summary.totalLeaveDays ?? 0)
-              }
+              value={String(data?.summary.totalLeaveDays ?? 0)}
               tone="text-[#0f766e]"
             />
             <SummaryTile
@@ -859,32 +824,6 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
               tone="text-[#b45309]"
             />
           </div>
-
-          {calculationPending ? (
-            <div
-              role="status"
-              className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-            >
-              <Clock3
-                size={18}
-                className="mt-0.5 shrink-0 text-amber-700"
-                aria-hidden="true"
-              />
-              <div className="min-w-0">
-                <p className="font-semibold">
-                  Dữ liệu đang chờ HR cập nhật bảng công
-                </p>
-                <p className="mt-0.5 text-amber-800">
-                  Chưa có kết quả tính công cho tháng này; tổng công và phép sẽ
-                  hiển thị sau khi HR cập nhật.
-                </p>
-              </div>
-            </div>
-          ) : lastCalculatedAt ? (
-            <p className="text-xs text-[#64748b]">
-              Dữ liệu tính gần nhất: {lastCalculatedAt}
-            </p>
-          ) : null}
 
           {state.status === "idle" ||
           (state.status === "loading" && data === null) ? (
@@ -953,7 +892,6 @@ export const MyTimesheetPage: React.FC<{ tabBar?: React.ReactNode }> = ({
                       key={date}
                       date={date}
                       isFuture={date > today}
-                      calculationPending={calculationPending}
                       {...(firstColumn ? { firstColumn } : {})}
                     />
                   );

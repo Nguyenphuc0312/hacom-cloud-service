@@ -85,22 +85,6 @@ afterEach(() => {
 });
 
 describe("PdfJsViewer", () => {
-  it("embedded preview excludes download and external-open controls", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(new ArrayBuffer(8), { status: 200 }));
-    render(<PdfJsViewer url="blob:local-preview" fileName="document.pdf" embedded allowExport={false} />);
-    await screen.findByText(/3 pages/);
-    expect(screen.queryByRole("button", { name: "chat:file.download" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Open in new tab" })).toBeNull();
-  });
-
-  it("preview fetch failure does not offer an export bypass", async () => {
-    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("sensitive upstream path"));
-    render(<PdfJsViewer url="blob:failed-preview" fileName="document.pdf" embedded allowExport={false} />);
-    await screen.findByText("Failed to load PDF");
-    expect(screen.queryByText("sensitive upstream path")).toBeNull();
-    expect(screen.queryByRole("button", { name: "chat:file.download" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Open in new tab" })).toBeNull();
-  });
   it("server KHÔNG hỗ trợ range (trả 200) → tải cả file, không đưa url cho pdf.js", async () => {
     getDocumentArgs.length = 0;
     // 200 = server phớt lờ header Range. Đưa { url } trong tình huống này chính
