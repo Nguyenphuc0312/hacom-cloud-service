@@ -153,6 +153,22 @@ export default function CloudManagePage() {
     });
   }, [items]);
 
+  useEffect(() => {
+    if (!openMenuId) return;
+    const closeMenuOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        setOpenMenuId(null);
+        return;
+      }
+      if (!target.closest("[data-cloud-resource-menu-popup], [data-cloud-resource-menu-trigger]")) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener("pointerdown", closeMenuOnOutsidePointer);
+    return () => document.removeEventListener("pointerdown", closeMenuOnOutsidePointer);
+  }, [openMenuId]);
+
   const bytesFor = (kind: CloudItem["type"]) =>
     workspace.items
       .filter((item) => item.type === kind)
@@ -301,7 +317,7 @@ const ManageTableRow: React.FC<ManageItemProps & { menuOpen: boolean; onToggleMe
     <label className="flex items-center"><input type="checkbox" checked={selected} onChange={onToggleSelect} aria-label={`${selected ? "Bỏ chọn" : "Chọn"} ${titleFor(item)}`} className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30" /></label>
     <button type="button" onClick={onOpen} className="flex min-w-0 items-center gap-3 text-left"><CloudItemIcon type={item.type} /><span className="min-w-0"><span className="block truncate text-sm font-semibold text-text-primary">{titleFor(item)}</span><span className="mt-0.5 block truncate text-xs text-text-secondary">{getCloudItemPreview(item) || "Chưa có mô tả"}</span></span></button>
     <span className={`w-fit rounded-md px-2 py-1 text-xs font-medium ${typeBadgeClass[item.type]}`}>{typeLabel[item.type]}</span><span className="text-xs text-text-secondary">{formatBytes(item.sizeBytes)}</span><span className="text-xs text-text-secondary">{formatSentDate(item.createdAt)}</span>
-    <div className="relative flex items-center gap-1"><button type="button" disabled={!isDownloadable(item)} onClick={onDownload} className="flex h-9 w-9 items-center justify-center rounded-lg text-text-secondary hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-30" aria-label="Tải xuống"><Download className="h-4 w-4" aria-hidden /></button><button type="button" onClick={onToggleMenu} aria-expanded={menuOpen} aria-haspopup="menu" className={`flex h-9 w-9 items-center justify-center rounded-lg border transition-colors ${menuOpen ? "border-primary/30 bg-primary/10 text-primary" : "border-transparent text-text-secondary hover:bg-surface-muted"}`} aria-label="Thao tác khác"><MoreHorizontal className="h-4 w-4" aria-hidden /></button>{menuOpen ? <div className="absolute right-0 top-11 z-20 w-48 rounded-xl border border-border bg-surface p-2 shadow-[0_12px_30px_rgba(15,23,42,0.14)]" role="menu"><button type="button" onClick={onOpen} className="flex h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-text-primary transition-colors hover:bg-surface-muted" role="menuitem"><ExternalLink className="h-4 w-4 text-text-secondary" aria-hidden />Mở nội dung</button><div className="my-1 border-t border-border/70" /><button type="button" onClick={onTrash} className="flex h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-red-600 transition-colors hover:bg-red-50" role="menuitem"><Trash2 className="h-4 w-4" aria-hidden />Chuyển vào Thùng rác</button></div> : null}</div>
+    <div className="relative flex items-center gap-1"><button type="button" disabled={!isDownloadable(item)} onClick={onDownload} className="flex h-9 w-9 items-center justify-center rounded-lg text-text-secondary hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-30" aria-label="Tải xuống"><Download className="h-4 w-4" aria-hidden /></button><button type="button" data-cloud-resource-menu-trigger="true" onClick={onToggleMenu} aria-expanded={menuOpen} aria-haspopup="menu" className={`flex h-9 w-9 items-center justify-center rounded-lg border transition-colors ${menuOpen ? "border-primary/30 bg-primary/10 text-primary" : "border-transparent text-text-secondary hover:bg-surface-muted"}`} aria-label="Thao tác khác"><MoreHorizontal className="h-4 w-4" aria-hidden /></button>{menuOpen ? <div data-cloud-resource-menu-popup="true" className="absolute right-0 top-11 z-20 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-surface p-2 shadow-[0_12px_30px_rgba(15,23,42,0.14)]" role="menu"><button type="button" onClick={onOpen} className="flex h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-text-primary transition-colors hover:bg-surface-muted" role="menuitem"><ExternalLink className="h-4 w-4 shrink-0 text-text-secondary" aria-hidden />Mở nội dung</button><div className="my-1 border-t border-border/70" /><button type="button" onClick={onTrash} className="flex h-10 w-full items-center gap-2 whitespace-nowrap rounded-lg px-3 text-left text-sm text-red-600 transition-colors hover:bg-red-50" role="menuitem"><Trash2 className="h-4 w-4 shrink-0" aria-hidden />Chuyển vào Thùng rác</button></div> : null}</div>
   </article>
 );
 
