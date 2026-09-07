@@ -22,6 +22,7 @@ export const appNamespaces = [
   "cloud",
   "aiAssistant",
   "tasks",
+  "dms",
 ] as const;
 
 const isProduction =

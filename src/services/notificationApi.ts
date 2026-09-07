@@ -1,6 +1,7 @@
 import apiClient from "../lib/axios";
 
 export type BackendNotificationType =
+  | "SYSTEM"
   | "FRIEND_REQUEST_RECEIVED"
   | "FRIEND_REQUEST_ACCEPTED"
   | "ADDED_TO_GROUP"

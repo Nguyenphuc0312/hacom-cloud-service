@@ -386,6 +386,11 @@ export const authApi = {
     const response = await authClient.post<ApiResponse<LoginResponse>>(
       AUTH_ENDPOINTS.login,
       { email, password, rememberMe },
+      {
+        // The Auth-owned SSO cookie must be set by a response from the Auth
+        // origin, not by a Chat reverse-proxy response.
+        withCredentials: isRefreshTokenCookieMode() || import.meta.env.VITE_AUTH_BROWSER_SESSION_ENABLED === "true",
+      },
     );
     return response.data;
   },

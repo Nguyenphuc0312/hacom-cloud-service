@@ -11,7 +11,6 @@ import {
   UserGroupIcon,
   InboxIcon,
   ExclamationTriangleIcon,
-  ComputerDesktopIcon,
 } from "@heroicons/react/24/outline";
 import { Button } from "./Button";
 
@@ -23,6 +22,10 @@ const WeeklyCalendarWidget = React.lazy(() =>
   import("../../features/calendar/components/WeeklyCalendarWidget").then((m) => ({
     default: m.WeeklyCalendarWidget,
   })),
+);
+
+const DocumentWorkspace = React.lazy(() =>
+  import("../../features/dms/DocumentWorkspace"),
 );
 
 interface EmptyStateProps {
@@ -160,22 +163,24 @@ export const ErrorState: React.FC<{
   const resolvedMessage = message ?? t("error:generic.requestFailed");
 
   return (
-    <EmptyState
-      icon={
-        <ExclamationTriangleIcon className="h-full w-full text-danger/55" />
-      }
-      title={resolvedTitle}
-      description={resolvedMessage}
-      action={
-        onRetry
-          ? {
-            label: t("common:actions.retry"),
-            onClick: onRetry,
-            variant: "primary",
-          }
-          : undefined
-      }
-    />
+    <div role="alert" aria-live="assertive">
+      <EmptyState
+        icon={
+          <ExclamationTriangleIcon className="h-full w-full text-danger/55" />
+        }
+        title={resolvedTitle}
+        description={resolvedMessage}
+        action={
+          onRetry
+            ? {
+              label: t("common:actions.retry"),
+              onClick: onRetry,
+              variant: "primary",
+            }
+            : undefined
+        }
+      />
+    </div>
   );
 };
 
@@ -183,117 +188,16 @@ interface NoChatSelectedProps {
   onNewChat?: () => void;
 }
 
-const WELCOME_SLIDES = [
-  {
-    src: "/hacom-tower.jpg",
-    alt: "Hacom Tower",
-    title: "Hacom Tower",
-    description: "Dự án căn hộ thương mại tại Khánh Hòa",
-    fit: "cover",
-  },
-  {
-    src: "/hacom-riverside.jpg",
-    alt: "Hacom Riverside",
-    title: "Hacom Riverside",
-    description: "Dự án tại Lào Cai",
-    fit: "cover",
-  },
-  {
-    src: "/hacom-wind.jpg",
-    alt: "Nhà máy điện gió Hòa Bình 5",
-    title: "Điện gió Hòa Bình 5",
-    description: "Năng lượng tái tạo",
-    fit: "cover",
-  },
-  {
-    src: "/hacom-imperial-dalat.jpg",
-    alt: "Khách sạn Imperial Palace Đà Lạt",
-    title: "Imperial Palace Đà Lạt",
-    description: "Khách sạn nghỉ dưỡng",
-    fit: "cover",
-  },
-];
-
-const SlideshowFigure: React.FC = React.memo(() => {
-  const [activeSlideIndex, setActiveSlideIndex] = React.useState(0);
-  const activeSlide = WELCOME_SLIDES[activeSlideIndex];
-
-  React.useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setActiveSlideIndex((currentIndex) =>
-        currentIndex === WELCOME_SLIDES.length - 1 ? 0 : currentIndex + 1,
-      );
-    }, 3000);
-
-    return () => window.clearInterval(intervalId);
-  }, []);
-
-  // Figure scales with the pane instead of a fixed 380px: the heading below is
-  // fluid (clamp 22→32px), so a fixed-width figure looks undersized next to it
-  // on a wide window and cramped on a narrow one. Capped at 520px so it stays a
-  // banner, not a hero, on ultrawide.
-  return (
-    <figure className="w-full max-w-[clamp(280px,34vw,520px)] overflow-hidden rounded-xl bg-surface shadow-[0_18px_46px_rgba(21,101,192,0.15)] ring-1 ring-border/50">
-      <div className="relative aspect-[16/8.7] w-full overflow-hidden bg-slate-100">
-        {WELCOME_SLIDES.map((slide, index) => (
-          <img
-            key={slide.src}
-            src={slide.src}
-            alt={slide.alt}
-            className={clsx(
-              "absolute inset-0 h-full w-full transition-opacity duration-500 ease-out",
-              slide.fit === "contain" ? "object-contain" : "object-cover",
-              index === activeSlideIndex ? "opacity-100" : "opacity-0",
-            )}
-            loading={index === 0 ? "eager" : "lazy"}
-          />
-        ))}
-      </div>
-      <figcaption className="grid min-h-9 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2">
-        <strong className="min-w-0 truncate text-xs font-bold text-text-primary">
-          {activeSlide.title}
-        </strong>
-        <span className="min-w-0 truncate text-right text-xs font-semibold text-text-muted">
-          {activeSlide.description}
-        </span>
-      </figcaption>
-    </figure>
-  );
-});
-
 export const NoChatSelected: React.FC<NoChatSelectedProps> = () => {
-  const { t } = useTranslation();
-
   return (
     <section className="chat-background flex flex-1 overflow-y-auto px-[clamp(12px,2.5vw,40px)] py-[clamp(12px,2.5vw,32px)] text-text-secondary">
       {/* h-fit: as a flex child of a scrolling column this box would otherwise be
           stretched/squashed to the section height, clipping the calendar's
           tallest day mid-event instead of letting the section scroll. */}
       <div className="mx-auto flex h-fit w-full max-w-[1800px] flex-col items-center">
-        <SlideshowFigure />
-
-        <div className="mt-4 animate-fade-in text-center">
-          <h2 className="text-[clamp(22px,2.8vw,32px)] font-extrabold leading-tight text-text-primary">
-            Chào mừng đến với{" "}
-            <span className="text-[#1565C0]">
-              Hacom Holdings
-            </span>
-          </h2>
-          <div className="mt-3 flex justify-center">
-            <a
-              href="https://drive.google.com/drive/u/2/folders/1sHWGuyh8oU70KfiqK5x_q3fBV4xhPE0u"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white transition-all duration-300 hover:bg-[#1976D2] active:scale-[0.98] bg-[#1565C0]"
-              style={{
-                boxShadow: "0 2px 8px rgba(21, 101, 192, 0.35), 0 1px 3px rgba(21, 101, 192, 0.2)",
-              }}
-            >
-              <ComputerDesktopIcon className="h-5 w-5 shrink-0" />
-              {t("common:emptyState.downloadPC")}
-            </a>
-          </div>
-        </div>
+        <React.Suspense fallback={<div className="skeleton h-[520px] w-full rounded-xl" />}>
+          <DocumentWorkspace />
+        </React.Suspense>
 
         {/* Fallback giữ đúng khung + chiều cao của widget để tải xong không
             giật layout (khớp wrapper thật trong WeeklyCalendarWidget). */}
