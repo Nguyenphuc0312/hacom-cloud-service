@@ -167,6 +167,13 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     disabled = false,
     submitDisabled = false,
     attachmentsDisabled = false,
+    cloudDeleteDropActive = false,
+    cloudDeleteDropOver = false,
+    onCloudDeleteDragEnter,
+    onCloudDeleteDragOver,
+    onCloudDeleteDragLeave,
+    onCloudDeleteDrop,
+    cloudDeleteDropLabel,
     className,
     onLayoutHeightChange,
     disabledReason,
@@ -1769,6 +1776,13 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
             }}
             ariaLabel={sendButtonLabel}
             className="shrink-0"
+            cloudDeleteDropActive={cloudDeleteDropActive}
+            cloudDeleteDropOver={cloudDeleteDropOver}
+            onCloudDeleteDragEnter={onCloudDeleteDragEnter}
+            onCloudDeleteDragOver={onCloudDeleteDragOver}
+            onCloudDeleteDragLeave={onCloudDeleteDragLeave}
+            onCloudDeleteDrop={onCloudDeleteDrop}
+            cloudDeleteDropLabel={cloudDeleteDropLabel}
           />
         </div>
 

@@ -1012,12 +1012,13 @@ export const RoomItemContainer = React.memo(
         void (async () => {
           try {
             const result = await forwardMessages({
-              items: [
-                {
-                  sourceMessageId: payload.messageId,
-                  targetConversationId: conversationId,
-                },
-              ],
+              items: (payload.messageIds?.length
+                ? payload.messageIds
+                : [payload.messageId]
+              ).map((sourceMessageId) => ({
+                sourceMessageId,
+                targetConversationId: conversationId,
+              })),
             }).unwrap();
 
             // Same name the sidebar shows: alias ("tên gợi nhớ") wins over the

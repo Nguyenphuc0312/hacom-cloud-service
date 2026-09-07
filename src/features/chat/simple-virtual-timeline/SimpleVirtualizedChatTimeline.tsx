@@ -59,6 +59,12 @@ export interface SimpleVirtualizedChatTimelineProps {
   /** Render trashed Cloud items with the normal chat bubble and restore action. */
   cloudTrashMode?: boolean;
   onRestoreCloudItem?: (messageId: string) => void | Promise<void>;
+  onCloudDeleteDragStart?: (
+    messageId: string,
+    event: React.DragEvent<HTMLDivElement>,
+  ) => void;
+  onCloudDeleteDragEnd?: () => void;
+  onCloudSelectionLaneDragStart?: React.DragEventHandler<HTMLDivElement>;
   viewerCanRecallOthers?: boolean;
   onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
@@ -235,6 +241,9 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   cloudMessageActionsOnly,
   cloudTrashMode,
   onRestoreCloudItem,
+  onCloudDeleteDragStart,
+  onCloudDeleteDragEnd,
+  onCloudSelectionLaneDragStart,
   onImageClick,
   onFilePreview,
   hasMore,
@@ -603,6 +612,18 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
                 key={virtualItem.key}
                 data-index={virtualItem.index}
                 ref={virtualizer.measureElement}
+                draggable={
+                  Boolean(onCloudSelectionLaneDragStart) &&
+                  isSelectionMode &&
+                  row.kind === "group" &&
+                  row.items.some((item) => selectedIds.has(item.messageId))
+                }
+                onDragStart={(event) => {
+                  // A bubble has its own richer drag source. This fallback is
+                  // for the full-width lane beside a selected bubble.
+                  if (event.target !== event.currentTarget) return;
+                  onCloudSelectionLaneDragStart?.(event);
+                }}
                 style={{
                   position: "absolute",
                   top: 0,
@@ -626,6 +647,8 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
                         cloudMessageActionsOnly={cloudMessageActionsOnly}
                         cloudTrashMode={cloudTrashMode}
                         onRestoreCloudItem={onRestoreCloudItem}
+                        onCloudDeleteDragStart={onCloudDeleteDragStart}
+                        onCloudDeleteDragEnd={onCloudDeleteDragEnd}
                         onImageClick={wrappedOnImageClick}
                         onFilePreview={onFilePreview}
                         density={density}

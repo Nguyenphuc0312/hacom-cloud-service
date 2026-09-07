@@ -76,6 +76,13 @@ export interface MessageInputProps {
   disabled?: boolean;
   submitDisabled?: boolean;
   attachmentsDisabled?: boolean;
+  cloudDeleteDropActive?: boolean;
+  cloudDeleteDropOver?: boolean;
+  onCloudDeleteDragEnter?: React.DragEventHandler<HTMLButtonElement>;
+  onCloudDeleteDragOver?: React.DragEventHandler<HTMLButtonElement>;
+  onCloudDeleteDragLeave?: React.DragEventHandler<HTMLButtonElement>;
+  onCloudDeleteDrop?: React.DragEventHandler<HTMLButtonElement>;
+  cloudDeleteDropLabel?: string;
   className?: string;
   onLayoutHeightChange?: (nextHeight: number) => void;
   disabledReason?: string;

@@ -13,6 +13,8 @@ export const MESSAGE_DRAG_MIME = "application/x-hacom-message";
 
 export interface MessageDragPayload {
   messageId: string;
+  /** Optional ordered batch; legacy drop targets can continue using messageId. */
+  messageIds?: string[];
   sourceConversationId: string;
   /** Short label for the drag ghost / accessibility (file name or "[Ảnh]"). */
   label: string;
@@ -37,8 +39,12 @@ export const decodeMessageDrag = (
       typeof parsed.messageId === "string" &&
       typeof parsed.sourceConversationId === "string"
     ) {
+      const messageIds = Array.isArray(parsed.messageIds)
+        ? parsed.messageIds.filter((id): id is string => typeof id === "string")
+        : [];
       return {
         messageId: parsed.messageId,
+        ...(messageIds.length > 0 ? { messageIds } : {}),
         sourceConversationId: parsed.sourceConversationId,
         label: typeof parsed.label === "string" ? parsed.label : "",
       };

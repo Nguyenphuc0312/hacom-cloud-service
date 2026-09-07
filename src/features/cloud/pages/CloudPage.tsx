@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { DragEvent } from "react";
 import {
   ArrowPathIcon as LoaderCircle,
   ArrowUturnLeftIcon as RotateCcw,
@@ -59,6 +60,19 @@ import {
   isTrashItemExpired,
 } from "../utils/cloudFormat";
 import { resolveCloudUserId } from "../utils/cloudIdentity";
+import {
+  resolveMessageIdAtY,
+  shouldShowCloudSelectionToolbar,
+} from "../utils/cloudSelection";
+import {
+  applyCloudDeleteDragGhost,
+  decodeCloudDeleteDrag,
+  encodeCloudDeleteDrag,
+  isCloudDeleteDrag,
+  resolveCloudDeleteDragSource,
+  type CloudDeleteDragPayload,
+} from "../utils/cloudDeleteDrag";
+import { encodeMessageDrag } from "../../chat/quickForward";
 import { ROUTE_PATHS } from "../../../router/paths";
 import {
   ATTACHMENT_CONSTRAINTS,
@@ -153,33 +167,6 @@ const isStandaloneHttpUrl = (value: string): boolean => {
   }
 };
 
-/**
- * My Documents selection actions are available only for an uninterrupted
- * range of message frames. A pointer can jump over a row, so checking only
- * the selected count is not sufficient.
- */
-const isContiguousMessageSelection = (
-  orderedMessages: Message[],
-  selectedIds: Set<string>,
-): boolean => {
-  if (selectedIds.size < 2) return false;
-
-  const selectedIndexes = orderedMessages.reduce<number[]>(
-    (indexes, message, index) => {
-      if (selectedIds.has(message.id)) indexes.push(index);
-      return indexes;
-    },
-    [],
-  );
-
-  return (
-    selectedIndexes.length === selectedIds.size &&
-    selectedIndexes.every(
-      (index, position) => position === 0 || index === selectedIndexes[position - 1] + 1,
-    )
-  );
-};
-
 const getMessageRangeIds = (
   orderedMessages: Message[],
   startId: string,
@@ -202,10 +189,18 @@ type CloudSelectionDrag = {
   startY: number;
   active: boolean;
   selecting: boolean;
+  startedOnMessage: boolean;
   baseSelection: Set<string>;
   lastMessageId?: string;
   holdTimer?: number;
 };
+
+type CloudDeleteDragState = CloudDeleteDragPayload & { over: boolean };
+
+type CloudSelectionPointEvent = Pick<
+  PointerEvent,
+  "clientX" | "clientY" | "target"
+>;
 
 export default function CloudPage() {
   const { t } = useTranslation("cloud");
@@ -230,6 +225,9 @@ export default function CloudPage() {
   const isSelectionModeRef = useRef(false);
   const selectedMessageIdsRef = useRef<Set<string>>(new Set());
   const suppressSelectionClickRef = useRef(false);
+  const [cloudDeleteDrag, setCloudDeleteDrag] =
+    useState<CloudDeleteDragState | null>(null);
+  const cloudDeleteDragRef = useRef<CloudDeleteDragState | null>(null);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -696,18 +694,59 @@ export default function CloudPage() {
       });
     };
 
+    const resolveMessageIdAtPointer = (
+      event: CloudSelectionPointEvent,
+      selectableMessages: readonly Message[],
+    ): string | undefined => {
+      const timeline = document.querySelector<HTMLElement>(
+        ".cloud-chat-page [data-testid='simple-timeline-scroll']",
+      );
+      if (!timeline) return undefined;
+
+      const timelineRect = timeline.getBoundingClientRect();
+      if (
+        event.clientX < timelineRect.left ||
+        event.clientX > timelineRect.right ||
+        event.clientY < timelineRect.top ||
+        event.clientY > timelineRect.bottom
+      ) {
+        return undefined;
+      }
+
+      const selectableIds = new Set(selectableMessages.map((message) => message.id));
+      const target = event.target as HTMLElement | null;
+      const directRow = target?.closest<HTMLElement>("[data-message-id]");
+      const directId = directRow?.dataset.messageId;
+      if (
+        directRow &&
+        directId &&
+        timeline.contains(directRow) &&
+        selectableIds.has(directId)
+      ) {
+        return directId;
+      }
+
+      const bounds = Array.from(
+        timeline.querySelectorAll<HTMLElement>("[data-message-id]"),
+      ).flatMap((row) => {
+        const id = row.dataset.messageId;
+        if (!id || !selectableIds.has(id)) return [];
+        const rect = row.getBoundingClientRect();
+        return [{ id, top: rect.top, bottom: rect.bottom }];
+      });
+      return resolveMessageIdAtY(bounds, event.clientY);
+    };
+
     const handlePointerDown = (event: PointerEvent) => {
       if (event.pointerType === "mouse" && event.button !== 0) return;
       const target = event.target as HTMLElement | null;
       // Links, file cards and video surfaces are selectable too. Only native
       // controls should keep their own click/drag behavior.
       if (!target || target.closest("button,input,select,textarea")) return;
-      const row = target.closest<HTMLElement>("[data-message-id]");
-      const messageId = row?.dataset.messageId;
       const selectableMessages = viewMode === "trash" ? trashMessages : messages;
-      if (!messageId || !selectableMessages.some((message) => message.id === messageId)) {
-        return;
-      }
+      const messageId = resolveMessageIdAtPointer(event, selectableMessages);
+      if (!messageId) return;
+      const startedOnMessage = Boolean(target.closest("[data-message-id]"));
       const isTextSelectionTarget = Boolean(target.closest(".chat-message-text"));
       const selection: CloudSelectionDrag = {
         startId: messageId,
@@ -715,6 +754,7 @@ export default function CloudPage() {
         startY: event.clientY,
         active: false,
         selecting: !selectedMessageIdsRef.current.has(messageId),
+        startedOnMessage,
         baseSelection: new Set(selectedMessageIdsRef.current),
       };
       // Desktop users commonly hold a message instead of dragging. Start the
@@ -749,17 +789,14 @@ export default function CloudPage() {
         event.clientY - drag.startY,
       );
 
-      const target = event.target as HTMLElement | null;
-      const row = target?.closest<HTMLElement>("[data-message-id]");
-      const messageId = row?.dataset.messageId;
-      if (!messageId) return;
       const selectableMessages = viewMode === "trash" ? trashMessages : messages;
-      if (!selectableMessages.some((message) => message.id === messageId)) return;
+      const messageId = resolveMessageIdAtPointer(event, selectableMessages);
+      if (!messageId) return;
 
       // Keep native browser text selection while the pointer remains inside
       // the message where the gesture started. Message selection begins only
       // after the pointer enters another message frame.
-      if (!drag.active && messageId === drag.startId) return;
+      if (!drag.active && messageId === drag.startId && drag.startedOnMessage) return;
       if (!drag.active && distance < 8) return;
 
       if (!drag.active) {
@@ -781,15 +818,16 @@ export default function CloudPage() {
         return;
       }
       const target = event.target as HTMLElement | null;
-      if (!target || target.closest("button,input,select,textarea,a,video")) {
+      // While selection mode is active, the message surface owns the click.
+      // In particular, a video click must toggle the row instead of reaching
+      // the native player/preview. Explicit controls and links keep their own
+      // behavior; video returns to normal as soon as selection mode exits.
+      if (!target || target.closest("button,input,select,textarea,a")) {
         return;
       }
-      const row = target.closest<HTMLElement>("[data-message-id]");
-      const messageId = row?.dataset.messageId;
       const selectableMessages = viewMode === "trash" ? trashMessages : messages;
-      if (!messageId || !selectableMessages.some((message) => message.id === messageId)) {
-        return;
-      }
+      const messageId = resolveMessageIdAtPointer(event, selectableMessages);
+      if (!messageId) return;
       event.preventDefault();
       event.stopPropagation();
       toggleMessageSelection(messageId);
@@ -1055,13 +1093,168 @@ export default function CloudPage() {
     () => cloudTrashItems.filter((item) => selectedMessageIds.has(item.id)),
     [cloudTrashItems, selectedMessageIds],
   );
-  const hasContiguousSelection = useMemo(
-    () =>
-      isContiguousMessageSelection(
-        viewMode === "trash" ? trashMessages : messages,
+  const showSelectionToolbar = shouldShowCloudSelectionToolbar(
+    isSelectionMode,
+    selectedMessageIds.size,
+  );
+
+  const setCloudDeleteDragState = useCallback(
+    (next: CloudDeleteDragState | null) => {
+      cloudDeleteDragRef.current = next;
+      setCloudDeleteDrag(next);
+    },
+    [],
+  );
+
+  const handleCloudDeleteDragStart = useCallback(
+    (messageId: string, event: DragEvent<HTMLDivElement>) => {
+      const message = messages.find((candidate) => candidate.id === messageId);
+      if (!message) return;
+      const payload = resolveCloudDeleteDragSource({
+        message,
+        isSelectionMode,
+        isSelected: selectedMessageIds.has(messageId),
         selectedMessageIds,
-      ),
-    [messages, selectedMessageIds, trashMessages, viewMode],
+      });
+      if (!payload) return;
+
+      // Carry both contracts. A room in the left sidebar consumes the shared
+      // forward payload; the composer/panel consumes the Cloud trash payload.
+      encodeMessageDrag(event.dataTransfer, {
+        messageId,
+        messageIds: payload.itemIds,
+        sourceConversationId: message.conversationId,
+        label: getCloudItemTitle(
+          cloudItems.find((item) => item.id === messageId) ??
+            ({ type: "file" } as CloudItem),
+          {
+            text: t("item.untitledText"),
+            link: t("item.untitledLink"),
+            file: t("item.untitledFile"),
+          },
+        ),
+      });
+      if (!encodeCloudDeleteDrag(event.dataTransfer, payload)) return;
+
+      const selectionDrag = selectionDragRef.current;
+      if (selectionDrag?.holdTimer) window.clearTimeout(selectionDrag.holdTimer);
+      selectionDragRef.current = null;
+      document.body.style.userSelect = "";
+      suppressSelectionClickRef.current = true;
+      window.setTimeout(() => {
+        suppressSelectionClickRef.current = false;
+      }, 0);
+
+      const firstItem = cloudItems.find((item) => item.id === payload.itemIds[0]);
+      applyCloudDeleteDragGhost(
+        event.dataTransfer,
+        firstItem?.title || t("item.untitledFile"),
+        payload.itemIds.length,
+      );
+      setCloudDeleteDragState({ ...payload, over: false });
+    },
+    [cloudItems, isSelectionMode, messages, selectedMessageIds, setCloudDeleteDragState, t],
+  );
+
+  const handleCloudSelectionLaneDragStart = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      const firstSelectedId = messages.find((message) =>
+        selectedMessageIds.has(message.id),
+      )?.id;
+      if (!firstSelectedId) {
+        event.preventDefault();
+        return;
+      }
+      handleCloudDeleteDragStart(firstSelectedId, event);
+    },
+    [handleCloudDeleteDragStart, messages, selectedMessageIds],
+  );
+
+  const handleCloudDeleteDragEnd = useCallback(() => {
+    setCloudDeleteDragState(null);
+  }, [setCloudDeleteDragState]);
+
+  const handleCloudDeleteDragEnter = useCallback(
+    (event: DragEvent<HTMLElement>) => {
+      if (!isCloudDeleteDrag(event.dataTransfer)) return;
+      event.preventDefault();
+      const current = cloudDeleteDragRef.current;
+      if (current && !current.over) setCloudDeleteDragState({ ...current, over: true });
+    },
+    [setCloudDeleteDragState],
+  );
+
+  const handleCloudDeleteDragOver = useCallback(
+    (event: DragEvent<HTMLElement>) => {
+      if (!isCloudDeleteDrag(event.dataTransfer)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      const current = cloudDeleteDragRef.current;
+      if (current && !current.over) setCloudDeleteDragState({ ...current, over: true });
+    },
+    [setCloudDeleteDragState],
+  );
+
+  const handleCloudDeleteDragLeave = useCallback(
+    (event: DragEvent<HTMLElement>) => {
+      const nextTarget = event.relatedTarget as Node | null;
+      if (nextTarget && event.currentTarget.contains(nextTarget)) return;
+      const current = cloudDeleteDragRef.current;
+      if (current?.over) setCloudDeleteDragState({ ...current, over: false });
+    },
+    [setCloudDeleteDragState],
+  );
+
+  const handleCloudDeleteDrop = useCallback(
+    async (event: DragEvent<HTMLElement>) => {
+      if (!isCloudDeleteDrag(event.dataTransfer)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const payload = decodeCloudDeleteDrag(event.dataTransfer);
+      setCloudDeleteDragState(null);
+      if (!payload || workspace.isMutating) return;
+
+      const activeItemsById = new Map(
+        cloudItems
+          .filter((item) => item.status !== "trashed" && item.status !== "deleted")
+          .map((item) => [item.id, item]),
+      );
+      const validItems = payload.itemIds
+        .map((itemId) => activeItemsById.get(itemId))
+        .filter((item): item is CloudItem => Boolean(item));
+      if (validItems.length === 0) return;
+
+      captureTimelineScroll();
+      let deletedCount = 0;
+      for (const item of validItems) {
+        try {
+          await handleTrash(item.id);
+          deletedCount += 1;
+        } catch {
+          // The workspace already exposes the actionable API error banner.
+        }
+      }
+      restoreTimelineScroll();
+      if (deletedCount > 0) {
+        toast.success(
+          deletedCount > 1
+            ? `Đã đưa ${deletedCount} mục vào Thùng rác`
+            : "Đã đưa mục vào Thùng rác",
+        );
+      }
+      if (payload.source === "selection" && deletedCount === validItems.length) {
+        exitSelectionMode();
+      }
+    },
+    [
+      captureTimelineScroll,
+      cloudItems,
+      exitSelectionMode,
+      handleTrash,
+      restoreTimelineScroll,
+      setCloudDeleteDragState,
+      workspace.isMutating,
+    ],
   );
 
   const handleDeleteSelected = useCallback(async () => {
@@ -1318,6 +1511,9 @@ export default function CloudPage() {
               onDelete={handleDeleteRequest}
               onRetry={handleRetryCloudMessage}
               cloudMessageActionsOnly
+              onCloudDeleteDragStart={handleCloudDeleteDragStart}
+              onCloudDeleteDragEnd={handleCloudDeleteDragEnd}
+              onCloudSelectionLaneDragStart={handleCloudSelectionLaneDragStart}
               hasMore={Boolean(workspace.nextCursor)}
               isLoadingMore={workspace.isLoadingMore}
               isInitialLoading={workspace.isLoading}
@@ -1379,7 +1575,7 @@ export default function CloudPage() {
           ) : null}
 
           <div className="sticky bottom-0 z-sticky shrink-0">
-            {isSelectionMode && hasContiguousSelection ? (
+            {showSelectionToolbar ? (
               <div
                 className="flex min-h-12 w-full items-center justify-between gap-2 border-t border-border/60 bg-surface px-3 py-2 shadow-sm"
                 role="toolbar"
@@ -1460,6 +1656,15 @@ export default function CloudPage() {
                 disabled={workspace.isMutating}
                 submitDisabled={workspace.isMutating}
                 attachmentsDisabled={workspace.isMutating}
+                cloudDeleteDropActive={cloudDeleteDrag !== null && !workspace.isMutating}
+                cloudDeleteDropOver={cloudDeleteDrag?.over === true && !workspace.isMutating}
+                onCloudDeleteDragEnter={handleCloudDeleteDragEnter}
+                onCloudDeleteDragOver={handleCloudDeleteDragOver}
+                onCloudDeleteDragLeave={handleCloudDeleteDragLeave}
+                onCloudDeleteDrop={handleCloudDeleteDrop}
+                cloudDeleteDropLabel={t("dragDelete.dropTarget", {
+                  defaultValue: "Thả để đưa vào Thùng rác",
+                })}
                 composerMode="online"
                 conversationName={t("workspace.title")}
                 onAddFiles={handleAddFiles}
@@ -1506,12 +1711,32 @@ export default function CloudPage() {
           <div
             className={clsx(
               "h-full w-full transform-gpu bg-surface transition-[transform,opacity] duration-300 ease-out xl:absolute xl:inset-y-0 xl:right-0 xl:w-[var(--app-inspector-width)]",
+              cloudDeleteDrag && "ring-2 ring-inset ring-danger/40",
+              cloudDeleteDrag?.over && "bg-danger/5 ring-danger/70",
               isRightPanelOpen
                 ? "translate-x-0 opacity-100"
                 : "pointer-events-none translate-x-4 opacity-0 xl:translate-x-6",
             )}
             style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
+            onDragEnter={cloudDeleteDrag ? handleCloudDeleteDragEnter : undefined}
+            onDragOver={cloudDeleteDrag ? handleCloudDeleteDragOver : undefined}
+            onDragLeave={cloudDeleteDrag ? handleCloudDeleteDragLeave : undefined}
+            onDrop={cloudDeleteDrag ? handleCloudDeleteDrop : undefined}
           >
+            {cloudDeleteDrag ? (
+              <div
+                className={clsx(
+                  "pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-danger/5 text-danger transition-colors duration-200",
+                  cloudDeleteDrag.over && "bg-danger/12",
+                )}
+                aria-hidden
+              >
+                <div className="flex items-center gap-2 rounded-full border border-danger/40 bg-surface/95 px-4 py-2 text-sm font-semibold shadow-lg">
+                  <Trash2 className="h-5 w-5" />
+                  Thả vào panel để đưa vào Thùng rác
+                </div>
+              </div>
+            ) : null}
             {isSearchOpen ? (
               <aside className="flex h-full min-h-0 flex-col bg-surface" aria-label="Tìm kiếm tin nhắn">
                 <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-5">

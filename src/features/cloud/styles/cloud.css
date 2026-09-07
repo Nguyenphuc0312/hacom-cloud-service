@@ -1610,6 +1610,21 @@ button.cloud-delete-choice--danger:hover {
   min-height: 220px;
 }
 
+/* The Cloud manage route uses the same compact density as Chat. Its resource
+   rows are denser than the conversation inspector, so keep the icon tile in
+   proportion without changing the shared Cloud item component elsewhere. */
+.cloud-manage-page .cloud-item-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+@media (max-width: 639px) {
+  .cloud-manage-page [aria-label="Chế độ hiển thị"] {
+    margin-left: auto;
+  }
+}
+
 @media (max-width: 720px) {
   .cloud-documents__header {
     min-height: 62px;

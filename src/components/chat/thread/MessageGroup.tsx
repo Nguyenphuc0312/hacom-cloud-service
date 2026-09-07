@@ -64,6 +64,7 @@ import {
 import { extractFirstUrlFromContent } from "../../message/linkPreviewUtils";
 import { shouldTreatMessageContentAsRichText } from "../../../utils/messageContent.utils";
 import { toast } from "../../ui";
+import { resolveCloudDeleteDragSource } from "../../../features/cloud/utils/cloudDeleteDrag";
 
 const REPLY_TYPE_LABEL: Partial<Record<string, string>> = {
   [MessageType.IMAGE]: "Hình ảnh",
@@ -121,6 +122,11 @@ interface MessageGroupProps {
   /** Render a trashed Cloud item as a normal bubble with restore control. */
   cloudTrashMode?: boolean;
   onRestoreCloudItem?: (messageId: string) => void | Promise<void>;
+  onCloudDeleteDragStart?: (
+    messageId: string,
+    event: React.DragEvent<HTMLDivElement>,
+  ) => void;
+  onCloudDeleteDragEnd?: () => void;
   onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
   density?: ChatDensity;
@@ -239,6 +245,12 @@ interface MessageGroupItemProps {
   cloudMessageActionsOnly?: boolean;
   cloudTrashMode?: boolean;
   onRestoreCloudItem?: (messageId: string) => void | Promise<void>;
+  onCloudDeleteDragStart?: (
+    messageId: string,
+    event: React.DragEvent<HTMLDivElement>,
+  ) => void;
+  onCloudDeleteDragEnd?: () => void;
+  selectedMessageIds?: Set<string>;
   onImageClick?: (payload: ImageClickPayload) => void;
   onFilePreview?: (attachment: Attachment) => void;
   isSelectionMode: boolean;
@@ -300,6 +312,9 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
   cloudMessageActionsOnly = false,
   cloudTrashMode = false,
   onRestoreCloudItem,
+  onCloudDeleteDragStart,
+  onCloudDeleteDragEnd,
+  selectedMessageIds,
   onImageClick,
   onFilePreview,
   isSelectionMode,
@@ -354,10 +369,26 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         hasLink,
       });
     }, [message.type, message.content, message.contentFormat, dragAttachment?.fileName]);
+    const cloudDeleteDragSource =
+      cloudMessageActionsOnly && onCloudDeleteDragStart
+        ? resolveCloudDeleteDragSource({
+            message,
+            isSelectionMode,
+            isSelected,
+            selectedMessageIds,
+          })
+        : null;
+    const canCloudDeleteDrag = cloudDeleteDragSource !== null;
     const canQuickForward =
       !isSelectionMode && dragLabel !== null && Boolean(message.conversationId);
     const handleDragStart = React.useCallback(
       (event: React.DragEvent<HTMLDivElement>) => {
+        if (cloudDeleteDragSource && onCloudDeleteDragStart) {
+          // The Cloud callback adds the delete payload and also preserves the
+          // shared quick-forward payload when this message can be forwarded.
+          onCloudDeleteDragStart(message.id, event);
+          return;
+        }
         if (!message.conversationId || !dragLabel) return;
         encodeMessageDrag(event.dataTransfer, {
           messageId: message.id,
@@ -368,8 +399,17 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         // the sibling action rail along).
         applyQuickForwardDragGhost(event.dataTransfer, dragLabel);
       },
-      [message.id, message.conversationId, dragLabel],
+      [
+        cloudDeleteDragSource,
+        dragLabel,
+        message.id,
+        message.conversationId,
+        onCloudDeleteDragStart,
+      ],
     );
+    const handleDragEnd = React.useCallback(() => {
+      if (cloudDeleteDragSource) onCloudDeleteDragEnd?.();
+    }, [cloudDeleteDragSource, onCloudDeleteDragEnd]);
     recordChatRenderCount("MessageGroupItem", message.id, {
       isOwn,
       isSelectionMode,
@@ -856,13 +896,14 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         className={clsx(
           "group/message-item relative flex max-w-[var(--chat-bubble-max)] gap-2",
           isPoll ? "self-center" : isOwn ? "self-end" : "self-start",
-          canQuickForward && "msg-quick-drag",
+          (canQuickForward || canCloudDeleteDrag) && "msg-quick-drag",
           insertedMessageKeys.has(getMessageStableKey(message)) &&
           isPendingMessage(message) &&
           "motion-message-insert",
         )}
-        draggable={canQuickForward}
-        onDragStart={canQuickForward ? handleDragStart : undefined}
+        draggable={canQuickForward || canCloudDeleteDrag}
+        onDragStart={canQuickForward || canCloudDeleteDrag ? handleDragStart : undefined}
+        onDragEnd={canCloudDeleteDrag ? handleDragEnd : undefined}
         onMouseEnter={handleItemMouseEnter}
         onMouseLeave={handleItemMouseLeave}
         onFocusCapture={handleItemMouseEnter}
@@ -1183,6 +1224,9 @@ const areEqualMessageGroupItemProps = (
     previous.isSelected === next.isSelected &&
     previous.onToggleSelect === next.onToggleSelect &&
     previous.onStartSelectionMode === next.onStartSelectionMode &&
+    previous.onCloudDeleteDragStart === next.onCloudDeleteDragStart &&
+    previous.onCloudDeleteDragEnd === next.onCloudDeleteDragEnd &&
+    previous.selectedMessageIds === next.selectedMessageIds &&
     previous.onNavigateToMessage === next.onNavigateToMessage &&
     previous.currentUsername === next.currentUsername &&
     previous.viewerCanRecallOthers === next.viewerCanRecallOthers &&
@@ -1213,6 +1257,8 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
   cloudMessageActionsOnly,
   cloudTrashMode,
   onRestoreCloudItem,
+  onCloudDeleteDragStart,
+  onCloudDeleteDragEnd,
   onImageClick,
   onFilePreview,
   isSelectionMode = false,
@@ -1323,6 +1369,9 @@ const MessageGroupBase: React.FC<MessageGroupProps> = ({
               cloudMessageActionsOnly={cloudMessageActionsOnly}
               cloudTrashMode={cloudTrashMode}
               onRestoreCloudItem={onRestoreCloudItem}
+              onCloudDeleteDragStart={onCloudDeleteDragStart}
+              onCloudDeleteDragEnd={onCloudDeleteDragEnd}
+              selectedMessageIds={selectedMessageIds}
               onImageClick={onImageClick}
               onFilePreview={onFilePreview}
               isSelectionMode={isSelectionMode}
