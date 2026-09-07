@@ -3,6 +3,7 @@ import { cloudApi, CloudApiError } from "../api/cloudApi";
 import type {
   CloudHealth,
   CloudItem,
+  CloudItemSummary,
   CloudPage,
   CloudQuota,
   CloudQuotaRequest,
@@ -31,6 +32,19 @@ interface CloudWorkspaceState {
   nextCursor?: string;
   trashNextCursor?: string;
   uploadProgress: CloudUploadProgress | null;
+  summary: CloudItemSummary | null;
+}
+
+export interface CloudWorkspaceOptions {
+  query?: string;
+  type?: CloudItem["type"];
+  from?: string;
+  to?: string;
+  minSizeBytes?: number;
+  maxSizeBytes?: number;
+  sort?: "created_at" | "title" | "size_bytes";
+  order?: "asc" | "desc";
+  limit?: number;
 }
 
 const initialState: CloudWorkspaceState = {
@@ -48,6 +62,7 @@ const initialState: CloudWorkspaceState = {
   isRequestingQuota: false,
   error: null,
   uploadProgress: null,
+  summary: null,
 };
 
 const asCloudError = (error: unknown): CloudApiError => {
@@ -69,13 +84,20 @@ const createMissingUserError = (): CloudApiError =>
 const mergeItems = (
   current: CloudItem[],
   incoming: CloudItem[],
+  sort: CloudWorkspaceOptions["sort"] = "created_at",
+  order: CloudWorkspaceOptions["order"] = "desc",
 ): CloudItem[] => {
   const byId = new Map(current.map((item) => [item.id, item]));
   incoming.forEach((item) => byId.set(item.id, item));
-  return Array.from(byId.values()).sort(
-    (left, right) =>
-      new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
-  );
+  const title = (item: CloudItem) => (item.title || item.content || item.url || "").trim().toLocaleLowerCase();
+  const direction = order === "asc" ? 1 : -1;
+  return Array.from(byId.values()).sort((left, right) => {
+    let delta = 0;
+    if (sort === "title") delta = title(left).localeCompare(title(right), "vi");
+    else if (sort === "size_bytes") delta = left.sizeBytes - right.sizeBytes;
+    else delta = new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+    return delta * direction || left.id.localeCompare(right.id) * direction;
+  });
 };
 
 const mergeTrashItems = (
@@ -164,8 +186,23 @@ const emptyCloudPage = (): CloudPage => ({ items: [], nextCursor: undefined });
 
 export const useCloudWorkspace = (
   userId: string | undefined,
-  searchQuery = "",
+  searchQueryOrOptions: string | CloudWorkspaceOptions = "",
 ) => {
+  const workspaceOptions = typeof searchQueryOrOptions === "string"
+    ? { query: searchQueryOrOptions }
+    : searchQueryOrOptions;
+  const searchQuery = workspaceOptions.query?.trim() ?? "";
+  const apiQuery = searchQuery.length >= 3 ? searchQuery : undefined;
+  const listOptions = {
+    type: workspaceOptions.type,
+    from: workspaceOptions.from,
+    to: workspaceOptions.to,
+    minSizeBytes: workspaceOptions.minSizeBytes,
+    maxSizeBytes: workspaceOptions.maxSizeBytes,
+    sort: workspaceOptions.sort,
+    order: workspaceOptions.order,
+    limit: workspaceOptions.limit,
+  } as const;
   const [state, setState] = useState<CloudWorkspaceState>(initialState);
   const mountedRef = useRef(true);
 
@@ -196,25 +233,25 @@ export const useCloudWorkspace = (
       }));
 
       try {
-        const query = searchQuery.trim() || undefined;
         let bundle: [
           CloudPage,
           CloudPage,
           CloudQuota | null,
           CloudQuotaRequest | null,
           CloudHealth,
+          CloudItemSummary | null,
         ] | undefined;
         let lastError: unknown;
         for (let attempt = 0; attempt <= INITIAL_LOAD_RETRY_DELAYS_MS.length; attempt += 1) {
           try {
           bundle = await Promise.all([
-              cloudApi.listItems(userId, { signal, q: query }),
+              cloudApi.listItems(userId, { ...listOptions, signal, q: apiQuery }),
               // Trash/quota were introduced after the first Cloud rollout.
               // A gateway serving an older contract must not blank the active
               // My Documents timeline; treat only missing-method responses as
               // optional while still surfacing auth/network failures.
               cloudApi
-                .listTrash(userId, { signal, q: query })
+                .listTrash(userId, { signal, q: apiQuery })
                 .catch((error: unknown): CloudPage => {
                   if (isOptionalEndpointMissing(error)) return emptyCloudPage();
                   throw error;
@@ -233,6 +270,10 @@ export const useCloudWorkspace = (
                 status: "DOWN",
                 service: "hacom-cloud-api",
               })),
+              // Summary is an enhancement for the management cards. A Cloud
+              // deployment that predates the endpoint (or is temporarily
+              // unavailable) must not prevent the timeline itself from loading.
+              cloudApi.getItemSummary(userId, signal).catch((): CloudItemSummary | null => null),
           ]);
             break;
           } catch (error) {
@@ -244,7 +285,7 @@ export const useCloudWorkspace = (
           }
         }
         if (!bundle) throw lastError ?? new Error("Cloud data unavailable");
-        const [page, trashPage, quota, quotaRequest, health] = bundle;
+        const [page, trashPage, quota, quotaRequest, health, summary] = bundle;
         const hydratedItems = await hydrateMediaAccess(
           page.items,
           userId,
@@ -263,6 +304,7 @@ export const useCloudWorkspace = (
           quota,
           quotaRequest,
           health,
+          summary,
           nextCursor: page.nextCursor,
           trashNextCursor: trashPage.nextCursor,
           isLoading: false,
@@ -281,7 +323,7 @@ export const useCloudWorkspace = (
         }));
       }
     },
-    [searchQuery, userId],
+    [apiQuery, listOptions.from, listOptions.limit, listOptions.maxSizeBytes, listOptions.minSizeBytes, listOptions.order, listOptions.sort, listOptions.to, listOptions.type, searchQuery, userId],
   );
 
   useEffect(() => {
@@ -299,14 +341,15 @@ export const useCloudWorkspace = (
     setState((current) => ({ ...current, isLoadingMore: true }));
     try {
       const page: CloudPage = await cloudApi.listItems(userId, {
+        ...listOptions,
         cursor: state.nextCursor,
-        q: searchQuery.trim() || undefined,
+        q: apiQuery,
       });
       const hydratedItems = await hydrateMediaAccess(page.items, userId);
       if (!mountedRef.current) return;
       setState((current) => ({
         ...current,
-        items: mergeItems(current.items, hydratedItems),
+        items: mergeItems(current.items, hydratedItems, listOptions.sort, listOptions.order),
         nextCursor: page.nextCursor,
         isLoadingMore: false,
       }));
@@ -318,7 +361,7 @@ export const useCloudWorkspace = (
         error: asCloudError(error),
       }));
     }
-  }, [searchQuery, state.isLoadingMore, state.nextCursor, userId]);
+  }, [apiQuery, listOptions.from, listOptions.limit, listOptions.maxSizeBytes, listOptions.minSizeBytes, listOptions.order, listOptions.sort, listOptions.to, listOptions.type, state.isLoadingMore, state.nextCursor, userId]);
 
   const loadMoreTrash = useCallback(async () => {
     if (!userId || !state.trashNextCursor || state.isLoadingMoreTrash) return;
@@ -326,7 +369,7 @@ export const useCloudWorkspace = (
     try {
       const page = await cloudApi.listTrash(userId, {
         cursor: state.trashNextCursor,
-        q: searchQuery.trim() || undefined,
+        q: apiQuery,
       });
       const hydratedItems = await hydrateMediaAccess(page.items, userId);
       if (!mountedRef.current) return;
@@ -344,7 +387,7 @@ export const useCloudWorkspace = (
         error: asCloudError(error),
       }));
     }
-  }, [searchQuery, state.isLoadingMoreTrash, state.trashNextCursor, userId]);
+  }, [apiQuery, state.isLoadingMoreTrash, state.trashNextCursor, userId]);
 
   /** Load every remaining trash page for the gallery view. */
   const loadAllTrash = useCallback(async () => {
@@ -356,7 +399,7 @@ export const useCloudWorkspace = (
       while (cursor) {
         const page = await cloudApi.listTrash(userId, {
           cursor,
-          q: searchQuery.trim() || undefined,
+          q: apiQuery,
         });
         const hydratedItems = await hydrateMediaAccess(page.items, userId);
         incoming = mergeTrashItems(incoming, hydratedItems);
@@ -378,7 +421,7 @@ export const useCloudWorkspace = (
       }));
       throw error;
     }
-  }, [searchQuery, state.isLoadingMoreTrash, state.trashNextCursor, userId]);
+  }, [apiQuery, state.isLoadingMoreTrash, state.trashNextCursor, userId]);
 
   const refreshQuota = useCallback(async () => {
     if (!userId) return;
@@ -411,7 +454,7 @@ export const useCloudWorkspace = (
         if (!mountedRef.current) return;
         setState((current) => ({
           ...current,
-          items: mergeItems(current.items, [item]),
+          items: mergeItems(current.items, [item], listOptions.sort, listOptions.order),
           isMutating: false,
         }));
       } catch (error) {
@@ -425,7 +468,7 @@ export const useCloudWorkspace = (
         throw cloudError;
       }
     },
-    [refreshQuota, userId],
+    [listOptions.order, listOptions.sort, refreshQuota, userId],
   );
 
   const createLink = useCallback(
@@ -442,7 +485,7 @@ export const useCloudWorkspace = (
         if (!mountedRef.current) return;
         setState((current) => ({
           ...current,
-          items: mergeItems(current.items, [item]),
+          items: mergeItems(current.items, [item], listOptions.sort, listOptions.order),
           isMutating: false,
         }));
       } catch (error) {
@@ -456,7 +499,7 @@ export const useCloudWorkspace = (
         throw cloudError;
       }
     },
-    [refreshQuota, userId],
+    [listOptions.order, listOptions.sort, refreshQuota, userId],
   );
 
   const uploadFile = useCallback(
@@ -517,7 +560,7 @@ export const useCloudWorkspace = (
         if (mountedRef.current) {
           setState((current) => ({
             ...current,
-            items: mergeItems(current.items, [normalizeCloudItemType(completed.item)]),
+            items: mergeItems(current.items, [normalizeCloudItemType(completed.item)], listOptions.sort, listOptions.order),
             isMutating: false,
             uploadProgress: {
               fileName: file.name,
@@ -540,7 +583,7 @@ export const useCloudWorkspace = (
         throw cloudError;
       }
     },
-    [refreshQuota, userId],
+    [listOptions.order, listOptions.sort, refreshQuota, userId],
   );
 
   const trashItem = useCallback(
@@ -621,7 +664,7 @@ export const useCloudWorkspace = (
           return {
             ...current,
             trashItems: current.trashItems.filter((candidate) => candidate.id !== itemId),
-            items: mergeItems(current.items, [restoredItem]),
+            items: mergeItems(current.items, [restoredItem], listOptions.sort, listOptions.order),
             isMutating: false,
           };
         });
@@ -633,6 +676,8 @@ export const useCloudWorkspace = (
             items: mergeItems(
               current.items.filter((candidate) => candidate.id !== itemId),
               [current.items.find((candidate) => candidate.id === itemId) ?? locallyRestored!],
+              listOptions.sort,
+              listOptions.order,
             ),
             isMutating: false,
           }));
@@ -649,7 +694,7 @@ export const useCloudWorkspace = (
         throw cloudError;
       }
     },
-    [loadInitial, userId],
+    [listOptions.order, listOptions.sort, loadInitial, userId],
   );
 
   const permanentlyDeleteItem = useCallback(
@@ -737,7 +782,8 @@ export const useCloudWorkspace = (
     const refreshProcessingItems = async () => {
       try {
         const page = await cloudApi.listItems(userId, {
-          q: searchQuery.trim() || undefined,
+          ...listOptions,
+          q: apiQuery,
         });
         const hydratedItems = await hydrateMediaAccess(page.items, userId);
         if (cancelled || !mountedRef.current) return;
@@ -746,7 +792,7 @@ export const useCloudWorkspace = (
         );
         setState((current) => ({
           ...current,
-          items: mergeItems(current.items, hydratedItems),
+          items: mergeItems(current.items, hydratedItems, listOptions.sort, listOptions.order),
           nextCursor:
             current.items.length > page.items.length
               ? current.nextCursor
@@ -781,7 +827,7 @@ export const useCloudWorkspace = (
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [hasProcessingItems, searchQuery, state.uploadProgress?.stage, userId]);
+  }, [apiQuery, hasProcessingItems, listOptions.from, listOptions.limit, listOptions.maxSizeBytes, listOptions.minSizeBytes, listOptions.order, listOptions.sort, listOptions.to, listOptions.type, state.uploadProgress?.stage, userId]);
 
   const clearError = useCallback(() => {
     setState((current) => ({ ...current, error: null }));

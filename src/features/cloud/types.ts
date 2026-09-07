@@ -42,6 +42,12 @@ export interface CloudPage {
   nextCursor?: string;
 }
 
+export interface CloudItemSummary {
+  totalCount: number;
+  totalBytes: number;
+  byType: Partial<Record<CloudItemType, { count: number; bytes: number }>>;
+}
+
 export interface CloudQuota {
   limitBytes: number;
   usedBytes: number;

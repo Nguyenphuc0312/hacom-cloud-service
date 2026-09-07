@@ -101,6 +101,33 @@ describe("cloudApi", () => {
     expect(requestedUrl).toContain("type=file");
   });
 
+  it("serializes management filters without leaking them into the path", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ items: [] }));
+
+    await cloudApi.listItems(userId, {
+      limit: 50,
+      q: "invoice",
+      type: "file",
+      from: "2026-08-01T00:00:00.000Z",
+      to: "2026-08-31T23:59:59.999Z",
+      minSizeBytes: 1_000_000,
+      maxSizeBytes: 9_999_999,
+      sort: "size_bytes",
+      order: "desc",
+    });
+
+    const requestedUrl = String(fetchMock.mock.calls[0]?.[0]);
+    expect(requestedUrl).toContain("limit=50");
+    expect(requestedUrl).toContain("q=invoice");
+    expect(requestedUrl).toContain("type=file");
+    expect(requestedUrl).toContain("from=2026-08-01T00%3A00%3A00.000Z");
+    expect(requestedUrl).toContain("to=2026-08-31T23%3A59%3A59.999Z");
+    expect(requestedUrl).toContain("min_size_bytes=1000000");
+    expect(requestedUrl).toContain("max_size_bytes=9999999");
+    expect(requestedUrl).toContain("sort=size_bytes");
+    expect(requestedUrl).toContain("order=desc");
+  });
+
   it("preserves backend error codes and request IDs", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(

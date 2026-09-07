@@ -3,6 +3,7 @@ import { refreshAccessTokenShared } from "../../../services/authRefreshCoordinat
 import { getAccessToken } from "../../../services/tokenService";
 import type {
   CloudHealth,
+  CloudItemSummary,
   CloudDeleteResult,
   CloudFileAccess,
   CloudItem,
@@ -165,6 +166,12 @@ export const cloudApi = {
       limit?: number;
       q?: string;
       type?: CloudItem["type"];
+      from?: string;
+      to?: string;
+      minSizeBytes?: number;
+      maxSizeBytes?: number;
+      sort?: "created_at" | "title" | "size_bytes";
+      order?: "asc" | "desc";
       signal?: AbortSignal;
     } = {},
   ): Promise<CloudPage> {
@@ -173,10 +180,20 @@ export const cloudApi = {
     if (options.cursor) query.set("cursor", options.cursor);
     if (options.q) query.set("q", options.q);
     if (options.type) query.set("type", options.type);
+    if (options.from) query.set("from", options.from);
+    if (options.to) query.set("to", options.to);
+    if (options.minSizeBytes !== undefined) query.set("min_size_bytes", String(options.minSizeBytes));
+    if (options.maxSizeBytes !== undefined) query.set("max_size_bytes", String(options.maxSizeBytes));
+    if (options.sort) query.set("sort", options.sort);
+    if (options.order) query.set("order", options.order);
     return cloudRequest<CloudPage>(`items?${query.toString()}`, {
       userId,
       signal: options.signal,
     });
+  },
+
+  getItemSummary(userId: string, signal?: AbortSignal): Promise<CloudItemSummary> {
+    return cloudRequest<CloudItemSummary>("items/summary", { userId, signal });
   },
 
   listTrash(

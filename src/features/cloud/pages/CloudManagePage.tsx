@@ -14,8 +14,10 @@ import {
   List,
   MoreHorizontal,
   Search,
+  SlidersHorizontal,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import {
   DocumentDuplicateIcon,
@@ -30,7 +32,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../../stores/authStore";
 import { useToast } from "../../../stores";
 import { resolveCloudUserId } from "../utils/cloudIdentity";
-import { useCloudWorkspace } from "../hooks/useCloudWorkspace";
+import { useCloudWorkspace, type CloudWorkspaceOptions } from "../hooks/useCloudWorkspace";
 import { formatBytes, getCloudItemPreview, getCloudItemTitle } from "../utils/cloudFormat";
 import { downloadResourceWithName } from "../../../utils/downloadFile";
 import { CloudItemIcon } from "../components/CloudItemIcon";
@@ -41,6 +43,15 @@ import { ROUTE_PATHS } from "../../../router/paths";
 import "../styles/cloud.css";
 
 type Filter = "all" | CloudItem["type"];
+type SortChoice = "newest" | "oldest" | "titleAsc" | "titleDesc" | "sizeLarge" | "sizeSmall";
+
+interface ManageFilters {
+  type: Filter;
+  from?: string;
+  to?: string;
+  minSizeBytes?: number;
+  maxSizeBytes?: number;
+}
 
 const ITEMS_PER_PAGE = 50;
 const downloadableTypes: CloudItem["type"][] = ["image", "video", "file", "audio"];
@@ -91,40 +102,74 @@ const formatSentDate = (value: string) =>
 const isDownloadable = (item: CloudItem) =>
   downloadableTypes.includes(item.type) && Boolean(item.accessUrl);
 
+const sortOptions: Array<{ value: SortChoice; label: string; sort: CloudWorkspaceOptions["sort"]; order: CloudWorkspaceOptions["order"] }> = [
+  { value: "newest", label: "Mới nhất", sort: "created_at", order: "desc" },
+  { value: "oldest", label: "Cũ nhất", sort: "created_at", order: "asc" },
+  { value: "titleAsc", label: "Tên A → Z", sort: "title", order: "asc" },
+  { value: "titleDesc", label: "Tên Z → A", sort: "title", order: "desc" },
+  { value: "sizeLarge", label: "Dung lượng lớn nhất", sort: "size_bytes", order: "desc" },
+  { value: "sizeSmall", label: "Dung lượng nhỏ nhất", sort: "size_bytes", order: "asc" },
+];
+
+const sizeOptions: Array<{ value: string; label: string; minSizeBytes?: number; maxSizeBytes?: number }> = [
+  { value: "all", label: "Mọi dung lượng" },
+  { value: "small", label: "Nhỏ hơn 1 MB", minSizeBytes: 1, maxSizeBytes: 999_999 },
+  { value: "medium", label: "1 – dưới 10 MB", minSizeBytes: 1_000_000, maxSizeBytes: 9_999_999 },
+  { value: "large", label: "10 – dưới 50 MB", minSizeBytes: 10_000_000, maxSizeBytes: 49_999_999 },
+  { value: "huge", label: "Từ 50 MB trở lên", minSizeBytes: 50_000_000 },
+];
+
+const datePreset = (preset: "today" | "7days" | "30days"): Pick<ManageFilters, "from" | "to"> => {
+  const end = new Date();
+  const start = new Date(end);
+  if (preset === "today") start.setHours(0, 0, 0, 0);
+  else {
+    start.setDate(start.getDate() - (preset === "7days" ? 6 : 29));
+    start.setHours(0, 0, 0, 0);
+  }
+  end.setHours(23, 59, 59, 999);
+  return { from: start.toISOString(), to: end.toISOString() };
+};
+
+const filterCount = (filters: ManageFilters): number =>
+  Number(filters.type !== "all") + Number(Boolean(filters.from || filters.to)) + Number(filters.minSizeBytes !== undefined || filters.maxSizeBytes !== undefined);
+
 export default function CloudManagePage() {
   const navigate = useNavigate();
   const toast = useToast();
   const authUser = useAuthStore((state) => state.user);
   const userId = resolveCloudUserId(authUser?.id);
-  const workspace = useCloudWorkspace(userId);
-  const uploadInputRef = useRef<HTMLInputElement | null>(null);
-  const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [appliedFilters, setAppliedFilters] = useState<ManageFilters>({ type: "all" });
+  const [draftFilters, setDraftFilters] = useState<ManageFilters>({ type: "all" });
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [sortChoice, setSortChoice] = useState<SortChoice>("newest");
+  const selectedSort = sortOptions.find((option) => option.value === sortChoice) ?? sortOptions[0];
+  const workspaceOptions = useMemo<CloudWorkspaceOptions>(() => ({
+    query: debouncedQuery,
+    type: appliedFilters.type === "all" ? undefined : appliedFilters.type,
+    from: appliedFilters.from,
+    to: appliedFilters.to,
+    minSizeBytes: appliedFilters.minSizeBytes,
+    maxSizeBytes: appliedFilters.maxSizeBytes,
+    sort: selectedSort.sort,
+    order: selectedSort.order,
+    limit: ITEMS_PER_PAGE,
+  }), [appliedFilters, debouncedQuery, selectedSort.order, selectedSort.sort]);
+  const workspace = useCloudWorkspace(userId, workspaceOptions);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const [grid, setGrid] = useState(false);
-  const [newestFirst, setNewestFirst] = useState(true);
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const items = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase();
-    return workspace.items
-      .filter((item) => filter === "all" || item.type === filter)
-      .filter((item) => {
-        if (!normalized) return true;
-        return `${titleFor(item)} ${typeLabel[item.type]} ${getCloudItemPreview(item)}`
-          .toLocaleLowerCase()
-          .includes(normalized);
-      })
-      .sort((left, right) => {
-        const delta = new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
-        return newestFirst ? -delta : delta;
-      });
-  }, [filter, newestFirst, query, workspace.items]);
-
-  const pageCount = Math.max(1, Math.ceil(items.length / ITEMS_PER_PAGE));
+  const items = workspace.items;
+  const loadedPageCount = Math.max(1, Math.ceil(items.length / ITEMS_PER_PAGE));
+  const pageCount = Math.max(1, loadedPageCount + (workspace.nextCursor ? 1 : 0));
   const paginatedItems = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     return items.slice(start, start + ITEMS_PER_PAGE);
@@ -137,13 +182,30 @@ export default function CloudManagePage() {
   const allPageSelected =
     paginatedItems.length > 0 && paginatedItems.every((item) => selectedIds.has(item.id));
 
+  const goToPage = useCallback((page: number) => {
+    if (page > loadedPageCount && workspace.nextCursor) {
+      void workspace.loadMore();
+    }
+    setCurrentPage(page);
+  }, [loadedPageCount, workspace.loadMore, workspace.nextCursor]);
+
   useEffect(() => {
     setCurrentPage(1);
-  }, [filter, newestFirst, query]);
+  }, [appliedFilters, debouncedQuery, sortChoice]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
   useEffect(() => {
     setCurrentPage((page) => Math.min(page, pageCount));
   }, [pageCount]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setOpenMenuId(null);
+  }, [appliedFilters, debouncedQuery, sortChoice]);
 
   useEffect(() => {
     const visibleIds = new Set(items.map((item) => item.id));
@@ -294,15 +356,15 @@ export default function CloudManagePage() {
         </div>
 
         <section className="min-w-0 space-y-5">
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">{cards.map((card) => { const count = card.type === "all" ? workspace.items.length : workspace.items.filter((item) => item.type === card.type).length; const bytes = card.type === "all" ? workspace.items.reduce((total, item) => total + item.sizeBytes, 0) : bytesFor(card.type); return <button type="button" key={card.type} onClick={() => setFilter(filter === card.type ? "all" : card.type)} className={`flex min-h-[88px] items-center gap-3 rounded-2xl border bg-surface px-4 text-left transition-colors ${filter === card.type ? "border-[#1976D2]/70 bg-[#EFF6FF]" : "border-border/70 hover:bg-surface-overlay"}`}><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-muted text-text-secondary">{card.icon}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold leading-tight text-text-primary">{card.label}</span><span className="mt-1 block text-xs text-text-secondary">{formatBytes(bytes)} · {count} mục</span></span></button>; })}</div>
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">{cards.map((card) => { const aggregate = card.type === "all" ? { count: workspace.summary?.totalCount ?? workspace.items.length, bytes: workspace.summary?.totalBytes ?? workspace.items.reduce((total, item) => total + item.sizeBytes, 0) } : workspace.summary?.byType[card.type]; const count = aggregate?.count ?? (card.type === "all" ? workspace.items.length : workspace.items.filter((item) => item.type === card.type).length); const bytes = aggregate?.bytes ?? (card.type === "all" ? 0 : bytesFor(card.type)); return <button type="button" key={card.type} onClick={() => { const next = filter === card.type ? "all" : card.type; setFilter(next); setAppliedFilters((current) => ({ ...current, type: next })); setDraftFilters((current) => ({ ...current, type: next })); }} className={`flex min-h-[88px] items-center gap-3 rounded-2xl border bg-surface px-4 text-left transition-colors ${filter === card.type ? "border-[#1976D2]/70 bg-[#EFF6FF]" : "border-border/70 hover:bg-surface-overlay"}`}><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-muted text-text-secondary">{card.icon}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold leading-tight text-text-primary">{card.label}</span><span className="mt-1 block text-xs text-text-secondary">{formatBytes(bytes)} · {count} mục</span></span></button>; })}</div>
 
-          <div className="space-y-4"><h2 className="text-lg font-semibold text-text-primary">{filter === "all" ? "Tất cả" : typeLabel[filter]} dữ liệu Hacom Cloud</h2><div className="flex flex-wrap items-center gap-3"><label className="relative flex h-11 min-w-[260px] flex-1 items-center rounded-lg border border-border/70 bg-surface px-3 text-text-secondary transition-colors focus-within:border-primary/70 focus-within:ring-2 focus-within:ring-primary/15"><Search className="mr-2 h-5 w-5 shrink-0" aria-hidden /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm kiếm nội dung, tên file, loại file..." aria-label="Tìm kiếm nội dung" className="cloud-manage-search-input min-w-0 flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted" /></label><input ref={uploadInputRef} type="file" multiple className="hidden" onChange={handleUpload} aria-hidden="true" /><button type="button" disabled={isUploading} onClick={() => uploadInputRef.current?.click()} className="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-text-inverse transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"><Upload className="h-4 w-4" aria-hidden />{isUploading ? "Đang tải…" : "Tải lên"}</button><button type="button" onClick={() => setNewestFirst((value) => !value)} className="flex h-11 shrink-0 items-center gap-2 rounded-lg border border-border/70 bg-surface px-4 text-sm text-text-secondary transition-colors hover:bg-surface-overlay" aria-label={`Sắp xếp: ${newestFirst ? "mới nhất trước" : "cũ nhất trước"}`}><ArrowDownUp className="h-4 w-4" aria-hidden /> {newestFirst ? "Mới nhất" : "Cũ nhất"}</button><div className="flex h-11 shrink-0 items-center rounded-lg border border-border/70 bg-surface p-0.5" role="group" aria-label="Chế độ hiển thị"><button type="button" onClick={() => setGrid(false)} className={`flex h-10 w-10 items-center justify-center rounded-md transition-colors ${!grid ? "bg-surface-muted text-primary shadow-sm" : "text-text-secondary hover:bg-surface-overlay"}`} aria-label="Chế độ danh sách" aria-pressed={!grid}><List className="h-5 w-5" aria-hidden /></button><button type="button" onClick={() => setGrid(true)} className={`flex h-10 w-10 items-center justify-center rounded-md transition-colors ${grid ? "bg-surface-muted text-primary shadow-sm" : "text-text-secondary hover:bg-surface-overlay"}`} aria-label="Chế độ lưới" aria-pressed={grid}><Grid2X2 className="h-5 w-5" aria-hidden /></button></div></div></div>
+          <div className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold text-text-primary">{filter === "all" ? "Tất cả" : typeLabel[filter]} dữ liệu Hacom Cloud</h2><span className="text-xs text-text-secondary">{workspace.summary ? `${workspace.summary.totalCount} mục` : ""}</span></div><div className="flex flex-wrap items-center gap-3"><label className="relative flex h-11 min-w-[260px] flex-1 items-center rounded-lg border border-border/70 bg-surface px-3 text-text-secondary transition-colors focus-within:border-primary/70 focus-within:ring-2 focus-within:ring-primary/15"><Search className="mr-2 h-5 w-5 shrink-0" aria-hidden /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm kiếm nội dung, tên file, loại file..." aria-label="Tìm kiếm nội dung" className="cloud-manage-search-input min-w-0 flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted" /></label><input ref={uploadInputRef} type="file" multiple className="hidden" onChange={handleUpload} aria-hidden="true" /><button type="button" disabled={isUploading} onClick={() => uploadInputRef.current?.click()} className="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-text-inverse transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"><Upload className="h-4 w-4" aria-hidden />{isUploading ? "Đang tải…" : "Tải lên"}</button><label className="flex h-11 shrink-0 items-center gap-2 rounded-lg border border-border/70 bg-surface px-3 text-sm text-text-secondary"><ArrowDownUp className="h-4 w-4" aria-hidden /><span className="sr-only">Sắp xếp</span><select value={sortChoice} onChange={(event) => setSortChoice(event.target.value as SortChoice)} className="bg-transparent text-sm text-text-primary outline-none"><option value="newest">Mới nhất</option><option value="oldest">Cũ nhất</option><option value="titleAsc">Tên A → Z</option><option value="titleDesc">Tên Z → A</option><option value="sizeLarge">Dung lượng lớn nhất</option><option value="sizeSmall">Dung lượng nhỏ nhất</option></select></label><div className="relative"><button type="button" onClick={() => { setDraftFilters(appliedFilters); setFilterOpen((open) => !open); }} className={`inline-flex h-11 items-center gap-2 rounded-lg border px-3 text-sm transition-colors ${filterCount(appliedFilters) ? "border-primary/50 bg-primary/5 text-primary" : "border-border/70 bg-surface text-text-secondary hover:bg-surface-overlay"}`} aria-expanded={filterOpen} aria-haspopup="dialog"><SlidersHorizontal className="h-4 w-4" aria-hidden />Bộ lọc{filterCount(appliedFilters) ? <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] text-white">{filterCount(appliedFilters)}</span> : null}</button>{filterOpen ? <CloudFilterPopover filters={draftFilters} onChange={setDraftFilters} onApply={() => { setFilter(draftFilters.type); setAppliedFilters(draftFilters); setFilterOpen(false); }} onReset={() => setDraftFilters({ type: "all" })} onClose={() => setFilterOpen(false)} /> : null}</div><div className="flex h-11 shrink-0 items-center rounded-lg border border-border/70 bg-surface p-0.5" role="group" aria-label="Chế độ hiển thị"><button type="button" onClick={() => setGrid(false)} className={`flex h-10 w-10 items-center justify-center rounded-md transition-colors ${!grid ? "bg-surface-muted text-primary shadow-sm" : "text-text-secondary hover:bg-surface-overlay"}`} aria-label="Chế độ danh sách" aria-pressed={!grid}><List className="h-5 w-5" aria-hidden /></button><button type="button" onClick={() => setGrid(true)} className={`flex h-10 w-10 items-center justify-center rounded-md transition-colors ${grid ? "bg-surface-muted text-primary shadow-sm" : "text-text-secondary hover:bg-surface-overlay"}`} aria-label="Chế độ lưới" aria-pressed={grid}><Grid2X2 className="h-5 w-5" aria-hidden /></button></div></div>{debouncedQuery.length > 0 && debouncedQuery.length < 3 ? <p className="text-xs text-text-secondary">Nhập ít nhất 3 ký tự để tìm trong nội dung Cloud.</p> : null}{filterCount(appliedFilters) || query ? <div className="flex flex-wrap items-center gap-2">{appliedFilters.type !== "all" ? <FilterChip label={typeLabel[appliedFilters.type]} onRemove={() => { const next = { ...appliedFilters, type: "all" as Filter }; setAppliedFilters(next); setDraftFilters(next); setFilter("all"); }} /> : null}{appliedFilters.from || appliedFilters.to ? <FilterChip label="Khoảng thời gian" onRemove={() => { const next = { ...appliedFilters, from: undefined, to: undefined }; setAppliedFilters(next); setDraftFilters(next); }} /> : null}{appliedFilters.minSizeBytes !== undefined || appliedFilters.maxSizeBytes !== undefined ? <FilterChip label="Dung lượng" onRemove={() => { const next = { ...appliedFilters, minSizeBytes: undefined, maxSizeBytes: undefined }; setAppliedFilters(next); setDraftFilters(next); }} /> : null}{query ? <FilterChip label={`Tìm: ${query}`} onRemove={() => setQuery("")} /> : null}<button type="button" onClick={() => { setQuery(""); setAppliedFilters({ type: "all" }); setDraftFilters({ type: "all" }); setFilter("all"); }} className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-medium text-primary hover:bg-primary/10">Xóa tất cả</button></div> : null}</div>
 
           {selectedIds.size > 0 ? <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3"><span className="text-sm font-medium text-text-primary">Đã chọn {selectedIds.size} mục</span><div className="ml-auto flex items-center gap-2"><button type="button" onClick={() => void handleDownloadSelected()} className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm text-text-secondary hover:bg-surface"><Download className="h-4 w-4" aria-hidden />Tải xuống</button><button type="button" onClick={() => void handleTrashSelected()} className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" aria-hidden />Thùng rác</button><button type="button" onClick={() => setSelectedIds(new Set())} className="h-9 px-2 text-sm text-text-secondary hover:underline">Hủy</button></div></div> : null}
 
           {workspace.isLoading ? <div className="flex min-h-[360px] items-center justify-center rounded-2xl border border-border/70 bg-surface text-sm text-text-secondary">Đang tải dữ liệu…</div> : items.length === 0 ? <div className="flex min-h-[360px] flex-col items-center justify-center rounded-2xl border border-border/70 bg-surface text-center"><span className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-muted text-text-secondary"><DocumentIcon className="h-6 w-6" aria-hidden /></span><h3 className="mt-4 text-base font-semibold text-text-primary">Chưa có nội dung</h3><p className="mt-2 text-sm text-text-secondary">Tải nội dung lên Hacom Cloud để lưu trữ và truy cập nhanh.</p></div> : grid ? <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">{paginatedItems.map((item) => <ManageGridCard key={item.id} item={item} selected={selectedIds.has(item.id)} onToggleSelect={() => toggleSelected(item.id)} onOpen={() => handleOpen(item)} onDownload={() => void handleDownload(item)} onTrash={() => void handleTrash(item)} />)}</div> : <div className="overflow-x-auto rounded-2xl border border-border/70 bg-surface"><div className="min-w-[1100px]"><div className="grid grid-cols-[36px_minmax(0,1fr)_180px_180px_220px_160px] items-center border-b border-border/70 px-4 py-3 text-xs font-semibold text-text-secondary"><label className="flex items-center"><input type="checkbox" checked={allPageSelected} onChange={togglePageSelection} aria-label="Chọn tất cả mục trên trang" className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30" /></label><span>Tên</span><span>Loại</span><span>Kích thước</span><span>Ngày gửi</span><span>Thao tác</span></div>{paginatedItems.map((item) => <ManageTableRow key={item.id} item={item} selected={selectedIds.has(item.id)} menuOpen={openMenuId === item.id} onToggleSelect={() => toggleSelected(item.id)} onOpen={() => handleOpen(item)} onDownload={() => void handleDownload(item)} onTrash={() => void handleTrash(item)} onToggleMenu={() => setOpenMenuId((id) => id === item.id ? null : item.id)} />)}</div></div>}
 
-          <nav className="flex flex-wrap items-center gap-3 rounded-2xl border border-border/70 bg-surface px-4 py-3 text-sm text-text-secondary" aria-label="Phân trang dữ liệu Hacom Cloud"><span>Hiển thị {items.length ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0}–{Math.min(currentPage * ITEMS_PER_PAGE, items.length)} của {items.length} mục</span><div className="ml-auto flex items-center gap-1"><button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-surface-overlay disabled:cursor-not-allowed disabled:opacity-40" aria-label="Trang trước"><ChevronLeft className="h-4 w-4" aria-hidden /></button>{Array.from({ length: pageCount }, (_, index) => index + 1).slice(0, 5).map((page) => <button type="button" key={page} onClick={() => setCurrentPage(page)} className={`h-8 min-w-8 rounded-lg px-2 ${page === currentPage ? "bg-primary text-white" : "hover:bg-surface-overlay"}`} aria-current={page === currentPage ? "page" : undefined}>{page}</button>)}<button type="button" disabled={currentPage >= pageCount} onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-surface-overlay disabled:cursor-not-allowed disabled:opacity-40" aria-label="Trang sau"><ChevronRight className="h-4 w-4" aria-hidden /></button></div></nav>
+          <nav className="flex flex-wrap items-center gap-3 rounded-2xl border border-border/70 bg-surface px-4 py-3 text-sm text-text-secondary" aria-label="Phân trang dữ liệu Hacom Cloud"><span>Hiển thị {items.length ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0}–{Math.min(currentPage * ITEMS_PER_PAGE, items.length)} của {workspace.summary && !filterCount(appliedFilters) && !debouncedQuery ? workspace.summary.totalCount : items.length}{workspace.nextCursor ? "+" : ""} mục</span><div className="ml-auto flex items-center gap-1"><button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-surface-overlay disabled:cursor-not-allowed disabled:opacity-40" aria-label="Trang trước"><ChevronLeft className="h-4 w-4" aria-hidden /></button>{Array.from({ length: pageCount }, (_, index) => index + 1).slice(0, 5).map((page) => <button type="button" key={page} onClick={() => goToPage(page)} className={`h-8 min-w-8 rounded-lg px-2 ${page === currentPage ? "bg-primary text-white" : "hover:bg-surface-overlay"}`} aria-current={page === currentPage ? "page" : undefined}>{page}</button>)}<button type="button" disabled={currentPage >= pageCount} onClick={() => goToPage(Math.min(pageCount, currentPage + 1))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-surface-overlay disabled:cursor-not-allowed disabled:opacity-40" aria-label="Trang sau"><ChevronRight className="h-4 w-4" aria-hidden /></button></div></nav>
         </section>
       </div>
       <CloudQuotaRequestDialog isOpen={isUpgradeOpen} quota={workspace.quota} currentRequest={workspace.quotaRequest} isLoading={workspace.isRequestingQuota} onClose={() => setIsUpgradeOpen(false)} onSubmit={workspace.requestQuota} />
@@ -324,3 +386,48 @@ const ManageTableRow: React.FC<ManageItemProps & { menuOpen: boolean; onToggleMe
 const ManageGridCard: React.FC<ManageItemProps> = ({ item, selected, onToggleSelect, onOpen, onDownload, onTrash }) => (
   <article className={`relative rounded-2xl border p-4 transition-colors ${selected ? "border-primary bg-primary/5" : "border-border/70 hover:bg-surface-overlay"}`}><div className="flex items-start gap-3"><label className="mt-1 flex items-center"><input type="checkbox" checked={selected} onChange={onToggleSelect} aria-label={`${selected ? "Bỏ chọn" : "Chọn"} ${titleFor(item)}`} className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30" /></label><button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left"><CloudItemIcon type={item.type} /><span className="min-w-0"><span className="block truncate text-sm font-semibold text-text-primary">{titleFor(item)}</span><span className="mt-1 block text-xs text-text-secondary">{typeLabel[item.type]} · {formatBytes(item.sizeBytes)}</span></span></button></div><div className="mt-4 flex items-center justify-end gap-1"><button type="button" disabled={!isDownloadable(item)} onClick={onDownload} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-30" aria-label="Tải xuống"><Download className="h-4 w-4" aria-hidden /></button><button type="button" onClick={onTrash} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary hover:bg-red-50 hover:text-red-600" aria-label="Chuyển vào Thùng rác"><Trash2 className="h-4 w-4" aria-hidden /></button></div></article>
 );
+
+const FilterChip: React.FC<{ label: string; onRemove?: () => void }> = ({ label, onRemove }) => (
+  <span className="inline-flex h-7 items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-2.5 text-xs font-medium text-primary">
+    {label}
+    {onRemove ? <button type="button" onClick={onRemove} className="rounded-full p-0.5 hover:bg-primary/15" aria-label={`Bỏ lọc ${label}`}><X className="h-3.5 w-3.5" aria-hidden /></button> : null}
+  </span>
+);
+
+const CloudFilterPopover: React.FC<{
+  filters: ManageFilters;
+  onChange: (filters: ManageFilters) => void;
+  onApply: () => void;
+  onReset: () => void;
+  onClose: () => void;
+}> = ({ filters, onChange, onApply, onReset, onClose }) => {
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const handleOutside = (event: PointerEvent) => {
+      if (popoverRef.current && event.target instanceof Node && !popoverRef.current.contains(event.target)) onClose();
+    };
+    const handleKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    document.addEventListener("pointerdown", handleOutside);
+    document.addEventListener("keydown", handleKey);
+    return () => { document.removeEventListener("pointerdown", handleOutside); document.removeEventListener("keydown", handleKey); };
+  }, [onClose]);
+  const sizeKey = sizeOptions.find((option) => option.minSizeBytes === filters.minSizeBytes && option.maxSizeBytes === filters.maxSizeBytes)?.value ?? "all";
+  const dateInvalid = Boolean(filters.from && filters.to && filters.from > filters.to);
+  const dateInput = (value?: string) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const pad = (part: number) => String(part).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  };
+  const updateDate = (key: "from" | "to", value: string) => onChange({ ...filters, [key]: value ? new Date(`${value}T${key === "from" ? "00:00:00" : "23:59:59.999"}`).toISOString() : undefined });
+  return <div ref={popoverRef} className="absolute right-0 top-12 z-30 w-[min(380px,calc(100vw-2rem))] rounded-2xl border border-border bg-surface p-4 shadow-[0_18px_45px_rgba(15,23,42,0.18)]" role="dialog" aria-label="Bộ lọc Cloud">
+    <div className="flex items-center justify-between"><div><h3 className="text-sm font-semibold text-text-primary">Bộ lọc nâng cao</h3><p className="mt-0.5 text-xs text-text-secondary">Lọc chính xác nội dung trong toàn bộ Cloud</p></div><button type="button" onClick={onClose} className="rounded-lg p-1.5 text-text-secondary hover:bg-surface-overlay" aria-label="Đóng bộ lọc"><X className="h-4 w-4" aria-hidden /></button></div>
+    <div className="mt-4 space-y-4">
+      <fieldset><legend className="mb-2 text-xs font-semibold text-text-secondary">Loại nội dung</legend><div className="grid grid-cols-2 gap-1.5">{(["all", "image", "video", "file", "audio", "text", "link"] as Filter[]).map((type) => <button type="button" key={type} onClick={() => onChange({ ...filters, type })} className={`rounded-lg border px-2.5 py-2 text-left text-xs transition-colors ${filters.type === type ? "border-primary/50 bg-primary/8 font-medium text-primary" : "border-border/70 text-text-secondary hover:bg-surface-overlay"}`}>{type === "all" ? "Tất cả" : typeLabel[type]}</button>)}</div></fieldset>
+      <fieldset><legend className="mb-2 text-xs font-semibold text-text-secondary">Ngày gửi</legend><div className="flex flex-wrap gap-1.5">{([{ value: "today", label: "Hôm nay" }, { value: "7days", label: "7 ngày qua" }, { value: "30days", label: "30 ngày qua" }] as const).map((preset) => <button type="button" key={preset.value} onClick={() => onChange({ ...filters, ...datePreset(preset.value) })} className="rounded-full border border-border/70 px-2.5 py-1.5 text-xs text-text-secondary hover:border-primary/40 hover:text-primary">{preset.label}</button>)}<button type="button" onClick={() => onChange({ ...filters, from: undefined, to: undefined })} className="rounded-full border border-border/70 px-2.5 py-1.5 text-xs text-text-secondary hover:border-primary/40 hover:text-primary">Bất kỳ ngày nào</button></div><div className="mt-2 grid grid-cols-2 gap-2"><label className="text-xs text-text-secondary">Từ<input type="date" value={dateInput(filters.from)} onChange={(event) => updateDate("from", event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-border/70 bg-background px-2 text-xs text-text-primary outline-none focus:border-primary/60" /></label><label className="text-xs text-text-secondary">Đến<input type="date" value={dateInput(filters.to)} onChange={(event) => updateDate("to", event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-border/70 bg-background px-2 text-xs text-text-primary outline-none focus:border-primary/60" /></label></div></fieldset>
+      <label className="block text-xs font-semibold text-text-secondary">Dung lượng<select value={sizeKey} onChange={(event) => { const option = sizeOptions.find((candidate) => candidate.value === event.target.value) ?? sizeOptions[0]; onChange({ ...filters, minSizeBytes: option.minSizeBytes, maxSizeBytes: option.maxSizeBytes }); }} className="mt-2 h-10 w-full rounded-lg border border-border/70 bg-background px-2.5 text-sm font-normal text-text-primary outline-none focus:border-primary/60">{sizeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+    </div>
+    {dateInvalid ? <p className="mt-2 text-xs text-red-600">Ngày bắt đầu phải trước ngày kết thúc.</p> : null}<div className="mt-4 flex items-center justify-between border-t border-border/70 pt-3"><button type="button" onClick={onReset} className="text-xs font-medium text-text-secondary hover:text-primary">Đặt lại</button><div className="flex gap-2"><button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-xs font-medium text-text-secondary hover:bg-surface-overlay">Hủy</button><button type="button" disabled={dateInvalid} onClick={onApply} className="rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50">Áp dụng</button></div></div>
+  </div>;
+};
