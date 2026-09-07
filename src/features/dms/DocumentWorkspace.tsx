@@ -6,6 +6,8 @@ import {
   ArrowDownTrayIcon,
   ArrowPathIcon,
   ArrowUpTrayIcon,
+  ArrowsPointingInIcon,
+  ArrowsPointingOutIcon,
   ChevronRightIcon,
   DocumentPlusIcon,
   DocumentTextIcon,
@@ -30,9 +32,43 @@ type DetailTab = "summary" | "files" | "history" | "tasks";
 type ActionMode = "edit" | "submit" | "approve" | "return" | "reject" | "register" | "issue" | "distribute" | "recall" | "archive";
 type WorkspaceView = "work" | "documents" | "archive" | "configuration" | "reports";
 type WorkType = "PROCESSING" | "APPROVAL" | "INCOMING" | "DUE_SOON";
+type SortBy = "updatedAt" | "subject" | "documentDate";
+type SortOrder = "asc" | "desc";
 const DOCUMENT_PAGE_SIZE = 50;
 const LIFECYCLE_STATES = ["DRAFT", "REGISTERED", "ISSUED", "COMPLETED", "ARCHIVED", "CANCELLED"];
 const WORK_TYPES: WorkType[] = ["PROCESSING", "APPROVAL", "INCOMING", "DUE_SOON"];
+
+const directionFromParams = (params: URLSearchParams): DirectionFilter => {
+  const direction = params.get("direction");
+  return ["INCOMING", "OUTGOING", "INTERNAL"].includes(direction ?? "") ? direction as DmsDirection : "ALL";
+};
+
+const lifecycleStateFromParams = (params: URLSearchParams): string | null => {
+  const state = params.get("state");
+  return LIFECYCLE_STATES.includes(state ?? "") ? state : null;
+};
+
+const workspaceFromParams = (params: URLSearchParams): WorkspaceView => {
+  const workspace = params.get("workspace");
+  return ["documents", "archive", "configuration", "reports"].includes(workspace ?? "") ? workspace as WorkspaceView : "work";
+};
+
+const workTypeFromParams = (params: URLSearchParams): WorkType | null => {
+  const workType = params.get("workType");
+  return WORK_TYPES.includes(workType as WorkType) ? workType as WorkType : null;
+};
+
+const detailTabFromParams = (params: URLSearchParams): DetailTab => {
+  const tab = params.get("tab");
+  return ["summary", "files", "history", "tasks"].includes(tab ?? "") ? tab as DetailTab : "summary";
+};
+
+const sortByFromParams = (params: URLSearchParams): SortBy => {
+  const sortBy = params.get("sortBy");
+  return ["updatedAt", "subject", "documentDate"].includes(sortBy ?? "") ? sortBy as SortBy : "updatedAt";
+};
+
+const sortOrderFromParams = (params: URLSearchParams): SortOrder => params.get("sortOrder") === "asc" ? "asc" : "desc";
 
 const formatDate = (value?: string | null): string => value
   ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value))
@@ -54,16 +90,23 @@ export default function DocumentWorkspace(): React.ReactElement {
   const { t } = useTranslation("dms");
   const [authReady, setAuthReady] = React.useState(Boolean(getDmsAccessToken()));
   const [authError, setAuthError] = React.useState(false);
+  const [oauthCallbackPending, setOauthCallbackPending] = React.useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return Boolean(params.get("code") || params.get("error"));
+  });
+  const autoAuthorizationAttempted = React.useRef(false);
   const [principal, setPrincipal] = React.useState<DmsPrincipal | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialDirection = searchParams.get("direction");
-  const [direction, setDirection] = React.useState<DirectionFilter>(["INCOMING", "OUTGOING", "INTERNAL"].includes(initialDirection ?? "") ? initialDirection as DmsDirection : "ALL");
-  const initialLifecycleState = searchParams.get("state");
-  const [lifecycleState, setLifecycleState] = React.useState<string | null>(LIFECYCLE_STATES.includes(initialLifecycleState ?? "") ? initialLifecycleState : null);
-  const [documentType, setDocumentType] = React.useState<string | null>(searchParams.get("documentType") || null);
-  const [search, setSearch] = React.useState(searchParams.get("search") || "");
-  const initialWorkType = searchParams.get("workType");
-  const [workType, setWorkType] = React.useState<WorkType | null>(WORK_TYPES.includes(initialWorkType as WorkType) ? initialWorkType as WorkType : null);
+  const direction = directionFromParams(searchParams);
+  const lifecycleState = lifecycleStateFromParams(searchParams);
+  const documentType = searchParams.get("documentType") || null;
+  const documentDateFrom = searchParams.get("documentDateFrom") || null;
+  const documentDateTo = searchParams.get("documentDateTo") || null;
+  const processorScope = searchParams.get("processorScope") === "ME" ? "ME" : null;
+  const search = searchParams.get("search") || "";
+  const workType = workTypeFromParams(searchParams);
+  const sortBy = sortByFromParams(searchParams);
+  const sortOrder = sortOrderFromParams(searchParams);
   const [documents, setDocuments] = React.useState<DmsDocument[]>([]);
   const [workQueue, setWorkQueue] = React.useState<DmsWorkQueue | null>(null);
   const [total, setTotal] = React.useState(0);
@@ -77,30 +120,49 @@ export default function DocumentWorkspace(): React.ReactElement {
       return next;
     });
   };
-  const setListFilter = (name: "direction" | "state" | "documentType" | "search", value: string | null): void => {
+  const setListFilter = React.useCallback((name: "direction" | "state" | "documentType" | "documentDateFrom" | "documentDateTo" | "search", value: string | null, replace = false): void => {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       if (value) next.set(name, value); else next.delete(name);
       next.delete("page");
       return next;
+    }, { replace });
+  }, [setSearchParams]);
+  const setSort = (patch: Partial<{ sortBy: SortBy; sortOrder: SortOrder }>): void => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      const nextSortBy = patch.sortBy ?? sortByFromParams(current);
+      const nextSortOrder = patch.sortOrder ?? sortOrderFromParams(current);
+      if (nextSortBy === "updatedAt") next.delete("sortBy"); else next.set("sortBy", nextSortBy);
+      if (nextSortOrder === "desc") next.delete("sortOrder"); else next.set("sortOrder", nextSortOrder);
+      next.delete("page");
+      return next;
     });
   };
   const selectedId = dmsDocumentId(searchParams.get("documentId"));
+  const detailTab = detailTabFromParams(searchParams);
   const [loadedDocument, setSelected] = React.useState<DmsDocument | null>(null);
   const [createDirection, setCreateDirection] = React.useState<DmsDirection>("INTERNAL");
   const selected = loadedDocument?.id === selectedId ? loadedDocument : null;
   const [loading, setLoading] = React.useState(false);
+  const [searchDraft, setSearchDraft] = React.useState(search);
+  const [searchComposing, setSearchComposing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [createOpen, setCreateOpen] = React.useState(false);
-  const [detailTab, setDetailTab] = React.useState<DetailTab>("summary");
   const [actionMode, setActionMode] = React.useState<ActionMode | null>(null);
-  const [view, setView] = React.useState<WorkspaceView>(() => {
-    const workspace = searchParams.get("workspace");
-    return ["documents", "archive", "configuration", "reports"].includes(workspace ?? "") ? workspace as WorkspaceView : "work";
-  });
+  const workspaceRef = React.useRef<HTMLElement>(null);
+  const [isFullscreen, setIsFullscreen] = React.useState(false);
+  const [view, setView] = React.useState<WorkspaceView>(() => workspaceFromParams(searchParams));
   const setSelectedId = (id: string): void => {
-    setSearchParams((current) => { const next = new URLSearchParams(current); next.set("documentId", id); next.set("workspace", view); return next; });
+    setSearchParams((current) => { const next = new URLSearchParams(current); next.set("documentId", id); next.set("workspace", view); next.delete("tab"); return next; });
+  };
+  const setDetailTab = (tab: DetailTab): void => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (tab === "summary") next.delete("tab"); else next.set("tab", tab);
+      return next;
+    });
   };
 
   React.useEffect(() => {
@@ -108,8 +170,15 @@ export default function DocumentWorkspace(): React.ReactElement {
       .then((completed) => {
         if (completed) { setAuthReady(true); setSearchParams(new URLSearchParams(window.location.search), { replace: true }); }
       })
-      .catch(() => setAuthError(true));
+      .catch(() => setAuthError(true))
+      .finally(() => setOauthCallbackPending(false));
   }, [setSearchParams]);
+
+  React.useEffect(() => {
+    if (authReady || authError || oauthCallbackPending || autoAuthorizationAttempted.current) return;
+    autoAuthorizationAttempted.current = true;
+    void beginDmsAuthorization().catch(() => setAuthError(true));
+  }, [authError, authReady, oauthCallbackPending]);
 
   React.useEffect(() => {
     if (!authReady) return;
@@ -121,13 +190,30 @@ export default function DocumentWorkspace(): React.ReactElement {
       });
   }, [authReady, t]);
 
+  React.useEffect(() => { setSearchDraft(search); }, [search]);
+
+  React.useEffect(() => {
+    if (searchComposing) return;
+    const timer = window.setTimeout(() => {
+      const nextSearch = searchDraft.trim();
+      if (nextSearch !== search) setListFilter("search", nextSearch || null, true);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [search, searchComposing, searchDraft, setListFilter]);
+
+  React.useEffect(() => {
+    const syncFullscreen = (): void => setIsFullscreen(document.fullscreenElement === workspaceRef.current);
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    return () => document.removeEventListener("fullscreenchange", syncFullscreen);
+  }, []);
+
   React.useEffect(() => {
     if (!principal || !["work", "documents", "archive"].includes(view)) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setLoading(true);
       setError(null);
-      void dmsApi.list({ direction: direction === "ALL" ? null : direction, state: lifecycleState, documentType, archiveState: view === "archive" ? "ARCHIVED" : "ACTIVE", queue: view === "work" ? "WORK" : null, workType: view === "work" ? workType : null, search, page, pageSize: DOCUMENT_PAGE_SIZE })
+      void dmsApi.list({ direction: direction === "ALL" ? null : direction, state: lifecycleState, documentType, documentDateFrom, documentDateTo, processorScope, archiveState: view === "archive" ? "ARCHIVED" : "ACTIVE", queue: view === "work" ? "WORK" : null, workType: view === "work" ? workType : null, search, sortBy, sortOrder, page, pageSize: DOCUMENT_PAGE_SIZE })
         .then((result) => {
           if (controller.signal.aborted) return;
           setDocuments(result.items);
@@ -144,7 +230,7 @@ export default function DocumentWorkspace(): React.ReactElement {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [direction, documentType, lifecycleState, page, principal, refreshKey, search, t, view, workType]);
+  }, [direction, documentDateFrom, documentDateTo, documentType, lifecycleState, page, principal, processorScope, refreshKey, search, sortBy, sortOrder, t, view, workType]);
 
   React.useEffect(() => {
     if (!principal) return;
@@ -163,6 +249,22 @@ export default function DocumentWorkspace(): React.ReactElement {
   }, [selectedId, principal, refreshKey, t]);
 
   const refresh = (): void => setRefreshKey((value) => value + 1);
+  const toggleFullscreen = async (): Promise<void> => {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await workspaceRef.current?.requestFullscreen();
+  };
+  const hasListFilters = direction !== "ALL" || lifecycleState !== null || documentType !== null || documentDateFrom !== null || documentDateTo !== null || processorScope !== null || search !== "" || sortBy !== "updatedAt" || sortOrder !== "desc";
+  const clearListFilters = (): void => setSearchParams((current) => {
+    const next = new URLSearchParams(current);
+    ["direction", "state", "documentType", "documentDateFrom", "documentDateTo", "processorScope", "search", "sortBy", "sortOrder", "page"].forEach((name) => next.delete(name));
+    return next;
+  });
+  const closeDetail = (): void => setSearchParams((current) => {
+    const next = new URLSearchParams(current);
+    next.delete("documentId");
+    next.delete("tab");
+    return next;
+  });
   const capabilities = new Set(principal?.capabilities ?? []);
 
   if (!authReady) {
@@ -179,7 +281,7 @@ export default function DocumentWorkspace(): React.ReactElement {
   }
 
   return (
-    <section className="w-full overflow-hidden rounded-xl border border-border bg-surface shadow-sm" aria-labelledby="dms-title" data-testid="dms-workspace">
+    <section ref={workspaceRef} className={`w-full overflow-hidden rounded-xl border border-border bg-surface shadow-sm ${isFullscreen ? "h-full overflow-y-auto" : ""}`} aria-labelledby="dms-title" data-testid="dms-workspace">
       <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
         <div>
           <div className="flex items-center gap-2">
@@ -189,18 +291,19 @@ export default function DocumentWorkspace(): React.ReactElement {
           <p className="mt-1 text-sm text-text-secondary">{t("subtitle", { employeeCode: principal?.employeeCode ?? "…" })}</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="secondary" size="sm" leftIcon={isFullscreen ? <ArrowsPointingInIcon /> : <ArrowsPointingOutIcon />} onClick={() => void toggleFullscreen()}>{t(isFullscreen ? "actions.exitFullscreen" : "actions.fullscreen")}</Button>
           <Button variant="secondary" size="sm" leftIcon={<ArrowPathIcon />} onClick={refresh}>{t("actions.refresh")}</Button>
           {view === "documents" && capabilities.has("document.draft.manage") && <><Button size="sm" variant="secondary" leftIcon={<ArrowUpTrayIcon />} onClick={() => { setCreateDirection("INCOMING"); setCreateOpen(true); }}>{t("actions.digitize")}</Button><Button size="sm" leftIcon={<DocumentPlusIcon />} onClick={() => { setCreateDirection("INTERNAL"); setCreateOpen(true); }}>{t("actions.createDraft")}</Button></>}
         </div>
       </header>
 
       {workQueue && Object.values(workQueue).some((count) => count > 0) && <div className="flex flex-wrap gap-x-5 gap-y-2 border-b border-border bg-surface-overlay px-4 py-2 text-sm sm:px-5" aria-label={t("queue.label")} data-testid="dms-work-queue">
-        {(["processing", "approvals", "incoming", "dueSoon"] as const).filter((key) => workQueue[key] > 0).map((key) => <button key={key} type="button" onClick={() => { const type = ({ processing: "PROCESSING", approvals: "APPROVAL", incoming: "INCOMING", dueSoon: "DUE_SOON" } as const)[key]; setView("work"); setWorkType(type); setSearchParams((current) => { const next = new URLSearchParams(current); next.set("workspace", "work"); next.set("workType", type); next.delete("page"); return next; }); }} className="text-left text-text-secondary hover:text-text-primary focus-visible:ring-2 focus-visible:ring-focus">{t(`queue.${key}`)} <strong className="text-text-primary">{workQueue[key]}</strong></button>)}
+        {(["processing", "approvals", "incoming", "dueSoon"] as const).filter((key) => workQueue[key] > 0).map((key) => <button key={key} type="button" onClick={() => { const type = ({ processing: "PROCESSING", approvals: "APPROVAL", incoming: "INCOMING", dueSoon: "DUE_SOON" } as const)[key]; setView("work"); setSearchParams((current) => { const next = new URLSearchParams(current); next.set("workspace", "work"); next.set("workType", type); next.delete("page"); return next; }); }} className="text-left text-text-secondary hover:text-text-primary focus-visible:ring-2 focus-visible:ring-focus">{t(`queue.${key}`)} <strong className="text-text-primary">{workQueue[key]}</strong></button>)}
       </div>}
 
-      <nav className="flex flex-wrap border-b border-border px-3 lg:flex-nowrap lg:overflow-x-auto sm:px-5" aria-label={t("navigation.label")} data-testid="dms-primary-navigation">{(["work", "documents", "archive", "configuration", "reports"] as const).filter((item) => item !== "reports" || capabilities.has("document.report.read")).map((item) => <button key={item} type="button" aria-current={view === item ? "page" : undefined} onClick={() => { setView(item); setSearchParams((current) => { const next = new URLSearchParams(current); next.set("workspace", item); next.delete("page"); return next; }); if (["work", "documents", "archive"].includes(item)) setLifecycleState(null); }} className={`min-h-11 shrink-0 border-b-2 px-3 text-sm font-semibold ${view === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>{t(`navigation.${item}`)}</button>)}</nav>
+      <nav className="flex flex-wrap border-b border-border px-3 lg:flex-nowrap lg:overflow-x-auto sm:px-5" aria-label={t("navigation.label")} data-testid="dms-primary-navigation">{(["work", "documents", "archive", "configuration", "reports"] as const).filter((item) => item !== "reports" || capabilities.has("document.report.read")).map((item) => <button key={item} type="button" aria-current={view === item ? "page" : undefined} onClick={() => { setView(item); setSearchParams((current) => { const next = new URLSearchParams(current); next.set("workspace", item); next.delete("page"); if (["work", "documents", "archive"].includes(item)) next.delete("state"); if (item !== "work") next.delete("workType"); return next; }); }} className={`min-h-11 shrink-0 border-b-2 px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-focus ${view === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>{t(`navigation.${item}`)}</button>)}</nav>
 
-      {view === "configuration" && principal ? <DmsAdministration principal={principal} /> : view === "reports" ? <DmsReport canExport={capabilities.has("document.report.export")} onDrillDown={(group, filters) => { const nextView = group.lifecycle_state === "ARCHIVED" ? "archive" : "documents"; setDirection(group.direction as DmsDirection); setLifecycleState(group.lifecycle_state); setDocumentType(filters.documentType ?? null); setView(nextView); setSearchParams((current) => { const next = new URLSearchParams(current); next.set("workspace", nextView); next.set("direction", group.direction); next.set("state", group.lifecycle_state); if (filters.documentType) next.set("documentType", filters.documentType); else next.delete("documentType"); next.delete("page"); return next; }); }} /> : <>
+      {view === "configuration" && principal ? <DmsAdministration principal={principal} /> : view === "reports" ? <DmsReport canExport={capabilities.has("document.report.export")} onDrillDown={(group, filters) => { const nextView = group.lifecycle_state === "ARCHIVED" ? "archive" : "documents"; setView(nextView); setSearchParams((current) => { const next = new URLSearchParams(current); next.set("workspace", nextView); next.set("direction", group.direction); next.set("state", group.lifecycle_state); if (filters.documentType) next.set("documentType", filters.documentType); else next.delete("documentType"); if (filters.processorScope) next.set("processorScope", filters.processorScope); else next.delete("processorScope"); next.delete("page"); return next; }); }} /> : <>
 
       {createOpen && principal && (
         <CreateDocumentPanel key={createDirection} principal={principal} defaultDirection={createDirection} onClose={() => setCreateOpen(false)} onCreated={(id) => { setCreateOpen(false); setSelectedId(id); refresh(); }} />
@@ -209,45 +312,75 @@ export default function DocumentWorkspace(): React.ReactElement {
       <div className="border-b border-border px-3 pt-2 sm:px-5">
         <div className="flex flex-wrap lg:flex-nowrap lg:overflow-x-auto" role="group" aria-label={t("filters.direction")} data-testid="dms-direction-tabs">
           {(["ALL", "INCOMING", "OUTGOING", "INTERNAL"] as const).map((item) => (
-            <button key={item} type="button" aria-pressed={direction === item} onClick={() => { setDirection(item); setListFilter("direction", item === "ALL" ? null : item); }} className={`min-h-10 shrink-0 border-b-2 px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-focus ${direction === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>
+            <button key={item} type="button" aria-pressed={direction === item} onClick={() => setListFilter("direction", item === "ALL" ? null : item)} className={`min-h-10 shrink-0 border-b-2 px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-focus ${direction === item ? "border-primary text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}>
               {t(`directions.${item}`)}
             </button>
           ))}
         </div>
-        <div className="my-3 flex flex-wrap gap-3">
+        <div className="my-3 flex flex-wrap items-end gap-3">
           <label className="relative block min-w-[16rem] max-w-xl flex-1">
             <span className="sr-only">{t("filters.search")}</span>
             <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-text-muted" aria-hidden="true" />
-            <input value={search} onChange={(event) => { const value = event.target.value; setSearch(value); setListFilter("search", value || null); }} className="min-h-10 w-full rounded-lg border border-border bg-background pl-10 pr-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-border-focus focus:ring-2 focus:ring-focus/20" placeholder={t("filters.searchPlaceholder")} />
-          </label>
-          <label className="grid gap-1 text-xs font-semibold text-text-secondary">
-            {t("fields.documentType")}
-            <input value={documentType ?? ""} onChange={(event) => { const value = event.target.value || null; setDocumentType(value); setListFilter("documentType", value); }} className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm font-normal text-text-primary outline-none placeholder:text-text-muted focus:border-border-focus focus:ring-2 focus:ring-focus/20" maxLength={120} />
+            <input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} onCompositionStart={() => setSearchComposing(true)} onCompositionEnd={(event) => { setSearchComposing(false); setSearchDraft(event.currentTarget.value); }} className="min-h-10 w-full rounded-lg border border-border bg-background pl-10 pr-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-border-focus focus:ring-2 focus:ring-focus/20" placeholder={t("filters.searchPlaceholder")} />
           </label>
           <label className="grid gap-1 text-xs font-semibold text-text-secondary">
             {t("filters.state")}
-            <select value={lifecycleState ?? ""} onChange={(event) => { const value = event.target.value || null; setLifecycleState(value); setListFilter("state", value); }} className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm font-normal text-text-primary outline-none focus:border-border-focus focus:ring-2 focus:ring-focus/20">
+            <select value={lifecycleState ?? ""} onChange={(event) => setListFilter("state", event.target.value || null)} className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm font-normal text-text-primary outline-none focus:border-border-focus focus:ring-2 focus:ring-focus/20">
               <option value="">{t("filters.allStates")}</option>
               {["DRAFT", "REGISTERED", "ISSUED", "COMPLETED"].map((state) => <option key={state} value={state}>{t(`lifecycle.${state}`, { defaultValue: state })}</option>)}
             </select>
           </label>
+          <details className="group grid gap-1 text-xs font-semibold text-text-secondary">
+            <span>{t("filters.advanced")}</span>
+            <summary className="flex min-h-10 cursor-pointer items-center rounded-lg border border-border bg-background px-3 text-sm font-semibold text-text-secondary marker:content-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-focus">{t("filters.more")}</summary>
+            <div className="mt-3 flex flex-wrap gap-3 rounded-lg border border-border bg-surface-overlay p-3">
+              <label className="grid gap-1 text-xs font-semibold text-text-secondary">
+                {t("fields.documentType")}
+                <input value={documentType ?? ""} onChange={(event) => setListFilter("documentType", event.target.value || null)} placeholder={t("filters.documentTypePlaceholder")} className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm font-normal text-text-primary outline-none placeholder:text-text-muted focus:border-border-focus focus:ring-2 focus:ring-focus/20" maxLength={120} />
+              </label>
+          {view !== "work" && <><label className="grid gap-1 text-xs font-semibold text-text-secondary">
+            {t("filters.documentDateFrom")}
+            <input type="date" value={documentDateFrom ?? ""} onChange={(event) => setListFilter("documentDateFrom", event.target.value || null)} className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm font-normal text-text-primary outline-none focus:border-border-focus focus:ring-2 focus:ring-focus/20" />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-text-secondary">
+            {t("filters.documentDateTo")}
+            <input type="date" value={documentDateTo ?? ""} onChange={(event) => setListFilter("documentDateTo", event.target.value || null)} className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm font-normal text-text-primary outline-none focus:border-border-focus focus:ring-2 focus:ring-focus/20" />
+          </label></>}
+          <label className="grid gap-1 text-xs font-semibold text-text-secondary">
+            {t("filters.sortBy")}
+            <select value={sortBy} onChange={(event) => setSort({ sortBy: event.target.value as SortBy })} className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm font-normal text-text-primary outline-none focus:border-border-focus focus:ring-2 focus:ring-focus/20">
+              <option value="updatedAt">{t("filters.sortUpdatedAt")}</option>
+              <option value="subject">{t("filters.sortSubject")}</option>
+              <option value="documentDate">{t("filters.sortDocumentDate")}</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-text-secondary">
+            {t("filters.sortOrder")}
+            <select value={sortOrder} onChange={(event) => setSort({ sortOrder: event.target.value as SortOrder })} className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm font-normal text-text-primary outline-none focus:border-border-focus focus:ring-2 focus:ring-focus/20">
+              <option value="desc">{t("filters.sortDescending")}</option>
+              <option value="asc">{t("filters.sortAscending")}</option>
+            </select>
+          </label>
+            </div>
+          </details>
+          {hasListFilters && <Button className="self-end" size="sm" variant="secondary" onClick={clearListFilters}>{t("filters.clear")}</Button>}
         </div>
       </div>
 
       {error ? (
         <ErrorState title={t("errors.listTitle")} message={error} onRetry={refresh} />
       ) : (
-        <div className="grid min-h-[420px] lg:grid-cols-[minmax(320px,42%)_minmax(0,1fr)]">
-          <div className="border-b border-border lg:border-b-0 lg:border-r">
+        <div className="grid min-h-[420px] xl:grid-cols-[minmax(320px,42%)_minmax(0,1fr)]">
+          <div className={`border-b border-border xl:border-b-0 xl:border-r ${selectedId ? "hidden xl:block" : ""}`}>
             <div className="flex min-h-10 items-center justify-between border-b border-border px-4 text-sm">
               <span className="font-semibold text-text-primary">{t(view === "archive" ? "archive.title" : view === "work" ? "queue.title" : "list.title")}</span>
               <span className="text-text-muted" aria-live="polite">{t("list.total", { count: total })}</span>
             </div>
-            <div className="max-h-[620px] overflow-y-auto">
-              {loading ? <div className="p-4"><SkeletonText lines={5} /></div> : documents.length === 0 ? (
-                <EmptyState title={t(view === "archive" ? "archive.empty" : view === "work" ? "queue.empty" : "list.empty")} description={t(view === "archive" ? "archive.emptyDescription" : view === "work" ? "queue.emptyDescription" : "list.emptyDescription")} />
+            <div className="max-h-[620px] overflow-y-auto" aria-busy={loading}>
+              {loading ? <div className="p-4" role="status"><span className="sr-only">{t("common:loading.default")}</span><SkeletonText lines={5} /></div> : documents.length === 0 ? (
+                <EmptyState title={t(view === "archive" ? "archive.empty" : view === "work" ? "queue.empty" : "list.empty")} description={t(view === "archive" ? "archive.emptyDescription" : view === "work" ? "queue.emptyDescription" : "list.emptyDescription")} action={hasListFilters ? { label: t("filters.clear"), onClick: clearListFilters, variant: "secondary" } : view === "documents" && capabilities.has("document.draft.manage") ? { label: t("actions.createDraft"), onClick: () => { setCreateDirection("INTERNAL"); setCreateOpen(true); } } : undefined} />
               ) : documents.map((document) => (
-                <button key={document.id} data-testid="dms-document-row" type="button" onClick={() => { setSelectedId(document.id); setDetailTab("summary"); setActionMode(null); }} className={`grid w-full grid-cols-[1fr_auto] gap-3 border-b border-border px-4 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus ${selectedId === document.id ? "bg-primary/8" : "hover:bg-surface-hover"}`}>
+                <button key={document.id} data-testid="dms-document-row" type="button" onClick={() => { setSelectedId(document.id); setActionMode(null); }} className={`grid w-full grid-cols-[1fr_auto] gap-3 border-b border-border px-4 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus ${selectedId === document.id ? "bg-primary/8" : "hover:bg-surface-hover"}`}>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold text-text-primary">{document.subject}</span>
                     <span className="mt-1 block truncate text-xs text-text-secondary">{document.document_number ?? t("list.noNumber")} · {t(`directions.${document.direction}`)}</span>
@@ -263,11 +396,10 @@ export default function DocumentWorkspace(): React.ReactElement {
               <Button size="sm" variant="secondary" disabled={page >= Math.ceil(total / DOCUMENT_PAGE_SIZE)} onClick={() => setPage((value) => Math.min(Math.ceil(total / DOCUMENT_PAGE_SIZE), value + 1))}>{t("pagination.next")}</Button>
             </div>}
           </div>
-          {selected ? (
-            <DocumentDetail document={selected} subjectId={principal?.subjectId ?? ""} capabilities={capabilities} tab={detailTab} onTab={setDetailTab} actionMode={actionMode} onAction={setActionMode} onRefresh={refresh} />
-          ) : (
-            <EmptyState icon={<DocumentTextIcon className="h-full w-full" />} title={t("detail.selectTitle")} description={t("detail.selectDescription")} />
-          )}
+          <div className={selectedId ? "block" : "hidden xl:block"}>
+            {selectedId && <div className="border-b border-border p-3 xl:hidden"><Button size="sm" variant="secondary" onClick={closeDetail}>{t("detail.backToList")}</Button></div>}
+            {selected ? <DocumentDetail document={selected} subjectId={principal?.subjectId ?? ""} capabilities={capabilities} tab={detailTab} onTab={setDetailTab} actionMode={actionMode} onAction={setActionMode} onRefresh={refresh} /> : selectedId ? <div className="p-4" role="status"><span className="sr-only">{t("common:loading.default")}</span><SkeletonText lines={6} /></div> : <EmptyState icon={<DocumentTextIcon className="h-full w-full" />} title={t("detail.selectTitle")} description={t("detail.selectDescription")} />}
+          </div>
         </div>
       )}
       </>}
@@ -281,11 +413,15 @@ export const CreateDocumentPanel: React.FC<{ principal: DmsPrincipal; defaultDir
   const [error, setError] = React.useState<string | null>(null);
   const [organizationId, setOrganizationId] = React.useState(principal.organizationIds[0] ?? "");
   const [templates, setTemplates] = React.useState<Array<Record<string, unknown>>>([]);
+  const [documentTypes, setDocumentTypes] = React.useState<Array<Record<string, unknown>>>([]);
   React.useEffect(() => {
     let active = true;
     if (organizationId) void dmsApi.templates(organizationId).then((items) => { if (active) setTemplates(items as Array<Record<string, unknown>>); }).catch(() => { if (active) setTemplates([]); });
+    if (organizationId) void dmsApi.catalogs(organizationId, "DOCUMENT_TYPE").then((items) => { if (active) setDocumentTypes(items as Array<Record<string, unknown>>); }).catch(() => { if (active) setDocumentTypes([]); });
     return () => { active = false; };
   }, [organizationId]);
+  const documentTypeOptions = new Map<string, string>(standardDocumentTypes.map((code): [string, string] => [code, t(`documentTypes.${code}`)]));
+  documentTypes.filter((item) => item.status === "ACTIVE").forEach((item) => documentTypeOptions.set(String(item.code), String(item.name)));
   const submit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -317,7 +453,7 @@ export const CreateDocumentPanel: React.FC<{ principal: DmsPrincipal; defaultDir
         <Field label={t("fields.organization")}><select name="organizationId" required value={organizationId} onChange={(event) => setOrganizationId(event.target.value)}>{principal.organizationIds.map((id, index) => <option key={id} value={id}>{`${t("fields.organizationScope")}${principal.organizationIds.length > 1 ? ` ${index + 1}` : ""}`}</option>)}</select></Field>
         <Field label={t("fields.direction")}><select name="direction" required defaultValue={defaultDirection}><option value="INCOMING">{t("directions.INCOMING")}</option><option value="OUTGOING">{t("directions.OUTGOING")}</option><option value="INTERNAL">{t("directions.INTERNAL")}</option></select></Field>
         <Field label={t("fields.template")}><select name="templateVersionId"><option value="">{t("create.withoutTemplate")}</option>{templates.map((item) => <option key={String(item.latest_version_id)} value={String(item.latest_version_id)}>{String(item.name)} · v{String(item.version)}</option>)}</select></Field>
-        <Field label={t("fields.documentType")}><input name="documentType" required maxLength={120} /></Field>
+        <Field label={t("fields.documentType")}><select name="documentType" required defaultValue=""><option value="" disabled>{t("filters.documentTypePlaceholder")}</option>{[...documentTypeOptions].map(([code, name]) => <option key={code} value={code}>{name}</option>)}</select></Field>
         <Field label={t("fields.confidentiality")}><select name="confidentiality"><option value="NORMAL">{t("confidentiality.NORMAL")}</option><option value="CONFIDENTIAL">{t("confidentiality.CONFIDENTIAL")}</option><option value="SECRET">{t("confidentiality.SECRET")}</option></select></Field>
         <Field label={t("fields.subject")} className="sm:col-span-2"><input name="subject" required maxLength={500} /></Field>
         <Field label={t("fields.documentDate")}><input name="documentDate" type="date" /></Field>
@@ -334,11 +470,16 @@ const Field: React.FC<{ label: string; children: React.ReactElement<{ className?
   <label className={`grid gap-1 text-xs font-semibold text-text-secondary ${className ?? ""}`}>{label}{React.cloneElement(children, { className: "min-h-10 w-full rounded-md border border-border bg-surface px-3 text-sm font-normal text-text-primary outline-none focus:border-border-focus focus:ring-2 focus:ring-focus/20" })}</label>
 );
 
+const standardDocumentTypes = ["CONG_VAN", "THONG_BAO", "QUYET_DINH", "TO_TRINH", "BAO_CAO"];
+
 const DocumentDetail: React.FC<{ document: DmsDocument; subjectId: string; capabilities: Set<string>; tab: DetailTab; onTab: (tab: DetailTab) => void; actionMode: ActionMode | null; onAction: (mode: ActionMode | null) => void; onRefresh: () => void }> = ({ document, subjectId, capabilities, tab: selectedTab, onTab, actionMode, onAction, onRefresh }) => {
   const { t } = useTranslation("dms");
   const available = actionsFor(document, capabilities, subjectId);
   const tabs = (["summary", "files", "history", "tasks"] as const).filter((item) => item !== "history" || document.access?.history === true);
   const tab = tabs.includes(selectedTab) ? selectedTab : "summary";
+  React.useEffect(() => {
+    if (tab !== selectedTab) onTab(tab);
+  }, [onTab, selectedTab, tab]);
   const handleTabKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const index = tabs.indexOf(tab);
     const nextIndex = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index - 1 + tabs.length) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : index;
@@ -358,9 +499,9 @@ const DocumentDetail: React.FC<{ document: DmsDocument; subjectId: string; capab
       {actionMode && <ActionPanel document={document} mode={actionMode} onClose={() => onAction(null)} onDone={() => { onAction(null); onRefresh(); }} />}
       <div className="flex overflow-x-auto border-b border-border" role="tablist" onKeyDown={handleTabKeyDown}>{tabs.map((item) => <button key={item} id={`dms-${document.id}-tab-${item}`} type="button" role="tab" aria-controls={`dms-${document.id}-panel-${item}`} aria-selected={tab === item} tabIndex={tab === item ? 0 : -1} onClick={() => onTab(item)} className={`min-h-10 border-b-2 px-4 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-focus ${tab === item ? "border-primary text-primary" : "border-transparent text-text-secondary"}`}>{t(`detail.tabs.${item}`)}</button>)}</div>
       <div id={`dms-${document.id}-panel-${tab}`} role="tabpanel" aria-labelledby={`dms-${document.id}-tab-${tab}`} tabIndex={0} className="max-h-[470px] overflow-y-auto p-4">
-        {tab === "summary" && <dl className="grid gap-3 sm:grid-cols-2"><Datum label={t("fields.organization")} value={t("fields.organizationScope")} /><Datum label={t("fields.documentType")} value={document.document_type} />{templateProvenance && <Datum label={t("fields.templateProvenance")} value={templateProvenance} />}<Datum label={t("fields.confidentiality")} value={t(`confidentiality.${document.confidentiality}`)} /><Datum label={t("fields.documentDate")} value={formatDate(document.document_date)} /><Datum label={t("fields.dueDate")} value={formatDate(document.due_date)} /><Datum label={t("fields.approval")} value={document.approval_state} /><Datum label={t("fields.distribution")} value={document.distribution_state} /><Datum label={t("fields.signing")} value={document.signing_state} /></dl>}
+        {tab === "summary" && <dl className="grid gap-3 sm:grid-cols-2"><Datum label={t("fields.organization")} value={t("fields.organizationScope")} /><Datum label={t("fields.documentType")} value={t(`documentTypes.${document.document_type}`, { defaultValue: document.document_type })} />{templateProvenance && <Datum label={t("fields.templateProvenance")} value={templateProvenance} />}<Datum label={t("fields.confidentiality")} value={t(`confidentiality.${document.confidentiality}`)} /><Datum label={t("fields.documentDate")} value={formatDate(document.document_date)} /><Datum label={t("fields.dueDate")} value={formatDate(document.due_date)} /><Datum label={t("fields.approval")} value={t(`approvalState.${document.approval_state}`, { defaultValue: document.approval_state })} /><Datum label={t("fields.distribution")} value={t(`distributionState.${document.distribution_state}`, { defaultValue: document.distribution_state })} /><Datum label={t("fields.signing")} value={t(`signingState.${document.signing_state}`, { defaultValue: document.signing_state })} /></dl>}
         {tab === "files" && <Files key={document.id} document={document} canUpload={capabilities.has("document.draft.manage") && document.lifecycle_state === "DRAFT"} canPreview={capabilities.has("document.file.read")} canDownload={capabilities.has("document.file.download")} onRefresh={onRefresh} />}
-        {tab === "history" && <div className="space-y-3">{document.history?.map((event) => <div key={event.id} className="rounded-lg border border-border p-3"><div className="flex justify-between gap-3"><span className="font-semibold text-text-primary">{t(`history.actions.${event.action}`, { defaultValue: event.action.replaceAll("_", " ") })}</span><span className="text-xs text-text-muted">{formatDate(event.occurred_at)}</span></div><p className="mt-1 text-xs text-text-secondary">{event.result}{event.reason_code ? ` · ${event.reason_code}` : ""}</p></div>) ?? null}</div>}
+        {tab === "history" && <div className="space-y-3">{document.history?.map((event) => <div key={event.id} className="rounded-lg border border-border p-3"><div className="flex justify-between gap-3"><span className="font-semibold text-text-primary">{t(`history.actions.${event.action}`, { defaultValue: event.action.replaceAll("_", " ") })}</span><span className="text-xs text-text-muted">{formatDate(event.occurred_at)}</span></div><p className="mt-1 text-xs text-text-secondary">{event.actor_subject_id ?? String(event.metadata.actorType ?? "—")} · {t(`historyResult.${event.result}`, { defaultValue: event.result })}{event.reason_code ? ` · ${event.reason_code}` : ""}</p></div>) ?? null}</div>}
         {tab === "tasks" && <DocumentTasks key={document.id} tasks={document.tasks ?? []} subjectId={subjectId} canProcess={capabilities.has("document.process")} onRefresh={onRefresh} />}
       </div>
     </article>
@@ -425,16 +566,20 @@ const Files: React.FC<{ document: DmsDocument; canUpload: boolean; canPreview: b
   return <div className="space-y-3">{canUpload && <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-primary/40 px-3 text-sm font-semibold text-primary"><ArrowUpTrayIcon className="h-4 w-4" />{t("files.upload")}<input className="sr-only" type="file" accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={busy} onChange={(event) => void upload(event)} /></label>}{document.files?.map((file) => <div key={file.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"><div className="min-w-0"><p className="truncate text-sm font-semibold text-text-primary">{file.filename}</p><p className="text-xs text-text-muted">{Math.ceil(file.content_length / 1024)} KB · {file.integrity_state}</p></div><div className="flex gap-1">{canPreview && <IconButton icon={<EyeIcon />} aria-label={t("files.preview")} size="sm" disabled={busy} onClick={() => void open(file.id, false)} />}{canDownload && <IconButton icon={<ArrowDownTrayIcon />} aria-label={t("files.download")} size="sm" disabled={busy} onClick={() => void open(file.id, true)} />}</div></div>)}</div>;
 };
 
-const ActionPanel: React.FC<{ document: DmsDocument; mode: ActionMode; onClose: () => void; onDone: () => void }> = ({ document, mode, onClose, onDone }) => {
+export const ActionPanel: React.FC<{ document: DmsDocument; mode: ActionMode; onClose: () => void; onDone: () => void }> = ({ document, mode, onClose, onDone }) => {
   const { t } = useTranslation("dms");
   const [workflows, setWorkflows] = React.useState<Array<Record<string, unknown>>>([]);
   const [books, setBooks] = React.useState<Array<Record<string, unknown>>>([]);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   React.useEffect(() => {
-    if (mode === "submit") void dmsApi.workflows(document.organization_id).then((items) => setWorkflows(items as Array<Record<string, unknown>>));
-    if (mode === "issue" || mode === "register") void dmsApi.books(document.organization_id, document.direction).then((items) => setBooks(items as Array<Record<string, unknown>>));
-  }, [document.direction, document.organization_id, mode]);
+    let active = true;
+    const fail = (cause: unknown): void => { if (active) setError(errorMessage(cause, t)); };
+    setError(null);
+    if (mode === "submit") void dmsApi.workflows(document.organization_id).then((items) => { if (active) setWorkflows(items as Array<Record<string, unknown>>); }).catch(fail);
+    if (mode === "issue" || mode === "register") void dmsApi.books(document.organization_id, document.direction).then((items) => { if (active) setBooks(items as Array<Record<string, unknown>>); }).catch(fail);
+    return () => { active = false; };
+  }, [document.direction, document.organization_id, mode, t]);
   const submit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);

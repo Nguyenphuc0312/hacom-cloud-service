@@ -163,22 +163,24 @@ export const ErrorState: React.FC<{
   const resolvedMessage = message ?? t("error:generic.requestFailed");
 
   return (
-    <EmptyState
-      icon={
-        <ExclamationTriangleIcon className="h-full w-full text-danger/55" />
-      }
-      title={resolvedTitle}
-      description={resolvedMessage}
-      action={
-        onRetry
-          ? {
-            label: t("common:actions.retry"),
-            onClick: onRetry,
-            variant: "primary",
-          }
-          : undefined
-      }
-    />
+    <div role="alert" aria-live="assertive">
+      <EmptyState
+        icon={
+          <ExclamationTriangleIcon className="h-full w-full text-danger/55" />
+        }
+        title={resolvedTitle}
+        description={resolvedMessage}
+        action={
+          onRetry
+            ? {
+              label: t("common:actions.retry"),
+              onClick: onRetry,
+              variant: "primary",
+            }
+            : undefined
+        }
+      />
+    </div>
   );
 };
 

@@ -39,6 +39,26 @@ describe("DMS API trust boundary", () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("archiveState=ARCHIVED");
   });
 
+  it("passes only the selected server-whitelisted sort parameters", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ items: [], total: 0, page: 1, pageSize: 50 }), { status: 200, headers: { "content-type": "application/json" } }));
+    await dmsApi.list({ sortBy: "documentDate", sortOrder: "asc", pageSize: 50 });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("sortBy=documentDate");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("sortOrder=asc");
+  });
+
+  it("passes document-date bounds only as list query filters", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ items: [], total: 0, page: 1, pageSize: 50 }), { status: 200, headers: { "content-type": "application/json" } }));
+    await dmsApi.list({ documentDateFrom: "2026-01-01", documentDateTo: "2026-01-31", pageSize: 50 });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("documentDateFrom=2026-01-01");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("documentDateTo=2026-01-31");
+  });
+
+  it("passes the caller-only processor scope as a list query filter", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ items: [], total: 0, page: 1, pageSize: 50 }), { status: 200, headers: { "content-type": "application/json" } }));
+    await dmsApi.list({ processorScope: "ME", pageSize: 50 });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("processorScope=ME");
+  });
+
   it("loads the server-scoped work queue without client-side organization input", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ processing: 1, approvals: 0, incoming: 2, dueSoon: 1 }), { status: 200, headers: { "content-type": "application/json" } }));
     await expect(dmsApi.workQueue()).resolves.toMatchObject({ processing: 1, incoming: 2 });

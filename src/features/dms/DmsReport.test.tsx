@@ -12,13 +12,15 @@ it("filters grouped reports and drills into the selected authorized result set",
   const onDrillDown = vi.fn();
   render(<DmsReport onDrillDown={onDrillDown} />);
   await screen.findByText("directions.OUTGOING");
+  expect(screen.getByRole("status").textContent).toContain("2");
   fireEvent.change(screen.getByLabelText("fields.direction"), { target: { value: "OUTGOING" } });
   fireEvent.change(screen.getByLabelText("report.state"), { target: { value: "ISSUED" } });
   fireEvent.change(screen.getByLabelText("fields.documentType"), { target: { value: "CONG_VAN" } });
+  fireEvent.click(screen.getByLabelText("report.onlyMyProcessing"));
   fireEvent.click(screen.getByRole("button", { name: "report.run" }));
-  await waitFor(() => expect(report).toHaveBeenLastCalledWith({ direction: "OUTGOING", state: "ISSUED", documentType: "CONG_VAN", from: undefined, to: undefined }));
+  await waitFor(() => expect(report).toHaveBeenLastCalledWith({ direction: "OUTGOING", state: "ISSUED", documentType: "CONG_VAN", from: undefined, to: undefined, processorScope: "ME" }));
   fireEvent.click(screen.getByRole("button", { name: "report.drillDown" }));
-  expect(onDrillDown).toHaveBeenCalledWith({ direction: "OUTGOING", lifecycle_state: "ISSUED", count: 2 }, { direction: "OUTGOING", state: "ISSUED", documentType: "CONG_VAN", from: undefined, to: undefined });
+  expect(onDrillDown).toHaveBeenCalledWith({ direction: "OUTGOING", lifecycle_state: "ISSUED", count: 2 }, { direction: "OUTGOING", state: "ISSUED", documentType: "CONG_VAN", from: undefined, to: undefined, processorScope: "ME" });
 });
 
 it("shows export only when the server-granted capability is present", async () => {

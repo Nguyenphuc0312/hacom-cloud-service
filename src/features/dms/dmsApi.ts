@@ -35,7 +35,7 @@ export type DmsDocument = {
   versions?: Array<{ id: string; version: number; metadata: Record<string, unknown>; created_at: string; template_code_snapshot: string | null; template_name_snapshot: string | null; template_version_number: number | null }>;
 };
 export type DmsFile = { id: string; filename: string; content_type: string; content_length: number; file_role: string; integrity_state: string };
-export type DmsHistory = { id: string; action: string; result: string; reason_code: string | null; metadata: Record<string, unknown>; occurred_at: string };
+export type DmsHistory = { id: string; actor_subject_id?: string | null; action: string; result: string; reason_code: string | null; metadata: Record<string, unknown>; occurred_at: string };
 export type DmsTask = { id: string; assignee_subject_id: string; role: string; state: string; revision: number; due_at: string | null; started_at: string | null };
 export type DmsList = { items: DmsDocument[]; total: number; page: number; pageSize: number };
 export type DmsWorkQueue = { processing: number; approvals: number; incoming: number; dueSoon: number };
@@ -107,8 +107,8 @@ export const dmsApi = {
     if (!response.ok) throw new DmsApiError(response.status, "DMS_FILE_UNAVAILABLE");
     return response.blob();
   },
-  report: (filters: { from?: string; to?: string; direction?: string; state?: string; documentType?: string } = {}) => request<{ groups: Array<{ direction: string; lifecycle_state: string; count: number }>; total: number }>(`/reports/summary${query(filters)}`),
-  exportReport: async (filters: { from?: string; to?: string; direction?: string; state?: string; documentType?: string } = {}): Promise<Blob> => {
+  report: (filters: { from?: string; to?: string; direction?: string; state?: string; documentType?: string; processorScope?: "ME" } = {}) => request<{ groups: Array<{ direction: string; lifecycle_state: string; count: number }>; total: number }>(`/reports/summary${query(filters)}`),
+  exportReport: async (filters: { from?: string; to?: string; direction?: string; state?: string; documentType?: string; processorScope?: "ME" } = {}): Promise<Blob> => {
     const token = getDmsAccessToken();
     if (!token) throw new DmsApiError(401, "DMS_AUTH_REQUIRED");
     const response = await fetch(`${DMS_API_BASE_URL}/reports/export${query(filters)}`, { headers: { authorization: `Bearer ${token}`, "x-request-id": crypto.randomUUID() }, signal: AbortSignal.timeout(20_000) });

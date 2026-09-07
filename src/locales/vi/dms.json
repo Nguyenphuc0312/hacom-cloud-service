@@ -25,8 +25,21 @@
     "direction": "Loại văn bản",
     "search": "Tìm văn bản",
     "searchPlaceholder": "Tìm theo trích yếu hoặc số văn bản",
+    "documentDateFrom": "Từ ngày văn bản",
+    "documentDateTo": "Đến ngày văn bản",
     "state": "Trạng thái",
-    "allStates": "Mọi trạng thái"
+    "allStates": "Mọi trạng thái",
+    "sortBy": "Sắp xếp theo",
+    "sortOrder": "Thứ tự",
+    "sortUpdatedAt": "Cập nhật gần nhất",
+    "sortSubject": "Trích yếu",
+    "sortDocumentDate": "Ngày văn bản",
+    "sortDescending": "Giảm dần",
+    "sortAscending": "Tăng dần",
+    "advanced": "Bộ lọc nâng cao",
+    "more": "Mở bộ lọc",
+    "clear": "Xóa bộ lọc",
+    "documentTypePlaceholder": "Chọn loại hồ sơ"
   },
   "list": {
     "title": "Danh sách văn bản",
@@ -40,6 +53,7 @@
   "detail": {
     "selectTitle": "Chọn một văn bản",
     "selectDescription": "Thông tin, tệp, lịch sử và công việc sẽ hiển thị tại đây.",
+    "backToList": "Quay lại danh sách",
     "tabs": {
       "summary": "Thông tin",
       "files": "Tệp",
@@ -47,6 +61,7 @@
       "tasks": "Xử lý"
     }
   },
+  "historyResult": { "ALLOW": "Được phép theo chính sách", "DENY": "Bị từ chối theo chính sách" },
   "create": { "title": "Tạo hồ sơ văn bản", "withoutTemplate": "Không dùng mẫu" },
   "history": { "actions": { "DOCUMENT_CREATED": "Đã tạo văn bản", "DOCUMENT_VERSION_CREATED": "Đã tạo phiên bản", "DOCUMENT_FILE_ATTACHED": "Đã đính kèm tệp", "WORKFLOW_SUBMITTED": "Đã trình duyệt", "APPROVAL_STEP_COMPLETED": "Đã hoàn thành bước duyệt", "DOCUMENT_APPROVED": "Đã phê duyệt", "DOCUMENT_REJECTED": "Đã từ chối", "DOCUMENT_RETURNED": "Đã trả lại", "DOCUMENT_ISSUED": "Đã phát hành", "INCOMING_DOCUMENT_REGISTERED": "Đã đăng ký văn bản đến", "DOCUMENT_DISTRIBUTED": "Đã phân phối", "DOCUMENT_DISTRIBUTION_RECALLED": "Đã thu hồi phân phối", "PROCESSING_STARTED": "Đã bắt đầu xử lý", "PROCESSING_COMPLETED": "Đã hoàn thành xử lý", "DOCUMENT_ARCHIVED": "Đã lưu trữ", "DOCUMENT_BOOK_CREATED": "Đã tạo sổ văn bản", "WORKFLOW_VERSION_CREATED": "Đã tạo phiên bản luồng", "TEMPLATE_VERSION_CREATED": "Đã tạo phiên bản mẫu", "TEMPLATE_STATUS_CHANGED": "Đã thay đổi trạng thái mẫu", "CATALOG_ITEM_VERSIONED": "Đã cập nhật phiên bản danh mục" } },
   "fields": {
@@ -70,6 +85,7 @@
     "recipientSubject": "Mã người nhận (không bắt buộc)",
     "processorSubject": "Mã người xử lý chính (không bắt buộc)"
   },
+  "documentTypes": { "CONG_VAN": "Công văn", "THONG_BAO": "Thông báo", "QUYET_DINH": "Quyết định", "TO_TRINH": "Tờ trình", "BAO_CAO": "Báo cáo" },
   "actions": {
     "edit": "Chỉnh sửa bản nháp",
     "refresh": "Làm mới",
@@ -90,7 +106,9 @@
     "recall": "Thu hồi phân phối",
     "archive": "Lưu trữ",
     "start": "Bắt đầu",
-    "complete": "Hoàn thành"
+    "complete": "Hoàn thành",
+    "fullscreen": "Toàn màn hình",
+    "exitFullscreen": "Thoát toàn màn hình"
   },
   "actionPanel": {
     "edit": "Chỉnh sửa thông tin bản nháp",
@@ -122,13 +140,19 @@
     "empty": "Chưa có cấu hình đang hoạt động.",
     "unnamed": "Cấu hình chưa đặt tên",
     "readOnly": "Bạn được xem cấu hình nhưng không có quyền thay đổi khu vực này.",
+    "readOnlyUnavailable": "Bạn không có quyền xem loại cấu hình này. Hãy liên hệ quản trị viên DMS nếu cần truy cập.",
     "invalid": "Không lưu được cấu hình. Kiểm tra dữ liệu, quyền và mã không trùng.",
+    "saved": "Đã lưu cấu hình.",
     "save": "Lưu phiên bản",
     "create": { "templates": "Tạo phiên bản mẫu", "workflows": "Tạo phiên bản luồng", "books": "Tạo sổ văn bản", "catalogs": "Cập nhật danh mục" },
     "fields": { "code": "Mã", "name": "Tên", "content": "Nội dung JSON", "activate": "Kích hoạt ngay", "actors": "Mã người duyệt theo thứ tự", "actorsHint": "Mỗi mã cách nhau bằng dấu phẩy", "prefix": "Tiền tố", "suffix": "Hậu tố", "catalogType": "Loại danh mục", "displayOrder": "Thứ tự", "status": "Trạng thái" },
+    "catalogTypes": { "URGENCY": "Độ khẩn", "CONFIDENTIALITY": "Độ mật", "DELIVERY_METHOD": "Hình thức gửi", "DOCUMENT_GROUP": "Nhóm văn bản", "DOCUMENT_TYPE": "Loại văn bản" },
     "searchTemplates": "Tìm mẫu", "searchTemplatesPlaceholder": "Mã hoặc tên mẫu", "statusChangeFailed": "Chưa cập nhật được trạng thái mẫu. Hãy tải lại và thử lại.", "templateStatus": { "DRAFT": "Bản nháp", "ACTIVE": "Đang dùng", "INACTIVE": "Ngừng dùng", "ARCHIVED": "Đã lưu trữ" }, "templateActions": { "ACTIVE": "Kích hoạt", "INACTIVE": "Ngừng dùng", "ARCHIVED": "Lưu trữ" }
   },
-  "report": { "title": "Báo cáo tổng hợp", "description": "Số lượng văn bản theo loại và trạng thái trong phạm vi được cấp.", "from": "Từ ngày", "to": "Đến ngày", "run": "Xem báo cáo", "export": "Xuất CSV", "total": "Tổng văn bản", "state": "Trạng thái", "count": "Số lượng", "allDirections": "Tất cả loại văn bản", "allStates": "Tất cả trạng thái", "drillDown": "Xem danh sách", "errorTitle": "Không thể tải báo cáo" },
+  "approvalState": { "NOT_REQUIRED": "Không cần phê duyệt", "PENDING": "Chờ phê duyệt", "APPROVED": "Đã phê duyệt", "RETURNED": "Đã trả lại", "REJECTED": "Đã từ chối" },
+  "distributionState": { "NOT_DISTRIBUTED": "Chưa phân phối", "DISTRIBUTED": "Đã phân phối", "RECALLED": "Đã thu hồi" },
+  "signingState": { "NOT_REQUIRED": "Không yêu cầu ký số", "PENDING": "Chờ ký số", "SIGNED": "Đã ký số" },
+  "report": { "title": "Báo cáo tổng hợp", "description": "Số lượng văn bản theo loại và trạng thái trong phạm vi được cấp.", "from": "Từ ngày", "to": "Đến ngày", "run": "Xem báo cáo", "export": "Xuất CSV", "total": "Tổng văn bản", "state": "Trạng thái", "count": "Số lượng", "allDirections": "Tất cả loại văn bản", "allStates": "Tất cả trạng thái", "onlyMyProcessing": "Chỉ việc tôi xử lý", "drillDown": "Xem danh sách", "errorTitle": "Không thể tải báo cáo" },
   "errors": {
     "oauth": "Không hoàn tất được phiên SSO DMS. Vui lòng kết nối lại.",
     "principal": "Không xác định được phạm vi và quyền DMS hiện tại.",

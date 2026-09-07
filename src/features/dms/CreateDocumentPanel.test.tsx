@@ -8,6 +8,7 @@ vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => k
 
 it("uses the supplied direction and creates an outgoing draft from the selected active template version", async () => {
   vi.spyOn(dmsApi, "templates").mockResolvedValue([{ latest_version_id: "template-v2", name: "Mẫu đi", version: 2 }]);
+  vi.spyOn(dmsApi, "catalogs").mockResolvedValue([{ code: "THONG_BAO", name: "Thông báo", status: "ACTIVE" }]);
   const create = vi.spyOn(dmsApi, "create").mockResolvedValue({ id: "document-1" });
   const created = vi.fn();
   const principal = { organizationIds: ["organization-1"] } as DmsPrincipal;
