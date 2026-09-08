@@ -23,7 +23,7 @@ import { useChatUiStore } from "../../../features/chat/state/chatUiStore";
 import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
 import { useFriendshipStore } from "../../../stores/friendshipStore";
 import { enrichUserProfile } from "../../../services/enrichUserProfile";
-import type { Conversation, UserStatus, UserSummary } from "../../../types";
+import type { Conversation, Message, UserStatus, UserSummary } from "../../../types";
 import {
   getConversationAvatar,
   getConversationDisplayName,
@@ -46,12 +46,15 @@ import { resolveForwardErrorMessage } from "../../../features/chat/forwardErrorM
 import {
   useForwardMessagesMutation,
   useDeleteMessageMutation,
+  useSendMessageMutation,
 } from "../../../features/api/chatApi";
 import { toast } from "../../ui";
 import { extractApiError } from "../../../lib/apiContract";
 import { conversationApi } from "../../../services/api";
 import { PersonalCloudAvatar } from "../../../features/cloud/components/PersonalCloudAvatar";
 import { isPersonalCloudConversation, personalCloudPresentation } from "../../../features/cloud/personalCloudPolicy";
+import { CLOUD_CONVERSATION_ID } from "../../../features/cloud/constants";
+import { sendCloudItemsToChat } from "../../../features/cloud/utils/sendCloudItemsToChat";
 import {
   ConversationLabelChips,
   ConversationLabelMarker,
@@ -880,6 +883,7 @@ export const RoomItemContainer = React.memo(
     // it here immediately, with an undo toast.
     const [isDropTarget, setIsDropTarget] = useState(false);
     const [forwardMessages] = useForwardMessagesMutation();
+    const [sendMessage] = useSendMessageMutation();
     const [deleteMessage] = useDeleteMessageMutation();
 
     const handleTogglePinned = React.useCallback(
@@ -1027,15 +1031,37 @@ export const RoomItemContainer = React.memo(
 
         void (async () => {
           try {
-            const result = await forwardMessages({
-              items: (payload.messageIds?.length
-                ? payload.messageIds
-                : [payload.messageId]
-              ).map((sourceMessageId) => ({
-                sourceMessageId,
-                targetConversationId: conversationId,
-              })),
-            }).unwrap();
+            const sourceIds = payload.messageIds?.length
+              ? payload.messageIds
+              : [payload.messageId];
+            const isCloudSource =
+              payload.sourceConversationId === CLOUD_CONVERSATION_ID;
+            let forwarded: Message[];
+            if (isCloudSource) {
+              const result = await sendCloudItemsToChat({
+                userId: currentUser.id,
+                itemIds: sourceIds,
+                targetConversationIds: [conversationId],
+                sendMessage: (input) => sendMessage(input).unwrap(),
+              });
+              forwarded = result.messagesByTarget[conversationId] ?? [];
+              if (result.failures.length > 0) {
+                toast.error(
+                  forwarded.length > 0
+                    ? `Đã gửi ${forwarded.length} tin, còn ${result.failures.length} tin chưa gửi được`
+                    : "Không thể chuyển tiếp tin nhắn vào Chat",
+                );
+                return;
+              }
+            } else {
+              const result = await forwardMessages({
+                items: sourceIds.map((sourceMessageId) => ({
+                  sourceMessageId,
+                  targetConversationId: conversationId,
+                })),
+              }).unwrap();
+              forwarded = result.messages ?? [];
+            }
 
             // Same name the sidebar shows: alias ("tên gợi nhớ") wins over the
             // enriched/HR name, which wins over the raw conversation name.
@@ -1044,7 +1070,6 @@ export const RoomItemContainer = React.memo(
               enrichedName ||
               getConversationDisplayName(conversation!, currentUser.id) ||
               i18n.t("common:labels.conversation");
-            const forwarded = result.messages ?? [];
             toast.action(
               i18n.t("chat:message.forward.quickSent", {
                 name: targetName,
@@ -1073,6 +1098,7 @@ export const RoomItemContainer = React.memo(
         alias,
         enrichedName,
         forwardMessages,
+        sendMessage,
         deleteMessage,
       ],
     );

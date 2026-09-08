@@ -20,6 +20,7 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ChatHeader } from "../../../components/chat/ChatHeader";
+import { ForwardModal } from "../../../components/chat/ForwardModal";
 import { PinnedMessageBar } from "../../../components/chat/PinnedMessageBar";
 import PinnedMessagesPanel from "../../../components/chat/PinnedMessagesPanel";
 import { MessageInput } from "../../../components/input/MessageInput";
@@ -236,6 +237,7 @@ export default function CloudPage() {
   const [trashNow, setTrashNow] = useState(() => Date.now());
   const [deleteTarget, setDeleteTarget] = useState<CloudItem | null>(null);
   const [selectedDeleteItems, setSelectedDeleteItems] = useState<CloudItem[]>([]);
+  const [cloudForwardMessages, setCloudForwardMessages] = useState<Message[] | null>(null);
   const timelineScrollTopRef = useRef<number | null>(null);
   const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);
   const [isPinnedPanelOpen, setIsPinnedPanelOpen] = useState(false);
@@ -1058,6 +1060,14 @@ export default function CloudPage() {
     [navigate],
   );
 
+  const handleCloudForward = useCallback(
+    (message: Message) => {
+      if (viewMode !== "active") return;
+      setCloudForwardMessages([message]);
+    },
+    [viewMode],
+  );
+
   const noopMessageAction = useCallback(
     (_message: Message) => {
       void _message;
@@ -1467,20 +1477,11 @@ export default function CloudPage() {
     exitSelectionMode();
   }, [exitSelectionMode, getSelectedShareText]);
 
-  const handleShareSelected = useCallback(async () => {
-    const text = getSelectedShareText();
-    if (!text) return;
-    try {
-      if (navigator.share) {
-        await navigator.share({ text });
-      } else {
-        await navigator.clipboard.writeText(text);
-      }
-      exitSelectionMode();
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
-    }
-  }, [exitSelectionMode, getSelectedShareText]);
+  const handleShareSelected = useCallback(() => {
+    if (viewMode !== "active" || selectedMessages.length === 0) return;
+    setCloudForwardMessages(selectedMessages);
+    exitSelectionMode();
+  }, [exitSelectionMode, selectedMessages, viewMode]);
 
   return (
     <AppShell
@@ -1605,7 +1606,7 @@ export default function CloudPage() {
               messages={visibleMessages}
               onReply={noopMessageAction}
               onReact={noopMessageIdAction}
-              onForward={noopMessageAction}
+              onForward={handleCloudForward}
               onPin={handleCloudPin}
               onEdit={noopMessageAction}
               onDelete={handleDeleteRequest}
@@ -1681,15 +1682,17 @@ export default function CloudPage() {
                     <Copy className="h-4 w-4" aria-hidden />
                     <span className="hidden sm:inline">{t("chat:message.actions.copy", { defaultValue: "Sao chép" })}</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleShareSelected()}
-                    disabled={selectedMessageIds.size === 0}
-                    className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-40"
-                  >
-                    <Share2 className="h-4 w-4" aria-hidden />
-                    <span className="hidden sm:inline">Chia sẻ</span>
-                  </button>
+                  {viewMode === "active" ? (
+                    <button
+                      type="button"
+                      onClick={handleShareSelected}
+                      disabled={selectedMessageIds.size === 0}
+                      className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-40"
+                    >
+                      <Share2 className="h-4 w-4" aria-hidden />
+                      <span className="hidden sm:inline">Chia sẻ</span>
+                    </button>
+                  ) : null}
                   {viewMode === "trash" ? (
                     <button
                       type="button"
@@ -2001,6 +2004,15 @@ export default function CloudPage() {
         onTrash={handleDialogTrash}
         onPermanentDelete={handleDialogPermanentDelete}
       />
+      {cloudForwardMessages ? (
+        <ForwardModal
+          messages={cloudForwardMessages}
+          source="cloud"
+          cloudItems={cloudItems}
+          currentUserId={currentUser.id}
+          onClose={() => setCloudForwardMessages(null)}
+        />
+      ) : null}
     </AppShell>
   );
 }

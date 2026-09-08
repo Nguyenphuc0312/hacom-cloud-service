@@ -33,17 +33,28 @@ import type { FileIconType } from "../../utils/formatFileSize";
 import { FileTypeIcon } from "../message/FileTypeIcon";
 import { Avatar } from "../common/Avatar";
 import { toast } from "../ui";
-import { useForwardMessagesMutation } from "../../features/api/chatApi";
+import {
+  useForwardMessagesMutation,
+  useSendMessageMutation,
+} from "../../features/api/chatApi";
 import { resolveForwardErrorMessage } from "../../features/chat/forwardErrorMessage";
 import { messageApi } from "../../services/api";
 import { CLOUD_CONVERSATION_ID } from "../../features/cloud/constants";
 import { cloudApi } from "../../features/cloud/api/cloudApi";
 import { saveChatMessagesToCloud } from "../../features/cloud/utils/saveChatMessagesToCloud";
+import {
+  sendCloudItemsToChat,
+  type CloudToChatResult,
+} from "../../features/cloud/utils/sendCloudItemsToChat";
+import type { CloudItem } from "../../features/cloud/types";
 
 type TabKey = "recent" | "groups" | "friends";
 
 interface ForwardModalProps {
   messages: Message[];
+  /** Cloud uses the same picker UI, but copies items into Chat as new messages. */
+  source?: "chat" | "cloud";
+  cloudItems?: readonly CloudItem[];
   /** Current user id — resolves DM display names correctly. */
   currentUserId: string;
   onClose: () => void;
@@ -221,6 +232,8 @@ const buildPreview = (messages: Message[]): ForwardPreview => {
 
 export const ForwardModal: React.FC<ForwardModalProps> = ({
   messages,
+  source = "chat",
+  cloudItems,
   currentUserId,
   onClose,
 }) => {
@@ -245,6 +258,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [isSavingToCloud, setIsSavingToCloud] = React.useState(false);
   const [forwardMessages, { isLoading }] = useForwardMessagesMutation();
+  const [sendMessage] = useSendMessageMutation();
 
   // Fetch full profiles for DM partners so remembered/HR names show (same as
   // the sidebar). TTL-cached, so re-running on list changes is cheap.
@@ -275,10 +289,11 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
   }, [conversations, tab, query, currentUserId, enrichedNames]);
 
   const showCloudTarget = React.useMemo(() => {
+    if (source === "cloud") return false;
     if (tab !== "recent") return false;
     const q = query.trim().toLowerCase();
     return !q || "my documents hacom cloud cloud của tôi".includes(q);
-  }, [query, tab]);
+  }, [query, source, tab]);
 
   // Recent = activity order (as stored). Groups/Friends = alphabetical sections.
   const sections = React.useMemo(() => {
@@ -325,6 +340,44 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
     if (selected.size === 0 || messages.length === 0) return;
 
     const targets = Array.from(selected);
+    if (source === "cloud") {
+      setIsSavingToCloud(true);
+      try {
+        const result: CloudToChatResult = await sendCloudItemsToChat({
+          userId: currentUserId,
+          itemIds: messages.map((message) => message.id),
+          items: cloudItems,
+          targetConversationIds: targets,
+          note,
+          sendMessage: (input) => sendMessage(input).unwrap(),
+        });
+        const failedCount = result.failures.length;
+        const sentCount = Object.values(result.messagesByTarget).reduce(
+          (total, sent) => total + sent.length,
+          0,
+        );
+        if (failedCount > 0) {
+          toast.error(
+            sentCount > 0
+              ? `Đã chuyển ${sentCount} tin nhắn, ${failedCount} tin nhắn chưa gửi được`
+              : "Không thể chuyển tiếp tin nhắn vào Chat",
+          );
+          return;
+        }
+        toast.success(
+          t("chat:message.forward.success", {
+            defaultValue: "Đã chuyển tiếp tin nhắn",
+          }),
+        );
+        onClose();
+      } catch (error) {
+        toast.error(resolveForwardErrorMessage(error));
+      } finally {
+        setIsSavingToCloud(false);
+      }
+      return;
+    }
+
     const includeCloud = selected.has(CLOUD_CONVERSATION_ID);
     const chatTargets = targets.filter(
       (target) => target !== CLOUD_CONVERSATION_ID,
