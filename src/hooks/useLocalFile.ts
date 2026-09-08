@@ -16,7 +16,10 @@ import {
   markFileDownloaded,
   subscribeDownloadedFiles,
 } from "../utils/downloadedFiles";
-import { buildLocalFileName, getDesktopFiles } from "../utils/desktopBridge";
+import {
+  buildLocalFileName,
+  getManagedDesktopFiles,
+} from "../utils/desktopBridge";
 import type {
   DesktopFileExists,
   DesktopFileResult,
@@ -107,7 +110,9 @@ export const useLocalFile = (
     attachment.fileSize > 0
       ? attachment.fileSize
       : undefined;
-  const desktop = getDesktopFiles();
+  // Chỉ dùng native khi shell cũng quản lý được thư mục tải đã chọn. Shell cũ
+  // sẽ fallback về download của trình duyệt thay vì lén tạo cache AppData.
+  const desktop = getManagedDesktopFiles();
   const currentUserId = scope.currentUserId.trim();
   const conversationId = scope.conversationId.trim();
 
