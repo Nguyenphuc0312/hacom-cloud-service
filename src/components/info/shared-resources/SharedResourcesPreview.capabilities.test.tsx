@@ -1,8 +1,9 @@
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const testState = vi.hoisted(() => ({
+  accountId: "viewer-1",
   summary: null as unknown,
   gallery: [] as Array<{ canPreview?: boolean; canDownload?: boolean }>,
   fetchThumbnailUrlsShared: vi.fn(),
@@ -20,8 +21,8 @@ vi.mock("../../../features/api/chatApi", () => ({
 }));
 
 vi.mock("../../../stores", () => ({
-  useAuthStore: (selector: (state: { user: { id: string } }) => unknown) =>
-    selector({ user: { id: "viewer-1" } }),
+  useAuthStore: (selector: (state: { user: { id: string } | null }) => unknown) =>
+    selector({ user: testState.accountId ? { id: testState.accountId } : null }),
   useChatStore: (
     selector: (state: { conversationById: Record<string, { type: string }> }) => unknown,
   ) => selector({ conversationById: { "conversation-1": { type: "DIRECT" } } }),
@@ -37,6 +38,8 @@ vi.mock("../../../services/api", () => ({
 }));
 
 vi.mock("../../../hooks/useBatchThumbnailUrl", () => ({
+  buildThumbnailCacheScopeKey: (accountId: string, conversationId: string) =>
+    `${accountId || "anonymous"}:${conversationId}`,
   fetchThumbnailUrlsShared: testState.fetchThumbnailUrlsShared,
 }));
 
@@ -85,6 +88,7 @@ vi.mock("./resourceCloudActions", () => ({
   saveResourceMessageToCloud: vi.fn(),
 }));
 
+import { dispatchFileSourceInvalidated } from "../../../features/chat/events/chatUiEvents";
 import { SharedResourcesPreview } from "./SharedResourcesPreview";
 
 const mediaItem = (
@@ -141,6 +145,7 @@ describe("SharedResourcesPreview capability gates", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     testState.gallery = [];
+    testState.accountId = "viewer-1";
     testState.fetchThumbnailUrlsShared.mockResolvedValue({});
     testState.getDownloadUrl.mockResolvedValue({ success: true, data: { url: "https://storage.example/file" } });
     testState.downloadResourceWithName.mockResolvedValue(undefined);
@@ -209,5 +214,40 @@ describe("SharedResourcesPreview capability gates", () => {
       );
     });
     expect(testState.markFileDownloaded).not.toHaveBeenCalled();
+  });
+
+  it("drops local fallback URLs on account change and refetches after source invalidation", async () => {
+    testState.summary = summaryWith([mediaItem()]);
+    testState.fetchThumbnailUrlsShared.mockResolvedValueOnce({
+      "file-media-1": { url: "https://signed.example/old" },
+    });
+
+    const { rerender } = render(
+      <SharedResourcesPreview conversationId="conversation-1" />,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("media-thumbnail")).toHaveAttribute(
+        "data-src",
+        "https://signed.example/old",
+      );
+    });
+
+    testState.accountId = "viewer-2";
+    rerender(<SharedResourcesPreview conversationId="conversation-1" />);
+    expect(screen.getByTestId("media-thumbnail")).toHaveAttribute("data-src", "");
+    await waitFor(() => {
+      expect(testState.fetchThumbnailUrlsShared).toHaveBeenCalledTimes(2);
+    });
+
+    act(() => {
+      dispatchFileSourceInvalidated({
+        conversationId: "conversation-1",
+        reason: "message-recalled",
+      });
+    });
+    expect(screen.getByTestId("media-thumbnail")).toHaveAttribute("data-src", "");
+    await waitFor(() => {
+      expect(testState.fetchThumbnailUrlsShared).toHaveBeenCalledTimes(3);
+    });
   });
 });

@@ -31,7 +31,11 @@ import { fileApi, messageApi } from "../../../services/api";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
 import { downloadResourceWithName } from "../../../utils/downloadFile";
 import { resolvePublicResourceUrl } from "../../../config";
-import { fetchThumbnailUrlsShared } from "../../../hooks/useBatchThumbnailUrl";
+import {
+  buildThumbnailCacheScopeKey,
+  fetchThumbnailUrlsShared,
+} from "../../../hooks/useBatchThumbnailUrl";
+import { listenForFileSourceInvalidated } from "../../../features/chat/events/chatUiEvents";
 import { ImagePreviewModal } from "../../modals/ImagePreviewModal";
 import type { GalleryImage } from "../../modals/ImagePreviewModal";
 import { VideoPlayerModal } from "./VideoPlayerModal";
@@ -144,6 +148,12 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
   onJumpToMessage,
 }) => {
   const currentUserId = useAuthStore((state) => state.user?.id ?? "");
+  const resourceScopeKey = useMemo(
+    () => buildThumbnailCacheScopeKey(currentUserId, conversationId),
+    [currentUserId, conversationId],
+  );
+  const resourceScopeRef = useRef(resourceScopeKey);
+  resourceScopeRef.current = resourceScopeKey;
   const conversationType = useChatStore(
     (state) => state.conversationById[conversationId]?.type,
   );
@@ -190,9 +200,10 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
   }, []);
 
   const [urlCache, setUrlCache] = useState<{
-    forConversationId: string;
+    scopeKey: string;
+    revision: number;
     urls: Record<string, string>;
-  }>({ forConversationId: conversationId, urls: {} });
+  }>({ scopeKey: resourceScopeKey, revision: 0, urls: {} });
 
   const { data, isLoading, isError } = useGetConversationSidebarSummaryQuery(
     conversationId,
@@ -236,8 +247,8 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
 
   // Memoize thumbnailUrls to ensure stable reference
   const thumbnailUrls = useMemo(() => {
-    return urlCache.forConversationId === conversationId ? urlCache.urls : {};
-  }, [urlCache.forConversationId, conversationId, urlCache.urls]);
+    return urlCache.scopeKey === resourceScopeKey ? urlCache.urls : {};
+  }, [resourceScopeKey, urlCache.scopeKey, urlCache.urls]);
 
   // Create stable thumbnail file IDs key for deduplication
   const thumbnailFileIdsKey = useMemo(() => {
@@ -279,10 +290,32 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     autoSelectedForRef.current = null;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveTab("media");
-    setUrlCache({ forConversationId: conversationId, urls: {} });
     setForwardMessage(null);
     setHiddenMessageIds(new Set());
   }, [conversationId]);
+
+  useEffect(() => {
+    setUrlCache((previous) =>
+      previous.scopeKey === resourceScopeKey
+        ? previous
+        : { scopeKey: resourceScopeKey, revision: 0, urls: {} },
+    );
+  }, [resourceScopeKey]);
+
+  useEffect(() =>
+    listenForFileSourceInvalidated(({ conversationId: invalidatedConversationId }) => {
+      if (invalidatedConversationId !== conversationId) return;
+      setUrlCache((previous) => {
+        if (previous.scopeKey !== resourceScopeKey) return previous;
+        return {
+          scopeKey: resourceScopeKey,
+          revision: previous.revision + 1,
+          urls: {},
+        };
+      });
+    }),
+    [conversationId, resourceScopeKey],
+  );
 
   const handleForwardResource = useCallback(
     (item: ForwardableResource) => {
@@ -317,9 +350,10 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     void fetchThumbnailUrlsShared(
       conversationId,
       needingFallback.map((i) => i.fileId),
+      { accountId: currentUserId || undefined },
     )
       .then((resolved) => {
-        if (cancelled) return;
+        if (cancelled || resourceScopeRef.current !== resourceScopeKey) return;
         const newUrls: Record<string, string> = {};
         for (const [fileId, item] of Object.entries(resolved)) {
           // item.url is already resolved against FILE_BASE_URL by the shared layer.
@@ -327,13 +361,14 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
         }
         if (Object.keys(newUrls).length === 0) return;
 
-        setUrlCache((prev) => ({
-          forConversationId: conversationId,
-          urls:
-            prev.forConversationId === conversationId
-              ? { ...prev.urls, ...newUrls }
-              : newUrls,
-        }));
+        setUrlCache((previous) =>
+          previous.scopeKey === resourceScopeKey
+            ? {
+                ...previous,
+                urls: { ...previous.urls, ...newUrls },
+              }
+            : previous,
+        );
       })
       .catch(() => {
         // Error handling - don't spam retries
@@ -343,7 +378,7 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, thumbnailFileIdsKey, conversationId]);
+  }, [activeTab, thumbnailFileIdsKey, conversationId, resourceScopeKey, urlCache.revision]);
 
   if (isLoading && variant === "card") {
     return (
