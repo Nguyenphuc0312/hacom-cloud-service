@@ -28,6 +28,10 @@ interface CloudWorkspaceState {
   isLoadingMoreTrash: boolean;
   isMutating: boolean;
   isRequestingQuota: boolean;
+  /** True after at least one complete active-list request has succeeded. */
+  hasLoadedSuccessfully: boolean;
+  /** The visible items belong to the previous request while this is true. */
+  isDataStale: boolean;
   error: CloudApiError | null;
   nextCursor?: string;
   trashNextCursor?: string;
@@ -60,6 +64,8 @@ const initialState: CloudWorkspaceState = {
   isLoadingMoreTrash: false,
   isMutating: false,
   isRequestingQuota: false,
+  hasLoadedSuccessfully: false,
+  isDataStale: false,
   error: null,
   uploadProgress: null,
   summary: null,
@@ -229,6 +235,7 @@ export const useCloudWorkspace = (
         ...current,
         isLoading: background ? current.isLoading : true,
         isRefreshing: background,
+        isDataStale: current.hasLoadedSuccessfully,
         error: null,
       }));
 
@@ -310,6 +317,8 @@ export const useCloudWorkspace = (
           isLoading: false,
           isRefreshing: false,
           isLoadingTrash: false,
+          hasLoadedSuccessfully: true,
+          isDataStale: false,
           error: null,
         }));
       } catch (error) {
@@ -319,6 +328,7 @@ export const useCloudWorkspace = (
           isLoading: false,
           isRefreshing: false,
           isLoadingTrash: false,
+          isDataStale: current.hasLoadedSuccessfully,
           error: asCloudError(error),
         }));
       }

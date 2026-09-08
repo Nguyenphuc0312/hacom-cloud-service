@@ -82,6 +82,8 @@ describe("useCloudWorkspace trash lifecycle", () => {
 
     const { result } = renderHook(() => useCloudWorkspace(userId));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.hasLoadedSuccessfully).toBe(true);
+    expect(result.current.isDataStale).toBe(false);
 
     await act(async () => {
       await result.current.trashItem(activeItem.id);
@@ -97,5 +99,29 @@ describe("useCloudWorkspace trash lifecycle", () => {
     expect(result.current.trashItems).toEqual([]);
     expect(result.current.quota).toEqual(activeQuota);
     expect(quotaSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it("exposes an initial API error instead of looking like an empty workspace", async () => {
+    vi.spyOn(cloudApi, "listItems").mockRejectedValue(
+      new CloudApiError({
+        status: 400,
+        code: "INVALID_FILTER",
+        message: "unsupported sort",
+      }),
+    );
+
+    const { result } = renderHook(() => useCloudWorkspace(userId, {
+      sort: "title",
+      order: "asc",
+    }));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.items).toEqual([]);
+    expect(result.current.hasLoadedSuccessfully).toBe(false);
+    expect(result.current.isDataStale).toBe(false);
+    expect(result.current.error).toMatchObject({
+      code: "INVALID_FILTER",
+      status: 400,
+    });
   });
 });

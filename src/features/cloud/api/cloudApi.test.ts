@@ -101,6 +101,17 @@ describe("cloudApi", () => {
     expect(requestedUrl).toContain("type=file");
   });
 
+  it("omits the default newest sort for legacy Cloud API compatibility", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ items: [] }));
+
+    await cloudApi.listItems(userId, { limit: 50 });
+
+    const requestedUrl = String(fetchMock.mock.calls[0]?.[0]);
+    expect(requestedUrl).toBe("/cloud-api/api/v1/cloud/items?limit=50");
+    expect(requestedUrl).not.toContain("sort=");
+    expect(requestedUrl).not.toContain("order=");
+  });
+
   it("serializes management filters without leaking them into the path", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ items: [] }));
 
