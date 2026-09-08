@@ -1846,26 +1846,6 @@ button.cloud-delete-choice--danger:hover {
   }
 }
 
-.cloud-chat-upload {
-  flex: 0 0 auto;
-  padding: 6px 0 0;
-  background: hsl(var(--chat-panel-bg) / 0.94);
-}
-
-.cloud-chat-upload__pill {
-  display: flex;
-  min-height: 34px;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid rgb(25 118 210 / 18%);
-  border-radius: 10px;
-  padding: 6px 10px;
-  background: hsl(var(--color-surface) / 0.96);
-  color: hsl(var(--color-text-secondary));
-  font-size: var(--font-size-xs, 0.75rem);
-  box-shadow: var(--shadow-xs);
-}
-
 /* My Documents uses drag-to-select rather than checkbox selection. The shared
    timeline still mounts its selection controls, so hide only those controls
    inside the Cloud conversation while keeping selection state and toolbar. */

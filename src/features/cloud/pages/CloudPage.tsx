@@ -9,7 +9,6 @@ import {
 } from "react";
 import type { DragEvent } from "react";
 import {
-  ArrowPathIcon as LoaderCircle,
   ArrowUturnLeftIcon as RotateCcw,
   ClipboardDocumentIcon as Copy,
   MagnifyingGlassIcon as Search,
@@ -1656,24 +1655,6 @@ export default function CloudPage() {
               className="min-h-0 flex-1"
             />
           )}
-
-          {workspace.uploadProgress ? (
-            <div className="cloud-chat-upload" role="status" aria-live="polite">
-              <ConversationLane>
-                <div className="cloud-chat-upload__pill">
-                  <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
-                  <span className="min-w-0 flex-1 truncate">
-                    {workspace.uploadProgress.fileName}
-                  </span>
-                  <span className="shrink-0 font-semibold text-[#1565C0]">
-                    {workspace.uploadProgress.stage === "uploading"
-                      ? `${workspace.uploadProgress.percent}%`
-                      : t(`upload.stage.${workspace.uploadProgress.stage}`)}
-                  </span>
-                </div>
-              </ConversationLane>
-            </div>
-          ) : null}
 
           <div className="sticky bottom-0 z-sticky shrink-0">
             {showSelectionToolbar ? (
