@@ -1,5 +1,9 @@
 export interface ImageClickPayload {
   url: string;
+  /** Server capability; omitted means legacy payload and remains allowed. */
+  canPreview?: boolean;
+  /** Server capability for downloading the currently selected image. */
+  canDownload?: boolean;
   alt?: string;
   senderName?: string;
   senderAvatar?: string;

@@ -49,6 +49,11 @@ export const getAttachmentRenderSignature = (
     dynamicField(dynamic, "uploadProgress"),
     dynamicField(dynamic, "processingStatus"),
     dynamicField(dynamic, "scanStatus"),
+    dynamicField(dynamic, "releaseStatus"),
+    dynamicField(dynamic, "releaseReason"),
+    dynamicField(dynamic, "canAttach"),
+    dynamicField(dynamic, "canDownload"),
+    dynamicField(dynamic, "canPreview"),
   ].map(scalar).join("|");
 };
 

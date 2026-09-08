@@ -12,7 +12,10 @@ import { SettingsSection } from "./SettingsSection";
 import { SettingsToggle } from "./SettingsToggle";
 import { useSettingsSection, useUpdateSettings } from "../../settings";
 import type { EnterKeyAction } from "../../settings/types";
-import { getDesktopFiles } from "../../utils/desktopBridge";
+import {
+  getDesktopFiles,
+  getManagedDesktopFiles,
+} from "../../utils/desktopBridge";
 
 interface ChatSectionProps {
   id?: string;
@@ -30,17 +33,11 @@ interface DownloadDirectoryApi {
 }
 
 const getDownloadDirectoryApi = (): DownloadDirectoryApi | null => {
-  // The desktop shell is released independently of the web client. Keep older
-  // desktop builds usable until their preload bridge includes this capability.
-  const files = getDesktopFiles();
-  if (
-    typeof files?.getDownloadDirectory !== "function" ||
-    typeof files.chooseDownloadDirectory !== "function"
-  ) {
-    return null;
-  }
-
-  return files as DownloadDirectoryApi;
+  // A partial/old preload can expose the picker without the matching safe
+  // save/open/reveal contract. Treat it as unsupported instead of presenting a
+  // misleading default-folder control.
+  const files = getManagedDesktopFiles();
+  return files ? (files as DownloadDirectoryApi) : null;
 };
 
 export const ChatSection: React.FC<ChatSectionProps> = ({ id }) => {
@@ -52,9 +49,9 @@ export const ChatSection: React.FC<ChatSectionProps> = ({ id }) => {
     () => getDesktopFiles() !== null,
     [],
   );
-  const [downloadDirectory, setDownloadDirectory] = React.useState<string | null>(
-    null,
-  );
+  const [downloadDirectory, setDownloadDirectory] = React.useState<
+    string | null
+  >(null);
   const [isDirectoryLoading, setIsDirectoryLoading] = React.useState(
     () => directoryApi !== null,
   );
@@ -189,10 +186,10 @@ export const ChatSection: React.FC<ChatSectionProps> = ({ id }) => {
               >
                 {isDirectoryLoading
                   ? t("chat.downloadFolder.loading")
-                  : downloadDirectory ??
+                  : (downloadDirectory ??
                     (hasDesktopFileBridge
                       ? t("chat.downloadFolder.unsupportedPath")
-                      : t("chat.downloadFolder.browserPath"))}
+                      : t("chat.downloadFolder.browserPath")))}
               </p>
               {directoryError ? (
                 <p className="mt-2 text-sm text-danger" role="alert">
@@ -205,7 +202,9 @@ export const ChatSection: React.FC<ChatSectionProps> = ({ id }) => {
             <button
               type="button"
               onClick={() => void handleChooseDownloadDirectory()}
-              disabled={!directoryApi || isDirectoryLoading || isChoosingDirectory}
+              disabled={
+                !directoryApi || isDirectoryLoading || isChoosingDirectory
+              }
               title={
                 directoryApi
                   ? t("chat.downloadFolder.changeHint")

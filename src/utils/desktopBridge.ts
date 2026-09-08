@@ -23,6 +23,20 @@ export interface DesktopFileExists {
   size?: number;
 }
 
+/** Kết quả tải trực tiếp xuống thư mục đã chọn bởi Desktop. */
+export interface DesktopDownloadResult extends DesktopFileResult {
+  bytes?: number;
+}
+
+/** Tiến độ tải native; ID luôn là khoá opaque do Web tạo. */
+export interface DesktopDownloadProgress {
+  id: string;
+  status: "started" | "progress" | "completed" | "canceled" | "failed";
+  loadedBytes: number;
+  totalBytes?: number;
+  reason?: string;
+}
+
 export interface DesktopFilesApi {
   /**
    * Save bytes under an opaque attachment id while keeping the user-visible
@@ -41,6 +55,19 @@ export interface DesktopFilesApi {
   getDownloadDirectory?: () => Promise<DesktopFileResult>;
   /** Ask the operating system for a new default download folder. */
   chooseDownloadDirectory?: () => Promise<DesktopFileResult>;
+  /** Stream an authorized URL directly to the configured visible folder. */
+  download?: (
+    fileId: string,
+    url: string,
+    displayName?: string,
+    expectedBytes?: number,
+  ) => Promise<DesktopDownloadResult>;
+  /** Cancel one in-flight direct native download. */
+  cancelDownload?: (fileId: string) => Promise<DesktopFileResult>;
+  /** Subscribe to progress emitted by the trusted native bridge. */
+  onDownloadProgress?: (
+    callback: (progress: DesktopDownloadProgress) => void,
+  ) => () => void;
 }
 
 /**
@@ -48,6 +75,12 @@ export interface DesktopFilesApi {
  * `window.chatDesktop` trong app — khai thêm ở file khác sẽ xung đột kiểu
  * (TS2717), nên chỗ nào cần thêm khả năng mới thì bổ sung vào đây.
  */
+export interface StreamingDesktopFilesApi extends DesktopFilesApi {
+  download: NonNullable<DesktopFilesApi["download"]>;
+  cancelDownload: NonNullable<DesktopFilesApi["cancelDownload"]>;
+  onDownloadProgress: NonNullable<DesktopFilesApi["onDownloadProgress"]>;
+}
+
 export interface ChatDesktopBridge {
   platform?: string;
   setUnreadBadge?: (count: number) => void;
@@ -89,6 +122,19 @@ export function getManagedDesktopFiles(): DesktopFilesApi | null {
     typeof files.getDownloadDirectory === "function" &&
     typeof files.chooseDownloadDirectory === "function"
     ? files
+    : null;
+}
+
+/**
+ * New shells stream directly to the selected destination.  The complete check
+ * prevents a web update from accidentally taking an incomplete old bridge path.
+ */
+export function getStreamingDesktopFiles(): StreamingDesktopFilesApi | null {
+  const files = getManagedDesktopFiles();
+  return typeof files?.download === "function" &&
+    typeof files.cancelDownload === "function" &&
+    typeof files.onDownloadProgress === "function"
+    ? (files as StreamingDesktopFilesApi)
     : null;
 }
 

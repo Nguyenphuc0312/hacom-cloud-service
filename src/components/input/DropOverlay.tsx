@@ -13,6 +13,7 @@ import React, { useCallback, useEffect } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { ArrowUpTrayIcon } from "@heroicons/react/24/outline";
+import { UPLOAD_LIMITS } from "../../utils/uploadPolicy";
 
 interface DropOverlayProps {
   /** Whether a file drag is currently active */
@@ -21,6 +22,11 @@ interface DropOverlayProps {
   onDismiss?: () => void;
   className?: string;
 }
+
+const formatUploadLimit = (bytes: number): string => {
+  const megabytes = bytes / (1024 * 1024);
+  return `${Number.isInteger(megabytes) ? megabytes : megabytes.toFixed(1)} MB`;
+};
 
 const DropOverlayComponent: React.FC<DropOverlayProps> = ({
   isActive,
@@ -82,8 +88,21 @@ const DropOverlayComponent: React.FC<DropOverlayProps> = ({
           </p>
           <p className="mt-2 text-xs text-text-muted">
             {t("chat:dropZone.limits", {
+              count: UPLOAD_LIMITS.maxFilesPerMessage,
+              imageLimit: formatUploadLimit(
+                UPLOAD_LIMITS.maxBytesByCategory.image,
+              ),
+              standardLimit: formatUploadLimit(
+                UPLOAD_LIMITS.maxBytesByCategory.document,
+              ),
+              genericLimit: formatUploadLimit(
+                UPLOAD_LIMITS.maxBytesByCategory.generic,
+              ),
+              totalLimit: formatUploadLimit(
+                UPLOAD_LIMITS.maxTotalSizePerMessage,
+              ),
               defaultValue:
-                "Tối đa 10 tệp · Ảnh 37.5 MB · Tài liệu 150 MB · Video 300 MB",
+                "Up to {{count}} files · Images {{imageLimit}} · Video, audio, documents & archives {{standardLimit}} · Other files {{genericLimit}} · Total {{totalLimit}}",
             })}
           </p>
         </div>

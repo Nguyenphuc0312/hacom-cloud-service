@@ -6,8 +6,8 @@
  * hoặc tài liệu Word/Excel/PDF, mũi tên chuyển file hai bên khi có nhiều file.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ChevronDown,
   ChevronLeft,
@@ -18,24 +18,23 @@ import {
   Music,
   X,
   AlertTriangle,
-} from 'lucide-react';
-import type { PreviewTarget } from '../../hooks/useFilePreview';
-import { getMimePreviewType, type PreviewType } from '../../utils/mimeRegistry';
+} from "lucide-react";
+import type { PreviewTarget } from "../../hooks/useFilePreview";
+import { getMimePreviewType, type PreviewType } from "../../utils/mimeRegistry";
 import {
   formatFilePreviewMetadata,
   getIconTypeFromPreviewType,
-} from '../../utils/filePreviewUtils';
-import { truncateFilename } from '../../utils/truncateFilename';
+} from "../../utils/filePreviewUtils";
+import { truncateFilename } from "../../utils/truncateFilename";
 import {
   downloadBlobWithName,
   downloadResourceWithName,
   fetchResourceBlob,
-} from '../../utils/downloadFile';
-import { asString } from '../../utils/payloadGuards';
-import { isPubliclyFetchableUrl } from '../../utils/publicUrl';
-import { useLocalFile } from '../../hooks/useLocalFile';
-import { useAuthStore } from '../../stores/authStore';
-import { SafeImage } from '../common/SafeImage';
+} from "../../utils/downloadFile";
+import { asString } from "../../utils/payloadGuards";
+import { useLocalFile } from "../../hooks/useLocalFile";
+import { useAuthStore } from "../../stores/authStore";
+import { SafeImage } from "../common/SafeImage";
 import {
   FileTypeIcon,
   TextPreview,
@@ -45,9 +44,8 @@ import {
   WordPreview,
   DocumentPreview,
   ArchivePreview,
-} from '../preview';
-import { OfficeOnlinePreview } from '../preview/OfficeOnlinePreview';
-import styles from './FilePreviewModal.module.css';
+} from "../preview";
+import styles from "./FilePreviewModal.module.css";
 
 export interface FilePreviewModalProps {
   isOpen: boolean;
@@ -63,7 +61,7 @@ export interface FilePreviewModalProps {
   onPrev: () => void;
   onNext: () => void;
   onRefreshUrl?: () => Promise<void>;
-  size?: 'full' | 'compact';
+  size?: "full" | "compact";
 }
 
 const ZOOM_PRESETS = [0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -82,7 +80,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   onPrev,
   onNext,
   onRefreshUrl,
-  size = 'full',
+  size = "full",
 }) => {
   const [scale, setScale] = useState(1);
   const [isZoomMenuOpen, setIsZoomMenuOpen] = useState(false);
@@ -90,71 +88,91 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [pageCount, setPageCount] = useState(1);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadFailed, setDownloadFailed] = useState(false);
-  const currentUserId = useAuthStore((state) => state.user?.id ?? '');
+  const [downloadProgress, setDownloadProgress] = useState<{
+    loadedBytes: number;
+    totalBytes?: number;
+  } | null>(null);
+  const currentUserId = useAuthStore((state) => state.user?.id ?? "");
   const overlayRef = useRef<HTMLDivElement>(null);
   const zoomMenuRef = useRef<HTMLDivElement>(null);
-  const officeViewerKey = `${currentIndex}:${secureUrl ?? ''}`;
-  const [officeViewerState, setOfficeViewerState] = useState({
-    key: officeViewerKey,
-    failed: false,
-  });
-  const officeViewerFailed =
-    officeViewerState.key === officeViewerKey && officeViewerState.failed;
+  const activeDownloadRef = useRef<AbortController | null>(null);
+  const cancelActiveDownload = React.useCallback(() => {
+    activeDownloadRef.current?.abort();
+  }, []);
+  const handleClose = React.useCallback(() => {
+    cancelActiveDownload();
+    onClose();
+  }, [cancelActiveDownload, onClose]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = "hidden";
     overlayRef.current?.focus();
     return () => {
       document.body.style.overflow = previousOverflow;
     };
   }, [isOpen]);
 
-  // Reset scale and states when opening a different item
+  // Reset scale and states when opening a different item. A transfer belongs
+  // to its original attachment, so navigation never leaves it running invisibly.
   useEffect(() => {
+    cancelActiveDownload();
     setScale(1);
     setIsZoomMenuOpen(false);
     setPageCount(1);
     setIsDownloading(false);
     setDownloadFailed(false);
-  }, [currentIndex, secureUrl]);
+    setDownloadProgress(null);
+  }, [cancelActiveDownload, currentIndex, secureUrl]);
+
+  useEffect(
+    () => () => {
+      cancelActiveDownload();
+    },
+    [cancelActiveDownload],
+  );
 
   // Keyboard navigation & escape
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         if (isZoomMenuOpen) {
           setIsZoomMenuOpen(false);
         } else {
-          onClose();
+          handleClose();
         }
       }
-      if (e.key === 'ArrowLeft' && hasPrev) onPrev();
-      if (e.key === 'ArrowRight' && hasNext) onNext();
+      if (e.key === "ArrowLeft" && hasPrev) onPrev();
+      if (e.key === "ArrowRight" && hasNext) onNext();
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, onPrev, onNext, hasPrev, hasNext, isZoomMenuOpen]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, handleClose, onPrev, onNext, hasPrev, hasNext, isZoomMenuOpen]);
 
   // Click outside zoom menu
   useEffect(() => {
     if (!isZoomMenuOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (zoomMenuRef.current && !zoomMenuRef.current.contains(e.target as Node)) {
+      if (
+        zoomMenuRef.current &&
+        !zoomMenuRef.current.contains(e.target as Node)
+      ) {
         setIsZoomMenuOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isZoomMenuOpen]);
 
   // Sync fullscreen state
   useEffect(() => {
-    const handleFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    const handleFullscreenChange = () =>
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () =>
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
 
   useEffect(() => {
@@ -172,27 +190,34 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   };
 
   const att = current?.attachment;
-  const rawAtt = att as (Record<string, unknown> | undefined);
+  const rawAtt = att as Record<string, unknown> | undefined;
   const fileName =
     asString(rawAtt?.fileName) ||
     asString(rawAtt?.originalName) ||
     asString(rawAtt?.name) ||
-    'file';
-  const fileSize = typeof rawAtt?.fileSize === 'number'
-    ? rawAtt.fileSize
-    : typeof rawAtt?.sizeBytes === 'number'
-      ? rawAtt.sizeBytes
-      : typeof rawAtt?.size === 'number'
-        ? rawAtt.size
-        : undefined;
-  const mimeType = asString(rawAtt?.mimeType) || 'application/octet-stream';
-  const { canOpenLocally, saveLocal, markDownloaded } = useLocalFile(att, {
+    "file";
+  const fileSize =
+    typeof rawAtt?.fileSize === "number"
+      ? rawAtt.fileSize
+      : typeof rawAtt?.sizeBytes === "number"
+        ? rawAtt.sizeBytes
+        : typeof rawAtt?.size === "number"
+          ? rawAtt.size
+          : undefined;
+  const mimeType = asString(rawAtt?.mimeType) || "application/octet-stream";
+  const {
+    canOpenLocally,
+    saveLocal,
+    canDownloadToLocal,
+    downloadToLocal,
+    markDownloaded,
+  } = useLocalFile(att, {
     currentUserId,
-    conversationId: current?.conversationId ?? '',
+    conversationId: current?.conversationId ?? "",
   });
 
   const previewType: PreviewType = useMemo(() => {
-    if (!current) return 'unknown';
+    if (!current) return "unknown";
     return current.previewType || getMimePreviewType(mimeType, fileName);
   }, [current, mimeType, fileName]);
 
@@ -216,57 +241,118 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
   const lowerName = fileName.toLowerCase();
   const lowerMimeType = mimeType.toLowerCase();
-  const isDocx = lowerName.endsWith('.docx');
+  const isDocx = lowerName.endsWith(".docx");
   const isXlsx =
-    lowerName.endsWith('.xlsx') ||
-    lowerName.endsWith('.xls') ||
-    lowerMimeType.includes('spreadsheetml') ||
-    lowerMimeType.includes('ms-excel');
+    lowerName.endsWith(".xlsx") ||
+    lowerName.endsWith(".xls") ||
+    lowerMimeType.includes("spreadsheetml") ||
+    lowerMimeType.includes("ms-excel");
   const isOfficeDoc =
-    previewType === 'document' || previewType === 'spreadsheet' || previewType === 'presentation';
+    previewType === "document" ||
+    previewType === "spreadsheet" ||
+    previewType === "presentation";
   const isZoomable =
-    previewType === 'image' || previewType === 'pdf' || (isOfficeDoc && (isDocx || isXlsx));
-  const usesOfficeOnline =
-    isOfficeDoc &&
-    isXlsx &&
-    !officeViewerFailed &&
-    Boolean(secureUrl && isPubliclyFetchableUrl(secureUrl));
-  const showsPreviewToolbar = isZoomable && !usesOfficeOnline;
+    previewType === "image" ||
+    previewType === "pdf" ||
+    (isOfficeDoc && (isDocx || isXlsx));
+  // Private signed URLs stay inside this app; Office files use local preview renderers.
+  const showsPreviewToolbar = isZoomable;
+
+  const canPreview = att?.canPreview !== false;
+  const canDownload = att?.canDownload !== false;
 
   if (!isOpen || !current) return null;
 
   const handleDownload = async () => {
-    if (!secureUrl || isDownloading) return;
+    if (!canDownload || !secureUrl || isDownloading) return;
 
+    const controller = new AbortController();
+    activeDownloadRef.current = controller;
+    const updateProgress = (progress: {
+      loadedBytes: number;
+      totalBytes?: number;
+    }) => {
+      if (!controller.signal.aborted) setDownloadProgress(progress);
+    };
     setIsDownloading(true);
     setDownloadFailed(false);
+    setDownloadProgress(null);
     try {
-      if (canOpenLocally) {
+      if (canDownloadToLocal) {
+        const saved = await downloadToLocal(secureUrl, {
+          signal: controller.signal,
+          onProgress: updateProgress,
+        });
+        if (!saved && !controller.signal.aborted) {
+          throw new Error("Native download failed");
+        }
+      } else if (canOpenLocally) {
         const blob = await fetchResourceBlob(secureUrl, {
           expectedBytes: fileSize,
           totalBytesHint: fileSize,
+          signal: controller.signal,
+          onProgress: updateProgress,
         });
+        if (controller.signal.aborted) return;
         const saved = await saveLocal(blob);
         if (!saved) downloadBlobWithName(blob, fileName);
       } else {
         await downloadResourceWithName(secureUrl, fileName, {
           expectedBytes: fileSize,
           totalBytesHint: fileSize,
+          signal: controller.signal,
+          onProgress: updateProgress,
         });
+        if (controller.signal.aborted) return;
         markDownloaded();
       }
     } catch {
-      setDownloadFailed(true);
+      if (!controller.signal.aborted) setDownloadFailed(true);
     } finally {
-      setIsDownloading(false);
+      if (activeDownloadRef.current === controller) {
+        activeDownloadRef.current = null;
+        setIsDownloading(false);
+      }
     }
   };
 
+  const downloadProgressPercent =
+    downloadProgress?.totalBytes && downloadProgress.totalBytes > 0
+      ? Math.min(
+          100,
+          Math.round(
+            (downloadProgress.loadedBytes / downloadProgress.totalBytes) * 100,
+          ),
+        )
+      : null;
+  const downloadActionLabel = isDownloading
+    ? downloadProgressPercent === null
+      ? "Đang tải — hủy tải"
+      : "Đang tải " + downloadProgressPercent + "% — hủy tải"
+    : downloadFailed
+      ? "Thử tải lại"
+      : "Tải về";
+
   const renderContent = () => {
+    if (!canPreview) {
+      return (
+        <div style={{ color: "#495057", textAlign: "center" }}>
+          <AlertTriangle
+            size={32}
+            color="#fa5252"
+            style={{ margin: "0 auto" }}
+          />
+          <div style={{ fontSize: 13, color: "#868e96", marginTop: 8 }}>
+            Tệp chưa sẵn sàng để xem trước.
+          </div>
+        </div>
+      );
+    }
+
     if (isLoadingUrl) {
       return (
-        <div style={{ color: '#495057', textAlign: 'center' }}>
-          <div style={{ fontSize: 13, color: '#868e96', marginTop: 8 }}>
+        <div style={{ color: "#495057", textAlign: "center" }}>
+          <div style={{ fontSize: 13, color: "#868e96", marginTop: 8 }}>
             Đang xin liên kết xem file mới nhất…
           </div>
         </div>
@@ -275,24 +361,29 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
     if (urlError || !secureUrl) {
       return (
-        <div style={{ color: '#495057', textAlign: 'center' }}>
-          <AlertTriangle size={32} color="#fa5252" style={{ margin: '0 auto' }} />
-          <div style={{ fontSize: 13, color: '#868e96', marginTop: 8 }}>
-            {urlError || 'File đang được xử lý hoặc không còn khả dụng, thử lại sau.'}
+        <div style={{ color: "#495057", textAlign: "center" }}>
+          <AlertTriangle
+            size={32}
+            color="#fa5252"
+            style={{ margin: "0 auto" }}
+          />
+          <div style={{ fontSize: 13, color: "#868e96", marginTop: 8 }}>
+            {urlError ||
+              "File đang được xử lý hoặc không còn khả dụng, thử lại sau."}
           </div>
           {onRefreshUrl && (
             <button
               type="button"
               style={{
                 marginTop: 12,
-                padding: '6px 14px',
+                padding: "6px 14px",
                 borderRadius: 6,
-                border: '1px solid #dee2e6',
-                background: '#fff',
-                color: '#495057',
+                border: "1px solid #dee2e6",
+                background: "#fff",
+                color: "#495057",
                 fontSize: 12,
                 fontWeight: 500,
-                cursor: 'pointer',
+                cursor: "pointer",
               }}
               onClick={() => void onRefreshUrl()}
             >
@@ -303,15 +394,19 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       );
     }
 
-    if (previewType === 'text') {
-      return <TextPreview url={secureUrl} fileName={fileName} fileSize={fileSize} />;
+    if (previewType === "text") {
+      return (
+        <TextPreview url={secureUrl} fileName={fileName} fileSize={fileSize} />
+      );
     }
 
-    if (previewType === 'csv') {
-      return <CsvPreview url={secureUrl} fileName={fileName} fileSize={fileSize} />;
+    if (previewType === "csv") {
+      return (
+        <CsvPreview url={secureUrl} fileName={fileName} fileSize={fileSize} />
+      );
     }
 
-    if (previewType === 'pdf') {
+    if (previewType === "pdf") {
       return (
         <PdfPreview
           url={secureUrl}
@@ -335,18 +430,9 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         );
       }
       if (isXlsx) {
-        if (usesOfficeOnline) {
-          return (
-            <OfficeOnlinePreview
-              url={secureUrl}
-              fileName={fileName}
-              onUnavailable={() =>
-                setOfficeViewerState({ key: officeViewerKey, failed: true })
-              }
-            />
-          );
-        }
-        return <ExcelPreview url={secureUrl} fileName={fileName} scale={scale} />;
+        return (
+          <ExcelPreview url={secureUrl} fileName={fileName} scale={scale} />
+        );
       }
       return (
         <DocumentPreview
@@ -359,20 +445,26 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       );
     }
 
-    if (previewType === 'archive') {
-      return <ArchivePreview url={secureUrl} fileName={fileName} fileSize={fileSize} />;
+    if (previewType === "archive") {
+      return (
+        <ArchivePreview
+          url={secureUrl}
+          fileName={fileName}
+          fileSize={fileSize}
+        />
+      );
     }
 
-    if (previewType === 'image') {
+    if (previewType === "image") {
       return (
         <div
-          className={`${styles.mediaBox} ${size === 'compact' ? styles.mediaBoxCompact : ''}`}
+          className={`${styles.mediaBox} ${size === "compact" ? styles.mediaBoxCompact : ""}`}
           onClick={(e) => e.stopPropagation()}
         >
           <SafeImage
             src={secureUrl}
             alt={fileName}
-            className={`${styles.image} ${size === 'compact' ? styles.imageCompact : ''}`}
+            className={`${styles.image} ${size === "compact" ? styles.imageCompact : ""}`}
             style={{ transform: `scale(${scale})` }}
             objectFit="contain"
             loading="eager"
@@ -390,10 +482,10 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       );
     }
 
-    if (previewType === 'video') {
+    if (previewType === "video") {
       return (
         <div
-          className={`${styles.mediaBox} ${size === 'compact' ? styles.mediaBoxCompact : ''}`}
+          className={`${styles.mediaBox} ${size === "compact" ? styles.mediaBoxCompact : ""}`}
           onClick={(e) => e.stopPropagation()}
         >
           <video
@@ -401,35 +493,35 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             controls
             playsInline
             preload="metadata"
-            className={`${styles.image} ${size === 'compact' ? styles.imageCompact : ''}`}
+            className={`${styles.image} ${size === "compact" ? styles.imageCompact : ""}`}
           />
         </div>
       );
     }
 
-    if (previewType === 'audio') {
+    if (previewType === "audio") {
       return (
         <div
           style={{
-            width: 'min(32rem, calc(100vw - 2rem))',
+            width: "min(32rem, calc(100vw - 2rem))",
             borderRadius: 16,
-            border: '1px solid #dee2e6',
-            background: '#fff',
-            boxShadow: '0 4px 24px rgba(0, 0, 0, 0.08)',
+            border: "1px solid #dee2e6",
+            background: "#fff",
+            boxShadow: "0 4px 24px rgba(0, 0, 0, 0.08)",
             padding: 20,
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
             <div
               style={{
                 width: 48,
                 height: 48,
                 borderRadius: 12,
-                background: '#f1f3f5',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                background: "#f1f3f5",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
               <Music size={22} color="#495057" />
@@ -439,28 +531,35 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                 style={{
                   fontSize: 14,
                   fontWeight: 500,
-                  color: '#25262b',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
+                  color: "#25262b",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
                 }}
                 title={fileName}
               >
                 {displayName}
               </div>
-              <div style={{ fontSize: 12, color: '#868e96' }}>{metadataLine}</div>
+              <div style={{ fontSize: 12, color: "#868e96" }}>
+                {metadataLine}
+              </div>
             </div>
           </div>
           <div style={{ marginTop: 16 }}>
-            <audio src={secureUrl} controls preload="metadata" style={{ width: '100%' }} />
+            <audio
+              src={secureUrl}
+              controls
+              preload="metadata"
+              style={{ width: "100%" }}
+            />
           </div>
         </div>
       );
     }
 
     return (
-      <div style={{ color: '#495057', textAlign: 'center' }}>
-        <div style={{ fontSize: 13, color: '#868e96' }}>
+      <div style={{ color: "#495057", textAlign: "center" }}>
+        <div style={{ fontSize: 13, color: "#868e96" }}>
           Không có bản xem trước cho định dạng này.
         </div>
       </div>
@@ -470,15 +569,13 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   return createPortal(
     <div
       ref={overlayRef}
-      className={`${styles.overlay} ${
-        usesOfficeOnline ? styles.overlayOfficeOnline : ''
-      }`}
+      className={styles.overlay}
       role="dialog"
       aria-modal="true"
       aria-label="Xem trước file"
       tabIndex={-1}
     >
-      <div className={styles.backdrop} onClick={onClose} />
+      <div className={styles.backdrop} onClick={handleClose} />
 
       {totalItems > 1 && hasPrev && (
         <button
@@ -509,8 +606,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
       <div
         className={`${styles.content} ${
-          showsPreviewToolbar ? styles.contentWithToolbar : ''
-        } ${usesOfficeOnline ? styles.contentOfficeOnline : ''}`}
+          showsPreviewToolbar ? styles.contentWithToolbar : ""
+        }`}
       >
         {renderContent()}
       </div>
@@ -567,7 +664,9 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                 type="button"
                 className={styles.toolbarIconBtn}
                 onClick={toggleFullscreen}
-                aria-label={isFullscreen ? 'Thoát toàn màn hình' : 'Xem toàn màn hình'}
+                aria-label={
+                  isFullscreen ? "Thoát toàn màn hình" : "Xem toàn màn hình"
+                }
               >
                 {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
               </button>
@@ -580,11 +679,13 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             {uploaderAvatarUrl ? (
               <SafeImage
                 src={uploaderAvatarUrl}
-                alt={uploaderName || ''}
+                alt={uploaderName || ""}
                 className={styles.uploaderAvatar}
                 objectFit="cover"
                 loading="eager"
-                fallback={<FileTypeIcon type={iconType} fileName={fileName} size={22} />}
+                fallback={
+                  <FileTypeIcon type={iconType} fileName={fileName} size={22} />
+                }
               />
             ) : (
               <FileTypeIcon type={iconType} fileName={fileName} size={22} />
@@ -601,35 +702,26 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           </div>
 
           <div className={styles.actions}>
-            {usesOfficeOnline && (
-              <>
-                <button
-                  type="button"
-                  className={styles.actionBtn}
-                  onClick={toggleFullscreen}
-                  aria-label={isFullscreen ? 'Thoát toàn màn hình' : 'Xem toàn màn hình'}
-                >
-                  {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
-                </button>
-                <div className={styles.actionDivider} />
-              </>
-            )}
             <button
               type="button"
               className={styles.actionBtn}
-              onClick={() => void handleDownload()}
-              disabled={!secureUrl || isDownloading}
+              onClick={
+                isDownloading
+                  ? cancelActiveDownload
+                  : () => void handleDownload()
+              }
+              disabled={!secureUrl || (!canDownload && !isDownloading)}
               aria-busy={isDownloading}
-              aria-label={downloadFailed ? "Thử tải lại" : "Tải về"}
-              title={downloadFailed ? "Tải lại" : "Tải về"}
+              aria-label={downloadActionLabel}
+              title={downloadActionLabel}
             >
-              <Download size={18} />
+              {isDownloading ? <X size={18} /> : <Download size={18} />}
             </button>
             <div className={styles.actionDivider} />
             <button
               type="button"
               className={styles.actionBtn}
-              onClick={onClose}
+              onClick={handleClose}
               aria-label="Đóng"
             >
               <X size={18} />

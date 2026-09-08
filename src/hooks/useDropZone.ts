@@ -8,6 +8,39 @@
 
 import { useCallback, useRef, useState } from "react";
 
+type DataTransferItemWithEntry = DataTransferItem & {
+  webkitGetAsEntry?: () => { isDirectory?: boolean } | null;
+};
+
+/**
+ * Browsers do not expose a portable folder `File` object. Detect directories
+ * before handing the remaining files to the shared attachment queue.
+ */
+export const hasDroppedDirectory = (
+  dataTransfer: Pick<DataTransfer, "files" | "items">,
+): boolean => {
+  const items = Array.from(dataTransfer.items);
+
+  if (
+    items.some((item) => {
+      if (item.kind !== "file") return false;
+      return (
+        (item as DataTransferItemWithEntry).webkitGetAsEntry?.()
+          ?.isDirectory === true
+      );
+    })
+  ) {
+    return true;
+  }
+
+  // Chromium reports a folder as a file item with no File when the legacy
+  // entry API is unavailable. Do not silently accept that ambiguous drop.
+  return (
+    dataTransfer.files.length === 0 &&
+    items.some((item) => item.kind === "file")
+  );
+};
+
 export interface UseDropZoneOptions {
   /** Called when files are dropped */
   onDrop: (files: File[]) => void;
@@ -15,6 +48,8 @@ export interface UseDropZoneOptions {
   disabled?: boolean;
   /** Called when user drops files while disabled */
   onDropRejected?: () => void;
+  /** Called when a dropped folder cannot be attached */
+  onDropFolderRejected?: () => void;
 }
 
 export interface UseDropZoneReturn {
@@ -35,6 +70,7 @@ export function useDropZone({
   onDrop,
   disabled = false,
   onDropRejected,
+  onDropFolderRejected,
 }: UseDropZoneOptions): UseDropZoneReturn {
   const [isDragActive, setIsDragActive] = useState(false);
   const dragCounter = useRef(0);
@@ -89,11 +125,14 @@ export function useDropZone({
       }
 
       const files = Array.from(e.dataTransfer.files);
+      if (hasDroppedDirectory(e.dataTransfer)) {
+        onDropFolderRejected?.();
+      }
       if (files.length > 0) {
         onDrop(files);
       }
     },
-    [disabled, onDrop, onDropRejected],
+    [disabled, onDrop, onDropFolderRejected, onDropRejected],
   );
 
   const dismiss = useCallback(() => {

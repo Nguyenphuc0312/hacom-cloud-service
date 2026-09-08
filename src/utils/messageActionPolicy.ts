@@ -54,7 +54,8 @@ const canCopyMessage = (message: Message): boolean =>
   getCopyableMessageText(message) !== null;
 
 const canDownloadAttachment = (message: Message): boolean =>
-  Array.isArray(message.attachments) && message.attachments.length > 0;
+  Array.isArray(message.attachments) &&
+  message.attachments.some((attachment) => attachment.canDownload !== false);
 
 const canReactToMessage = (message: Message): boolean =>
   message.type !== MessageType.SYSTEM &&

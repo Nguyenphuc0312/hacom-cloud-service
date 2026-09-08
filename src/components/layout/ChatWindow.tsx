@@ -92,6 +92,12 @@ function metaToAttachment(meta: UploadedFileMeta): Attachment {
     ...(meta.duration != null ? { duration: meta.duration } : {}),
     ...(meta.url ? { url: meta.url } : {}),
     ...(meta.thumbnailUrl ? { thumbnailUrl: meta.thumbnailUrl } : {}),
+    ...(meta.scanStatus ? { scanStatus: meta.scanStatus } : {}),
+    ...(meta.releaseStatus ? { releaseStatus: meta.releaseStatus } : {}),
+    ...(meta.releaseReason ? { releaseReason: meta.releaseReason } : {}),
+    ...(typeof meta.canAttach === "boolean" ? { canAttach: meta.canAttach } : {}),
+    ...(typeof meta.canDownload === "boolean" ? { canDownload: meta.canDownload } : {}),
+    ...(typeof meta.canPreview === "boolean" ? { canPreview: meta.canPreview } : {}),
   } as Attachment;
 }
 
@@ -845,6 +851,13 @@ const [composerHeight, setComposerHeight] = React.useState(0);
           t("chat:composer.attachBlocked", {
             defaultValue: "Attachments are currently unavailable",
           }),
+      );
+    },
+    onDropFolderRejected: () => {
+      toast.error(
+        t("chat:dropZone.folderUnsupported", {
+          defaultValue: "Folders cannot be attached. Choose files instead.",
+        }),
       );
     },
   });

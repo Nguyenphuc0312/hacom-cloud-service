@@ -68,6 +68,24 @@ export const normalizeAttachments = (value: unknown): Message["attachments"] => 
         width: asNumberValue(attachment.width),
         height: asNumberValue(attachment.height),
         duration: asNumberValue(attachment.duration),
+        ...(asStringValue(attachment.scanStatus)
+          ? { scanStatus: asStringValue(attachment.scanStatus) as Attachment["scanStatus"] }
+          : {}),
+        ...(asStringValue(attachment.releaseStatus)
+          ? { releaseStatus: asStringValue(attachment.releaseStatus) as Attachment["releaseStatus"] }
+          : {}),
+        ...(asStringValue(attachment.releaseReason)
+          ? { releaseReason: asStringValue(attachment.releaseReason) as Attachment["releaseReason"] }
+          : {}),
+        ...(typeof attachment.canAttach === "boolean"
+          ? { canAttach: attachment.canAttach }
+          : {}),
+        ...(typeof attachment.canDownload === "boolean"
+          ? { canDownload: attachment.canDownload }
+          : {}),
+        ...(typeof attachment.canPreview === "boolean"
+          ? { canPreview: attachment.canPreview }
+          : {}),
       } as Attachment;
     })
     .filter((item): item is Attachment => item !== null);

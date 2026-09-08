@@ -116,6 +116,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  Reflect.deleteProperty(window, "chatDesktop");
   toastMocks.success.mockClear();
   toastMocks.error.mockClear();
 });
@@ -218,4 +219,42 @@ describe("MessageCluster copy action", () => {
       expect(toastMocks.error).toHaveBeenCalledWith("Không thể sao chép tin nhắn");
     });
   });
+
+  it("keeps the browser Save action out of the menu when native streaming is available", () => {
+    Object.defineProperty(window, "chatDesktop", {
+      configurable: true,
+      value: {
+        files: {
+          save: vi.fn(),
+          open: vi.fn(),
+          reveal: vi.fn(),
+          exists: vi.fn(),
+          getDownloadDirectory: vi.fn(),
+          chooseDownloadDirectory: vi.fn(),
+          download: vi.fn(),
+          cancelDownload: vi.fn(),
+          onDownloadProgress: vi.fn(),
+        },
+      },
+    });
+    const { container } = renderCluster(
+      baseMessage({
+        type: MessageType.FILE,
+        content: "",
+        attachments: [
+          {
+            id: "file-native-1",
+            fileName: "Bao-cao-native.docx",
+            fileSize: 1024,
+            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          },
+        ],
+      }),
+    );
+
+    openMoreMenu(container);
+
+    expect(screen.queryByRole("menuitem", { name: "L\u01b0u v\u1ec1 m\u00e1y" })).toBeNull();
+  });
+
 });

@@ -23,18 +23,25 @@ vi.mock("react-i18next", () => ({
         "chat.saveSearchHistoryDesc": "Ghi nhớ lịch sử tìm kiếm.",
         "chat.downloadFolder.cardTitle": "File tải về",
         "chat.downloadFolder.label": "File được lưu tại thư mục",
-        "chat.downloadFolder.description": "File bạn tải về sẽ tự động lưu vào thư mục này.",
+        "chat.downloadFolder.description":
+          "File bạn tải về sẽ tự động lưu vào thư mục này.",
         "chat.downloadFolder.loading": "Đang xác định thư mục lưu…",
         "chat.downloadFolder.browserPath": "Do trình duyệt quản lý",
-        "chat.downloadFolder.browserDescription": "Trình duyệt không cho ứng dụng đọc hoặc chọn thư mục tải xuống.",
-        "chat.downloadFolder.unsupportedPath": "Chưa hỗ trợ trên phiên bản desktop này",
-        "chat.downloadFolder.unsupportedDescription": "Cập nhật ứng dụng desktop để chọn thư mục tải file mặc định.",
-        "chat.downloadFolder.readError": "Không thể đọc thư mục tải về hiện tại.",
+        "chat.downloadFolder.browserDescription":
+          "Trình duyệt không cho ứng dụng đọc hoặc chọn thư mục tải xuống.",
+        "chat.downloadFolder.unsupportedPath":
+          "Chưa hỗ trợ trên phiên bản desktop này",
+        "chat.downloadFolder.unsupportedDescription":
+          "Cập nhật ứng dụng desktop để chọn thư mục tải file mặc định.",
+        "chat.downloadFolder.readError":
+          "Không thể đọc thư mục tải về hiện tại.",
         "chat.downloadFolder.chooseError": "Không thể thay đổi thư mục tải về.",
         "chat.downloadFolder.change": "Thay đổi",
         "chat.downloadFolder.choosing": "Đang chọn…",
-        "chat.downloadFolder.changeHint": "Chọn thư mục mặc định cho file tải về",
-        "chat.downloadFolder.browserChangeHint": "Chỉ khả dụng trên ứng dụng desktop",
+        "chat.downloadFolder.changeHint":
+          "Chọn thư mục mặc định cho file tải về",
+        "chat.downloadFolder.browserChangeHint":
+          "Chỉ khả dụng trên ứng dụng desktop",
       };
       return messages[key] ?? key;
     },
@@ -63,9 +70,27 @@ describe("ChatSection download folder", () => {
     render(<ChatSection />);
 
     expect(screen.getByText("Do trình duyệt quản lý")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Thay đổi" })).toBeDisabled();
+  });
+
+  it("does not expose a folder picker from a partial desktop bridge", () => {
+    const files = {
+      open: vi.fn(),
+      getDownloadDirectory: vi.fn(),
+      chooseDownloadDirectory: vi.fn(),
+    };
+    Object.defineProperty(window, "chatDesktop", {
+      configurable: true,
+      value: { files },
+    });
+
+    render(<ChatSection />);
+
     expect(
-      screen.getByRole("button", { name: "Thay đổi" }),
-    ).toBeDisabled();
+      screen.getByText("Chưa hỗ trợ trên phiên bản desktop này"),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Thay đổi" })).toBeDisabled();
+    expect(files.getDownloadDirectory).not.toHaveBeenCalled();
   });
 
   it("loads and changes the desktop default download folder", async () => {
@@ -89,9 +114,7 @@ describe("ChatSection download folder", () => {
 
     render(<ChatSection />);
 
-    expect(
-      await screen.findByText("C:\\Users\\Minh\\Downloads"),
-    ).toBeVisible();
+    expect(await screen.findByText("C:\\Users\\Minh\\Downloads")).toBeVisible();
     const changeButton = screen.getByRole("button", { name: "Thay đổi" });
     await waitFor(() => expect(changeButton).toBeEnabled());
     await user.click(changeButton);

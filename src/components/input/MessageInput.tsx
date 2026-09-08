@@ -1669,6 +1669,14 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                     }
                   }
                 }}
+                onPasteFilesRejected={() => {
+                  toast.error(
+                    t("error:upload.clipboardFileMissingName", {
+                      defaultValue:
+                        "A pasted file without a name cannot be attached. Save it first and try again.",
+                    }),
+                  );
+                }}
                 onFocus={() => setIsComposerFocused(true)}
                 onBlur={() => {
                   setIsComposerFocused(false);
