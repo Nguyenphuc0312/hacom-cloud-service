@@ -1402,6 +1402,7 @@ export default function CloudPage() {
                   items={cloudItems}
                   isActive
                   layoutState={layoutState}
+                  currentUserId={currentUser.id}
                   onSelect={() => undefined}
                 />
               }

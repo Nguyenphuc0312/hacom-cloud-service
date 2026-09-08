@@ -1369,6 +1369,7 @@ export const ChatPage: React.FC = () => {
                 leadingContent={
                   <CloudConversationEntry
                     layoutState={sidebarLayoutState}
+                    currentUserId={currentUserSummary.id}
                     onSelect={() => navigate(ROUTE_PATHS.CLOUD)}
                   />
                 }

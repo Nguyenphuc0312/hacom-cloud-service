@@ -1,7 +1,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
-import { Users } from "lucide-react";
+import { Cloud, Users } from "lucide-react";
 import {
   ChevronDownIcon,
   MagnifyingGlassIcon,
@@ -36,6 +36,9 @@ import { toast } from "../ui";
 import { useForwardMessagesMutation } from "../../features/api/chatApi";
 import { resolveForwardErrorMessage } from "../../features/chat/forwardErrorMessage";
 import { messageApi } from "../../services/api";
+import { CLOUD_CONVERSATION_ID } from "../../features/cloud/constants";
+import { cloudApi } from "../../features/cloud/api/cloudApi";
+import { saveChatMessagesToCloud } from "../../features/cloud/utils/saveChatMessagesToCloud";
 
 type TabKey = "recent" | "groups" | "friends";
 
@@ -240,6 +243,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
   const [query, setQuery] = React.useState("");
   const [note, setNote] = React.useState("");
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [isSavingToCloud, setIsSavingToCloud] = React.useState(false);
   const [forwardMessages, { isLoading }] = useForwardMessagesMutation();
 
   // Fetch full profiles for DM partners so remembered/HR names show (same as
@@ -269,6 +273,12 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
         .includes(q);
     });
   }, [conversations, tab, query, currentUserId, enrichedNames]);
+
+  const showCloudTarget = React.useMemo(() => {
+    if (tab !== "recent") return false;
+    const q = query.trim().toLowerCase();
+    return !q || "my documents hacom cloud cloud của tôi".includes(q);
+  }, [query, tab]);
 
   // Recent = activity order (as stored). Groups/Friends = alphabetical sections.
   const sections = React.useMemo(() => {
@@ -315,24 +325,39 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
     if (selected.size === 0 || messages.length === 0) return;
 
     const targets = Array.from(selected);
+    const includeCloud = selected.has(CLOUD_CONVERSATION_ID);
+    const chatTargets = targets.filter(
+      (target) => target !== CLOUD_CONVERSATION_ID,
+    );
     const items = messages.flatMap((msg) =>
-      targets.map((targetConversationId) => ({
+      chatTargets.map((targetConversationId) => ({
         sourceMessageId: msg.id,
         targetConversationId,
       })),
     );
 
+    setIsSavingToCloud(includeCloud);
     try {
-      await forwardMessages({ items }).unwrap();
+      await Promise.all([
+        items.length > 0
+          ? forwardMessages({ items }).unwrap()
+          : Promise.resolve(),
+        includeCloud
+          ? saveChatMessagesToCloud(messages, currentUserId)
+          : Promise.resolve(),
+      ]);
 
       // Optional accompanying note — best effort, doesn't block forward success.
       const trimmedNote = note.trim();
       if (trimmedNote) {
         await Promise.allSettled(
-          targets.map((conversationId) =>
+          chatTargets.map((conversationId) =>
             messageApi.sendMessage(conversationId, { content: trimmedNote }),
           ),
         );
+        if (includeCloud) {
+          await cloudApi.createText(currentUserId, trimmedNote);
+        }
       }
 
       toast.success(
@@ -343,8 +368,12 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
       onClose();
     } catch (error) {
       toast.error(resolveForwardErrorMessage(error));
+    } finally {
+      setIsSavingToCloud(false);
     }
   };
+
+  const isSubmitting = isLoading || isSavingToCloud;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") onClose();
@@ -439,7 +468,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
             Do NOT use flex-1/basis-0 here: the parent is sized by max-h, so there
             is no free space to distribute and the list collapses to 0px. */}
         <div className="min-h-0 max-h-[520px] shrink overflow-y-auto py-3">
-          {filtered.length === 0 ? (
+          {filtered.length === 0 && !showCloudTarget ? (
             <div className="flex flex-col items-center justify-center gap-2 px-6 py-10 text-center text-sm text-text-muted">
               <MagnifyingGlassIcon className="h-7 w-7 opacity-30" />
               <span>
@@ -453,7 +482,52 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
               </span>
             </div>
           ) : (
-            sections.map((section) => (
+            <>
+              {showCloudTarget ? (
+                <button
+                  type="button"
+                  onClick={() => toggleSelect(CLOUD_CONVERSATION_ID)}
+                  className="flex min-h-[58px] w-full items-center gap-3 px-5 py-2 text-left transition-colors hover:bg-surface-hover"
+                >
+                  <span
+                    className={clsx(
+                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                      selected.has(CLOUD_CONVERSATION_ID)
+                        ? "border-[#1565C0] bg-[#1565C0]"
+                        : "border-border bg-transparent",
+                    )}
+                    aria-hidden="true"
+                  >
+                    {selected.has(CLOUD_CONVERSATION_ID) ? (
+                      <svg
+                        className="h-3 w-3 text-white"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                      >
+                        <path
+                          d="M2 6l3 3 5-5"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    ) : null}
+                  </span>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#1976D2]/20 bg-[#EFF6FF] text-[#1565C0] dark:bg-[#1565C0]/15">
+                    <Cloud className="h-5 w-5" aria-hidden />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] font-semibold text-text-primary">
+                      My Documents
+                    </span>
+                    <span className="block truncate text-xs text-text-muted">
+                      Lưu vào Hacom Cloud
+                    </span>
+                  </span>
+                </button>
+              ) : null}
+              {sections.map((section) => (
               <div key={section.letter || "recent"}>
                 {section.letter && (
                   <div className="sticky top-0 z-[1] bg-surface px-4 pt-1.5 pb-0.5 text-xs font-bold text-text-muted">
@@ -527,7 +601,8 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                   );
                 })}
               </div>
-            ))
+              ))}
+            </>
           )}
         </div>
 
@@ -592,16 +667,16 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
           </button>
           <button
             type="button"
-            disabled={selected.size === 0 || isLoading}
+            disabled={selected.size === 0 || isSubmitting}
             onClick={() => void handleConfirm()}
             className={clsx(
               "rounded-lg px-4 py-1.5 text-sm font-semibold text-white transition-colors",
-              selected.size > 0 && !isLoading
+              selected.size > 0 && !isSubmitting
                 ? "bg-[#1565C0] hover:bg-[#1976D2]"
                 : "cursor-not-allowed bg-[#1565C0]/40",
             )}
           >
-            {isLoading
+            {isSubmitting
               ? t("common:loading.processing", { defaultValue: "Đang gửi..." })
               : selected.size > 0
                 ? `${t("chat:message.forward.confirm", { defaultValue: "Chia sẻ" })} (${selected.size})`
