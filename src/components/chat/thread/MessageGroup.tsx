@@ -65,6 +65,9 @@ import { extractFirstUrlFromContent } from "../../message/linkPreviewUtils";
 import { shouldTreatMessageContentAsRichText } from "../../../utils/messageContent.utils";
 import { toast } from "../../ui";
 import { resolveCloudDeleteDragSource } from "../../../features/cloud/utils/cloudDeleteDrag";
+import { resolveCloudMessageMenuActions } from "../../../features/cloud/utils/cloudMessageMenu";
+import { downloadResourceWithName } from "../../../utils/downloadFile";
+import { useAttachmentDownloadUrl } from "../../../hooks/useAttachmentDownloadUrl";
 
 const REPLY_TYPE_LABEL: Partial<Record<string, string>> = {
   [MessageType.IMAGE]: "Hình ảnh",
@@ -342,6 +345,11 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
     const [isHovered, setIsHovered] = React.useState(false);
     const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const message = item.message;
+    const firstAttachment = message.attachments?.[0];
+    const { resolveUrl: resolveAttachmentDownloadUrl } = useAttachmentDownloadUrl(
+      message.conversationId,
+      firstAttachment,
+    );
     // ponytail: poll AND reminder render as a centered, chrome-free card (Zalo-style)
     // — no bubble bg/border, no sender label. Centering is handled by MessageGroupBase.
     const isPoll = message.type === MessageType.POLL || message.type === MessageType.REMINDER;
@@ -630,44 +638,17 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
           canDelete: Boolean(onDelete),
           canEdit: Boolean(onEdit),
           canRecallOthers: viewerCanRecallOthers,
+          isPersonalCloud: cloudMessageActionsOnly,
         });
 
       if (!cloudMessageActionsOnly) return resolved;
-
-      const allowed = new Set<MessageActionId>([
-        "pin",
-        "unpin",
-        "select",
-        "deleteForMe",
-        "forward",
-      ]);
-      if (cloudTrashMode) {
-        allowed.clear();
-        allowed.add("deleteForMe");
-        allowed.add("select");
-      }
-      const menuActions = resolved.menuActions.filter((id) => allowed.has(id));
-      // The default chat policy exposes forwarding on the quick rail only.
-      // My Documents intentionally hides that rail, so retain it explicitly
-      // in the three-dot menu as the user-facing "Chia sẻ" action.
-      if (
-        onForward &&
-        !menuActions.includes("forward") &&
-        message.type !== MessageType.SYSTEM &&
-        !message.isDeleted
-      ) {
-        menuActions.unshift("forward");
-      }
-      // Failed Cloud uploads are intentionally not deletable by the generic
-      // chat policy, but My Documents must still offer cleanup for them.
-      if (
-        onDelete &&
-        !menuActions.includes("deleteForMe") &&
-        message.type !== MessageType.SYSTEM &&
-        !message.isDeleted
-      ) {
-        menuActions.push("deleteForMe");
-      }
+      const menuActions = resolveCloudMessageMenuActions({
+        message,
+        baseActions: resolved.menuActions,
+        canForward: Boolean(onForward),
+        canDelete: Boolean(onDelete),
+        isTrash: cloudTrashMode,
+      });
       return {
         railActions: menuActions.length > 0 ? (["more"] as MessageActionId[]) : [],
         menuActions,
@@ -751,6 +732,39 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
       );
     }, [message, t]);
 
+    const handleAttachmentDownload = React.useCallback(async () => {
+      if (!firstAttachment) return;
+
+      const directCloudUrl = cloudMessageActionsOnly
+        ? resolvePublicResourceUrl(
+            firstAttachment.downloadUrl ?? firstAttachment.url,
+            {
+              context: "download",
+              allowBlob: true,
+              allowDataImage: firstAttachment.mimeType?.startsWith("image/"),
+            },
+          )
+        : undefined;
+      const downloadUrl =
+        directCloudUrl ?? (await resolveAttachmentDownloadUrl(true));
+
+      if (!downloadUrl) {
+        toast.error(
+          t("chat:file.downloadError", {
+            defaultValue: "Không thể tải file",
+          }),
+        );
+        return;
+      }
+
+      await downloadResourceWithName(downloadUrl, firstAttachment.fileName);
+    }, [
+      cloudMessageActionsOnly,
+      firstAttachment,
+      resolveAttachmentDownloadUrl,
+      t,
+    ]);
+
     const handleAction = React.useCallback(
       (actionId: MessageActionId) => {
         switch (actionId) {
@@ -769,6 +783,9 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
             break;
           case "copy":
             void handleCopy();
+            break;
+          case "downloadAttachment":
+            void handleAttachmentDownload();
             break;
           case "retry":
             if (message.conversationId) {
@@ -815,7 +832,25 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         setIsActionSheetOpen(false);
       },
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      [handleCopy, message, onDelete, onEdit, onForward, onPin, onReact, onReply, onStartSelectionMode, onToggleSelect, retrySendMessage, isOwn, t],
+      [handleAttachmentDownload, handleCopy, message, onDelete, onEdit, onForward, onPin, onReact, onReply, onStartSelectionMode, onToggleSelect, retrySendMessage, isOwn, t],
+    );
+
+    const handleContextMenu = React.useCallback(
+      (event: React.MouseEvent<HTMLDivElement>) => {
+        if (!cloudMessageActionsOnly || actionPolicy.menuActions.length === 0) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        setMenuAnchorRect({
+          left: event.clientX,
+          top: event.clientY,
+          bottom: event.clientY,
+        });
+        setIsActionSheetOpen(true);
+      },
+      [actionPolicy.menuActions.length, cloudMessageActionsOnly],
     );
 
     const hasInlineAction = React.useCallback(
@@ -907,6 +942,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
         onMouseEnter={handleItemMouseEnter}
         onMouseLeave={handleItemMouseLeave}
         onFocusCapture={handleItemMouseEnter}
+        onContextMenu={handleContextMenu}
         onBlurCapture={(event) => {
           const nextFocused = event.relatedTarget as Node | null;
           if (!event.currentTarget.contains(nextFocused)) {
@@ -1171,7 +1207,7 @@ const MessageGroupItemComponent: React.FC<MessageGroupItemProps> = ({
             cloudMessageActionsOnly
               ? {
                   forward: "Chia sẻ",
-                  ...(cloudTrashMode ? { deleteForMe: "Xóa vĩnh viễn" } : {}),
+                  deleteForMe: cloudTrashMode ? "Xóa vĩnh viễn" : "Xóa",
                 }
               : undefined
           }
