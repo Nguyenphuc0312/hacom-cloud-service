@@ -253,7 +253,7 @@ interface ChatWindowProps {
   connectionState?: ConnectionState;
   isConversationReady?: boolean;
   externalJumpToMessageId?: string | null;
-  externalJumpRequestVersion?: number;
+  externalJumpRequestVersion?: string | number;
   onExternalJumpHandled?: (messageId: string) => void;
   className?: string;
 }

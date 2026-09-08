@@ -34,14 +34,10 @@ import { useDebounce } from "../../../hooks/useDebounce";
 import { useMessageSearch } from "../../../hooks/useMessageSearch";
 import { useChatUserSearch, useFriendSuggestions } from "./useChatUserSearch";
 import type { ChatSearchUser } from "./useChatUserSearch";
+import { matchesContactQuery } from "../../../utils/contactSearchMatch";
 
 export type GlobalSearchFileType =
-  | "all"
-  | "image"
-  | "video"
-  | "document"
-  | "audio"
-  | "other";
+  "all" | "image" | "video" | "document" | "audio" | "other";
 
 export interface GlobalMessageFilters {
   senderId: string | null;
@@ -60,11 +56,6 @@ export interface GlobalFileResult extends ConversationResourcesFileItem {
   conversationId: string;
   conversationName: string;
 }
-
-const removeDiacritics = (s: string): string =>
-  s.normalize("NFD").replace(/[̀-ͯ]/g, "");
-
-const normalize = (s: string): string => removeDiacritics(s.toLowerCase().trim());
 
 /** Map a mime type to the coarse file-type filter buckets shown in the UI. */
 export const fileTypeOf = (
@@ -96,8 +87,15 @@ export const withinDateRange = (
 export const useGlobalContactSearch = (query: string, enabled: boolean) => {
   const trimmed = query.trim();
   // Friend list is local; server search covers non-friends. Merge, dedupe by id.
-  const { suggestions } = useFriendSuggestions({ query: trimmed, enabled });
-  const { results, isLoading } = useChatUserSearch(trimmed, {
+  const { suggestions, isLoading: isFriendLoading } = useFriendSuggestions({
+    query: trimmed,
+    enabled,
+  });
+  const {
+    results,
+    isLoading: isServerLoading,
+    debouncedQuery,
+  } = useChatUserSearch(trimmed, {
     enabled: enabled && trimmed.length >= 2,
     minQueryLength: 2,
   });
@@ -105,9 +103,38 @@ export const useGlobalContactSearch = (query: string, enabled: boolean) => {
   return useMemo(() => {
     const byId = new Map<string, ChatSearchUser>();
     for (const u of suggestions) byId.set(u.id, u);
-    for (const u of results) if (!byId.has(u.id)) byId.set(u.id, u);
-    return { people: Array.from(byId.values()), isLoading };
-  }, [suggestions, results, isLoading]);
+    for (const u of results) {
+      if (
+        matchesContactQuery(trimmed, [
+          u.alias,
+          u.displayName,
+          u.fullName,
+          u.username,
+          u.employeeCode,
+          u.departmentName,
+          u.unitCode,
+          u.title,
+        ]) &&
+        !byId.has(u.id)
+      ) {
+        byId.set(u.id, u);
+      }
+    }
+    return {
+      people: Array.from(byId.values()),
+      isLoading:
+        isFriendLoading ||
+        isServerLoading ||
+        (trimmed.length >= 2 && debouncedQuery.trim() !== trimmed),
+    };
+  }, [
+    debouncedQuery,
+    isFriendLoading,
+    isServerLoading,
+    results,
+    suggestions,
+    trimmed,
+  ]);
 };
 
 // --- Groups (in-memory conversations) ---------------------------------------
@@ -120,16 +147,18 @@ export const useGlobalGroupSearch = (
   const orderedIds = useChatStore((s) => s.orderedConversationIds);
 
   return useMemo(() => {
-    const q = normalize(query);
     const conversations = orderedIds
       .map((id) => conversationById[id])
       .filter((c): c is Conversation => Boolean(c) && !isDirectConversation(c));
     const pinnedAtById = new Map(
       conversations
-        .map((conversation) => [
-          conversation.id,
-          getConversationPinnedTimestamp(conversation),
-        ] as const)
+        .map(
+          (conversation) =>
+            [
+              conversation.id,
+              getConversationPinnedTimestamp(conversation),
+            ] as const,
+        )
         .filter(([, pinnedAt]) => pinnedAt > 0),
     );
     const comparator = createConversationActivityComparator(
@@ -138,8 +167,9 @@ export const useGlobalGroupSearch = (
     );
     return conversations
       .filter((c) => {
-        if (!q) return true;
-        return normalize(getConversationDisplayName(c, currentUser.id)).includes(q);
+        return matchesContactQuery(query, [
+          getConversationDisplayName(c, currentUser.id),
+        ]);
       })
       .sort(comparator);
   }, [conversationById, orderedIds, query, currentUser.id]);
@@ -157,7 +187,15 @@ export const useGlobalMessageSearch = (
   query: string,
   filters: GlobalMessageFilters,
 ) => {
-  const { setQuery, results, isLoading, hasMore, loadMore } = useMessageSearch({
+  const {
+    setQuery,
+    debouncedQuery,
+    results,
+    isLoading,
+    error,
+    hasMore,
+    loadMore,
+  } = useMessageSearch({
     limit: 30,
     senderId: filters.senderId,
     from: dayStartIso(filters.from),
@@ -168,7 +206,14 @@ export const useGlobalMessageSearch = (
     setQuery(query);
   }, [query, setQuery]);
 
-  return { messages: results, isLoading, hasMore, loadMore };
+  const queryIsCurrent = debouncedQuery.trim() === query.trim();
+  return {
+    messages: queryIsCurrent ? results : [],
+    isLoading: isLoading || !queryIsCurrent,
+    error,
+    hasMore: queryIsCurrent && hasMore,
+    loadMore,
+  };
 };
 
 // --- Files (aggregated across conversations, client-side) --------------------
@@ -193,6 +238,7 @@ export const useGlobalFileSearch = (
       return;
     }
     let cancelled = false;
+    setFiles([]);
     setIsLoading(true);
 
     conversationResourcesApi
@@ -216,7 +262,7 @@ export const useGlobalFileSearch = (
               conversationId,
               conversationName: conversation
                 ? getConversationDisplayName(conversation, currentUser.id)
-                : conversationId,
+                : "",
             };
           }),
         );
@@ -241,7 +287,11 @@ export const useGlobalFileSearch = (
     currentUser.id,
   ]);
 
-  return { files, isLoading };
+  const queryIsCurrent = debouncedQuery === query.trim();
+  return {
+    files: queryIsCurrent ? files : [],
+    isLoading: isLoading || !queryIsCurrent,
+  };
 };
 
 /** Distinct senders across the user's conversations — feeds the sender filter. */

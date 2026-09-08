@@ -24,6 +24,9 @@ export const normalizeSearchText = (value: string | null | undefined): string =>
     .toLowerCase()
     .trim();
 
+const normalizeQuery = (query: string): string =>
+  normalizeSearchText(query).replace(/^@+/, "");
+
 /**
  * Khớp khi từ khóa là chuỗi con LIỀN NHAU của một trong các trường.
  * Cố ý không dùng subsequence: đó chính là thứ gây nhiễu ở `/users/search`.
@@ -35,7 +38,7 @@ export const matchesContactQuery = (
   query: string,
   fields: Array<string | null | undefined>,
 ): boolean => {
-  const normalizedQuery = normalizeSearchText(query);
+  const normalizedQuery = normalizeQuery(query);
   if (!normalizedQuery) return true;
 
   const haystack = fields
@@ -44,7 +47,39 @@ export const matchesContactQuery = (
     .join(" ");
   if (!haystack) return false;
 
-  return normalizedQuery
-    .split(/\s+/)
-    .every((term) => haystack.includes(term));
+  return normalizedQuery.split(/\s+/).every((term) => haystack.includes(term));
+};
+
+/**
+ * Xếp hạng các kết quả khớp có chủ đích. Không dùng subsequence vì kiểu khớp
+ * đó khiến một mã nhân viên hoặc vài ký tự ngắn kéo theo hàng loạt kết quả sai.
+ */
+export const scoreSearchMatch = (
+  query: string,
+  fields: Array<string | null | undefined>,
+): number => {
+  const normalizedQuery = normalizeQuery(query);
+  if (!normalizedQuery) return 0;
+
+  const normalizedFields = fields
+    .map((field) => normalizeSearchText(field))
+    .filter(Boolean);
+  if (!normalizedFields.length) return -1;
+
+  if (normalizedFields.some((field) => field === normalizedQuery)) return 100;
+  if (normalizedFields.some((field) => field.startsWith(normalizedQuery)))
+    return 80;
+  if (
+    normalizedFields.some((field) =>
+      field.split(/\s+/).some((word) => word.startsWith(normalizedQuery)),
+    )
+  ) {
+    return 65;
+  }
+  if (normalizedFields.some((field) => field.includes(normalizedQuery)))
+    return 50;
+
+  const terms = normalizedQuery.split(/\s+/).filter(Boolean);
+  const haystack = normalizedFields.join(" ");
+  return terms.every((term) => haystack.includes(term)) ? 35 : -1;
 };

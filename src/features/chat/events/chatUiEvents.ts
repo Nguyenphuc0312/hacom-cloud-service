@@ -22,11 +22,53 @@ export interface OpenConversationDetail {
   messageId?: string;
 }
 
+export type ChatRouteIntent =
+  | ({ type: "open-conversation" } & OpenConversationDetail)
+  | ({ type: "start-direct-message" } & StartDirectMessageDetail);
+
+export interface ChatRouteState {
+  chatIntent: ChatRouteIntent & { requestId: string };
+}
+
 const CONTACT_PROFILE_VIEW_EVENT = "chat:contact:view-profile";
 const NOTIFICATION_CLICK_EVENT = "chat:notification:clicked";
 const OPEN_CONVERSATION_EVENT = "chat:open-conversation";
 const START_DIRECT_MESSAGE_EVENT = "chat:start-direct-message";
 const MENTION_PROFILE_VIEW_EVENT = "chat:mention:view-profile";
+
+let routeIntentSequence = 0;
+
+export const createChatRouteState = (
+  intent: ChatRouteIntent,
+): ChatRouteState => ({
+  chatIntent: {
+    ...intent,
+    requestId: `${Date.now()}:${++routeIntentSequence}`,
+  },
+});
+
+export const readChatRouteIntent = (
+  state: unknown,
+): ChatRouteState["chatIntent"] | null => {
+  if (!state || typeof state !== "object") return null;
+  const intent = (state as { chatIntent?: unknown }).chatIntent;
+  if (!intent || typeof intent !== "object") return null;
+
+  const candidate = intent as Partial<ChatRouteState["chatIntent"]>;
+  if (!candidate.requestId || !candidate.type) return null;
+  if (candidate.type === "open-conversation") {
+    return typeof candidate.conversationId === "string" &&
+      candidate.conversationId.length > 0
+      ? (candidate as ChatRouteState["chatIntent"])
+      : null;
+  }
+  if (candidate.type === "start-direct-message") {
+    return typeof candidate.userId === "string" && candidate.userId.length > 0
+      ? (candidate as ChatRouteState["chatIntent"])
+      : null;
+  }
+  return null;
+};
 
 const dispatchWindowEvent = <TDetail>(name: string, detail: TDetail): void => {
   if (typeof window === "undefined") {

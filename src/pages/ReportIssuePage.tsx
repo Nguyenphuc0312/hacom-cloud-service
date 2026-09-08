@@ -48,7 +48,12 @@ const rejectFile = (file: File, current: File[]): string | null => {
   if (current.length >= MAX_FILES) {
     return `Chỉ đính kèm tối đa ${MAX_FILES} tệp.`;
   }
-  const mimeType = resolveUploadMimeTypeForFile(file);
+  // Keep an explicitly supplied MIME type authoritative here. The shared
+  // upload policy normalizes unknown types to application/octet-stream for
+  // generic chat uploads, but the support form should still reject an
+  // explicitly unsupported attachment instead of silently accepting it.
+  const declaredMimeType = file.type.trim().toLowerCase();
+  const mimeType = declaredMimeType || resolveUploadMimeTypeForFile(file);
   if (!mimeType) {
     return `${file.name}: không nhận dạng được loại tệp.`;
   }

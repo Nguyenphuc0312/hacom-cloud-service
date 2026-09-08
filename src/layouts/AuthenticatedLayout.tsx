@@ -7,11 +7,13 @@ import { ROUTE_PATHS } from "../router/paths";
 import { PersistentNavigationRail } from "../shared/layout";
 import { GlobalWebSocketProvider } from "../features/realtime/GlobalWebSocketProvider";
 import {
-  dispatchNotificationClick,
+  createChatRouteState,
   listenForOpenConversation,
+  listenForStartDirectMessage,
 } from "../features/chat/events/chatUiEvents";
 import { useReminderStore } from "../stores/reminderStore";
 import { useFriendshipStore } from "../stores/friendshipStore";
+import { useChatSidebarStore } from "../features/chat/state/chatSidebarStore";
 import { AuthenticatedRouteFallback } from "./AuthenticatedRouteFallback";
 
 /**
@@ -24,6 +26,11 @@ export const AuthenticatedLayout: React.FC = () => {
   const currentUser = useAuthStore((state) => state.user);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = React.useState(false);
   const checkReminder = useReminderStore((s) => s.checkReminder);
+
+  React.useEffect(() => {
+    const sidebarState = useChatSidebarStore.getState();
+    if (sidebarState.isSearchOpen) sidebarState.closeSearch();
+  }, [location.key]);
 
   // Bootstrap ALL friend aliases on page load so ChatHeader/RoomItem show the
   // "tên gợi nhớ" immediately. Large limit → the alias index (friendByUserId)
@@ -48,19 +55,37 @@ export const AuthenticatedLayout: React.FC = () => {
   }, [checkReminder]);
 
   React.useEffect(() => {
-    return listenForOpenConversation(({ conversationId, messageId }) => {
-      // Notify ChatPage first (sets the jump-to-message target), then route
-      // straight to the target conversation. Navigating to the specific id —
-      // not bare ROUTE_PATHS.CHAT — avoids overriding ChatPage's own navigate
-      // and works from any page (chat or not). Falls back to /chat if no id.
-      dispatchNotificationClick({ conversationId, messageId });
+    return listenForOpenConversation((detail) => {
+      const { conversationId } = detail;
       navigate(
         conversationId
           ? `${ROUTE_PATHS.CHAT}/${conversationId}`
           : ROUTE_PATHS.CHAT,
+        {
+          state: createChatRouteState({
+            type: "open-conversation",
+            ...detail,
+          }),
+        },
       );
     });
   }, [navigate]);
+
+  React.useEffect(() => {
+    return listenForStartDirectMessage(({ userId }) => {
+      navigate(
+        location.pathname.startsWith(ROUTE_PATHS.CHAT)
+          ? location.pathname
+          : ROUTE_PATHS.CHAT,
+        {
+          state: createChatRouteState({
+            type: "start-direct-message",
+            userId,
+          }),
+        },
+      );
+    });
+  }, [location.pathname, navigate]);
 
   React.useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {

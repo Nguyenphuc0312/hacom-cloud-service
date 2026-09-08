@@ -11,6 +11,46 @@
  */
 
 const DEFAULT_NAME = "download";
+const MAX_IN_MEMORY_DOWNLOAD_BYTES = 200 * 1024 * 1024;
+const OBJECT_URL_REVOKE_DELAY_MS = 1_000;
+
+export interface ResourceDownloadProgress {
+  loadedBytes: number;
+  totalBytes?: number;
+}
+
+export interface ResourceDownloadOptions {
+  signal?: AbortSignal;
+  /** Fallback when storage does not expose Content-Length. */
+  totalBytesHint?: number;
+  /** Exact attachment size when the backend supplies one. */
+  expectedBytes?: number;
+  /** Cap buffered downloads so a malformed response cannot exhaust the renderer. */
+  maxBytes?: number;
+  onProgress?: (progress: ResourceDownloadProgress) => void;
+}
+
+// Renderer-level UX guard: only auto-open known passive formats. Unknown and
+// executable/script formats are downloaded but never dispatched to the OS.
+// The desktop main process must independently enforce the same policy.
+const AUTO_OPEN_EXTENSIONS = new Set(
+  "pdf txt csv rtf md log doc docx dot dotx xls xlsx xlt xltx ppt pptx pps ppsx pot potx odt ods odp jpg jpeg png gif webp bmp heic heif mp3 wav m4a ogg mp4 mov webm avi mkv zip rar 7z tar gz gzip".split(
+    " ",
+  ),
+);
+
+export const canAutoOpenDownloadedFile = (
+  fileName?: string | null,
+): boolean => {
+  // Windows ignores trailing spaces and dots when dispatching a file. Normalize
+  // them before checking the final extension to avoid names such as report.exe.
+  const normalized = (fileName ?? "").trim().replace(/[.\s]+$/g, "");
+  const dot = normalized.lastIndexOf(".");
+  if (dot <= 0 || dot === normalized.length - 1) return false;
+  return AUTO_OPEN_EXTENSIONS.has(
+    normalized.slice(dot + 1).toLowerCase(),
+  );
+};
 
 /** Optional Electron/Tauri/native host bridge for revealing a downloaded file. */
 export type HacomDesktopBridge = {
@@ -43,8 +83,112 @@ const triggerAnchorDownload = (
     a.rel = "noopener noreferrer";
   }
   document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  try {
+    a.click();
+  } finally {
+    a.remove();
+  }
+};
+
+const resolveTotalBytes = (
+  response: Response,
+  totalBytesHint?: number,
+): number | undefined => {
+  const headerValue = Number(response.headers.get("content-length"));
+  if (Number.isFinite(headerValue) && headerValue > 0) return headerValue;
+  return totalBytesHint && totalBytesHint > 0 ? totalBytesHint : undefined;
+};
+
+const assertExpectedBytes = (
+  loadedBytes: number,
+  expectedBytes?: number,
+): void => {
+  if (
+    typeof expectedBytes === "number" &&
+    expectedBytes > 0 &&
+    loadedBytes !== expectedBytes
+  ) {
+    throw new Error("Downloaded file size does not match attachment");
+  }
+};
+
+/** Fetch a resource once while reporting the real transferred byte count. */
+export const fetchResourceBlob = async (
+  url: string,
+  options: ResourceDownloadOptions = {},
+): Promise<Blob> => {
+  const response = await fetch(url, { signal: options.signal });
+  if (!response.ok) {
+    throw new Error("Download failed: HTTP " + response.status);
+  }
+
+  const maxBytes = options.maxBytes ?? MAX_IN_MEMORY_DOWNLOAD_BYTES;
+  const totalBytes = resolveTotalBytes(response, options.totalBytesHint);
+  if (totalBytes !== undefined && totalBytes > maxBytes) {
+    throw new Error("Download exceeds the in-memory size limit");
+  }
+  if (!response.body) {
+    const blob = await response.blob();
+    if (blob.size > maxBytes) {
+      throw new Error("Download exceeds the in-memory size limit");
+    }
+    assertExpectedBytes(blob.size, options.expectedBytes);
+    options.onProgress?.({ loadedBytes: blob.size, totalBytes });
+    return blob;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: ArrayBuffer[] = [];
+  let loadedBytes = 0;
+  let lastReportedBytes = 0;
+  let lastReportedAt = 0;
+  const reportProgress = (force = false) => {
+    if (!options.onProgress) return;
+    const now = Date.now();
+    if (!force && now - lastReportedAt < 100) return;
+    if (loadedBytes === lastReportedBytes) return;
+    lastReportedAt = now;
+    lastReportedBytes = loadedBytes;
+    options.onProgress?.({ loadedBytes, totalBytes });
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    const chunk = new Uint8Array(value.byteLength);
+    chunk.set(value);
+    chunks.push(chunk.buffer);
+    loadedBytes += chunk.byteLength;
+    if (loadedBytes > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw new Error("Download exceeds the in-memory size limit");
+    }
+    reportProgress();
+  }
+  reportProgress(true);
+  assertExpectedBytes(loadedBytes, options.expectedBytes);
+
+  return new Blob(chunks, {
+    type: response.headers.get("content-type") || undefined,
+  });
+};
+
+/** Start a browser download from a blob that has already been fetched. */
+export const downloadBlobWithName = (
+  blob: Blob,
+  fileName?: string | null,
+): void => {
+  const safeName = (fileName ?? "").trim() || DEFAULT_NAME;
+  const blobUrl = URL.createObjectURL(blob);
+  try {
+    triggerAnchorDownload(blobUrl, safeName);
+  } finally {
+    window.setTimeout(
+      () => URL.revokeObjectURL(blobUrl),
+      OBJECT_URL_REVOKE_DELAY_MS,
+    );
+  }
 };
 
 /**
@@ -55,20 +199,27 @@ const triggerAnchorDownload = (
 export const downloadResourceWithName = async (
   url: string,
   fileName?: string | null,
+  options: ResourceDownloadOptions = {},
 ): Promise<void> => {
   const safeName = (fileName ?? "").trim() || DEFAULT_NAME;
   if (!url) return;
 
   try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Download failed: HTTP ${response.status}`);
+    const blob = await fetchResourceBlob(url, options);
+    downloadBlobWithName(blob, safeName);
+  } catch (error) {
+    if (
+      options.signal?.aborted ||
+      (error instanceof DOMException && error.name === "AbortError")
+    ) {
+      throw error;
     }
-    const blob = await response.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    triggerAnchorDownload(blobUrl, safeName);
-    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-  } catch {
+    // Managed downloads report progress and already have a recoverable error
+    // state. A blind anchor fallback would start the same transfer again and
+    // cannot tell the caller whether that second attempt actually succeeded.
+    if (options.onProgress) {
+      throw error;
+    }
     // Fallback tốt-nhất-có-thể: tên có thể bị thay theo URL nếu khác origin.
     triggerAnchorDownload(url, safeName, { newTab: true });
   }

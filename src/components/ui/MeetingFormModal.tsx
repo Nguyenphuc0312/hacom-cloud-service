@@ -150,6 +150,9 @@ const searchUserToOption = (u: ChatSearchUser) => ({
   isSelf: false as const,
 });
 
+const looksLikeCode = (value: string): boolean =>
+  /^[a-z0-9._-]+$/i.test(value) && !/\s/.test(value);
+
 const timeRangesOverlap = (
   s1: string, e1: string,
   s2: string, e2: string,
@@ -210,7 +213,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
     else leaveAction();
   };
 
-  const savedLocations = React.useMemo(() => getSavedLocations(), [isOpen]);
+  const savedLocations = getSavedLocations();
 
   // Bạn bè dùng cho @-mention — lấy từ friendshipStore (cache server, có avatar/HR fields)
   const friends = useFriendshipStore((s) => s.friends);
@@ -223,9 +226,6 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       void fetchFriends();
     }
   }, [isOpen, friends.length, isFriendsLoading, fetchFriends]);
-
-  const looksLikeCode = (s: string): boolean =>
-    /^[a-z0-9._-]+$/i.test(s) && !/\s/.test(s);
 
   const friendOptions = React.useMemo(() => {
     const pickName = (f: typeof friends[number]): string => {
@@ -255,7 +255,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       }))
       .filter((f) => f.name)
       .sort((a, b) => a.name.localeCompare(b.name, "vi"));
-  }, [friends, looksLikeCode]);
+  }, [friends]);
 
   // Tùy chọn "bản thân" đặt ở đầu danh sách
   const selfOption = React.useMemo(() => {
@@ -282,7 +282,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       title: currentUser.title || "",
       isSelf: true as const,
     };
-  }, [currentUser, looksLikeCode]);
+  }, [currentUser]);
   // Avatar người tạo khi Sửa: event chỉ mang tên + authUserId, không mang ảnh →
   // tra qua batch loader (cùng nguồn với EventDetailModal / avatar stack), nếu
   // không thì để Avatar tự fallback initials. Trước đây hard-code "" nên hàng

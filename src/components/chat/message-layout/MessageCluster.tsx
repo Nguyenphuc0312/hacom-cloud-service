@@ -651,6 +651,12 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                     hasError={isFailedMessage(message)}
                     isPending={isPendingMessage(message)}
                     bare={bringsOwnSurface}
+                    className={
+                      message.type === MessageType.FILE &&
+                      (message.attachments?.length ?? 0) > 0
+                        ? "!rounded-[1.5rem] !p-2"
+                        : undefined
+                    }
                   >
                     {isGroupConversation && !isOwn && showSenderName && !isPoll && (
                       <p className={clsx(contract.cluster.senderLabel, "truncate")}>

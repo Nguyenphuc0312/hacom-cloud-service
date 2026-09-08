@@ -6,6 +6,7 @@ import {
   ChevronRightIcon,
   CheckIcon,
   EllipsisHorizontalIcon,
+  PaperClipIcon,
   TagIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
@@ -217,8 +218,13 @@ const buildPreviewText = (
   const lastMessage = conversation.lastMessage;
   if (!lastMessage) return "";
 
-  const messagePreview = getMessagePreview(lastMessage, currentUser.id, 240);
-  if (!messagePreview) return "";
+  const fullMessagePreview = getMessagePreview(lastMessage, currentUser.id, 240);
+  if (!fullMessagePreview) return "";
+  const filePrefix = `${i18n.t("chat:preview.file")} · `;
+  const messagePreview =
+    lastMessage.type === "file"
+      ? fullMessagePreview.replace(filePrefix, "")
+      : fullMessagePreview;
 
   if (lastMessage.type === "system" || isDirectConversation(conversation)) {
     return truncateTextWithEllipsis(messagePreview, 52);
@@ -604,6 +610,8 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
     visualState === "unread" || visualState === "mention";
   const previewToneClass =
     previewState === "failed" ? "text-danger" : visualStyles.preview;
+  const isFilePreview =
+    !draftText && conversation.lastMessage?.type === "file";
   const timeBadgeClasses =
     timeLabel.length > 0 && (visualState === "active" || shouldEmphasizeUnreadPreview)
       ? visualStyles.timeBadge
@@ -714,7 +722,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
           ) : (
             <p
               className={clsx(
-                "mt-0.5 truncate pr-1 text-left",
+                "mt-0.5 flex min-w-0 items-center gap-1 pr-1 text-left",
                 isDense
                   ? "text-[11px] leading-[0.95rem]"
                   : "text-[12px] leading-[1rem]",
@@ -729,7 +737,15 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
                     : "400",
               }}
             >
-              {previewText || t("sidebar:room.noMessagesYet")}
+              {isFilePreview && (
+                <PaperClipIcon
+                  aria-hidden="true"
+                  className="h-3.5 w-3.5 shrink-0 text-text-muted"
+                />
+              )}
+              <span className="min-w-0 truncate">
+                {previewText || t("sidebar:room.noMessagesYet")}
+              </span>
             </p>
           )}
         </div>

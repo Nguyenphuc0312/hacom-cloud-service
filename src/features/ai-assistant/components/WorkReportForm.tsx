@@ -25,6 +25,7 @@ import {
   type WorkReportTaskSubmit,
 } from "../services/aiChatApi";
 import { ConfirmDialog } from "../../../components/ui";
+import { isoToVn, vnToIso } from "../../../components/ui/dateFieldVNUtils";
 import { taskRowHasInput } from "./workReportCancelGuard";
 
 interface WorkReportFormProps {
@@ -128,29 +129,6 @@ function formatFileSize(bytes?: number): string {
 function formatDateVN(dateStr: string): string {
   const [y, m, d] = dateStr.split("-");
   return `${d}/${m}/${y}`;
-}
-
-// ── Ngày hoàn thành: state lưu chuỗi dd/mm/yyyy (BE nhận trực tiếp; submitted_tasks
-//    cũng trả dd/mm/yyyy). Chỉ chuyển đổi khi bắc cầu sang <input type="date">
-//    (native picker chỉ hiểu yyyy-mm-dd). ────────────────────────────────────
-
-/** "dd/mm/yyyy" (hợp lệ) → "yyyy-mm-dd" cho native picker; sai/rỗng → "". */
-export function vnToIso(vn: string): string {
-  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(vn.trim());
-  if (!m) return "";
-  const [, d, mo, y] = m;
-  const iso = `${y}-${mo}-${d}`;
-  const dt = new Date(`${iso}T00:00:00`);
-  // Chặn ngày không tồn tại (32/13/…): Date sẽ cuộn tháng nên phải đối chiếu lại.
-  if (Number.isNaN(dt.getTime())) return "";
-  const back = `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`;
-  return back === vn.trim() ? iso : "";
-}
-
-/** "yyyy-mm-dd" (từ native picker) → "dd/mm/yyyy". */
-export function isoToVn(iso: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
 }
 
 /**

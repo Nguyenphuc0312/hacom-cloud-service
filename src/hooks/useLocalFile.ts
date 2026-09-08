@@ -16,9 +16,10 @@ import {
   markFileDownloaded,
   subscribeDownloadedFiles,
 } from "../utils/downloadedFiles";
-import {
-  buildLocalFileName,
-  getDesktopFiles,
+import { buildLocalFileName, getDesktopFiles } from "../utils/desktopBridge";
+import type {
+  DesktopFileExists,
+  DesktopFileResult,
 } from "../utils/desktopBridge";
 import { logger } from "../utils/logger";
 
@@ -29,72 +30,194 @@ export interface UseLocalFileResult {
   status: LocalFileStatus;
   /** Desktop mới mở được file bằng app hệ thống / mở thư mục chứa. */
   canOpenLocally: boolean;
-  /** Mở file đã tải bằng app mặc định của OS. Trả false nếu không mở được. */
-  openLocal: () => Promise<boolean>;
-  /** Mở File Explorer và bôi đen file. Trả false nếu không làm được. */
-  reveal: () => Promise<boolean>;
+  /** Bản desktop hỗ trợ hộp thoại Save As native. */
+  canSaveAsLocally: boolean;
+  /** Mở file đã tải bằng app mặc định của OS. Giữ reason để caller phục hồi. */
+  openLocal: () => Promise<DesktopFileResult>;
+  /** Mở File Explorer và bôi đen file. Giữ reason để caller phục hồi. */
+  reveal: () => Promise<DesktopFileResult>;
   /** Ghi file xuống máy (desktop: đĩa thật; web: chỉ đánh dấu đã tải). */
   saveLocal: (blob: Blob) => Promise<boolean>;
+  /** Lưu một bản sao tới vị trí user chọn; bỏ blob để copy từ cache. */
+  saveAsLocal: (blob?: Blob) => Promise<DesktopFileResult>;
   /** Đánh dấu đã tải mà không ghi đĩa (dùng cho luồng tải của trình duyệt). */
   markDownloaded: () => void;
+}
+
+export interface LocalFileScope {
+  currentUserId: string;
+  conversationId: string;
 }
 
 const attachmentKey = (attachment: Attachment | undefined): string =>
   attachment?.id || attachment?.objectKey || attachment?.url || "";
 
+type DesktopStatusUpdate =
+  | { status: "downloaded"; observedSize: number }
+  | { status: "not-downloaded" };
+
+type DesktopStatusListener = (update: DesktopStatusUpdate) => void;
+
+const desktopStatusListeners = new Map<string, Set<DesktopStatusListener>>();
+
+const subscribeDesktopStatus = (
+  localName: string,
+  listener: DesktopStatusListener,
+): (() => void) => {
+  const listeners =
+    desktopStatusListeners.get(localName) ?? new Set<DesktopStatusListener>();
+  listeners.add(listener);
+  desktopStatusListeners.set(localName, listeners);
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) desktopStatusListeners.delete(localName);
+  };
+};
+
+const publishDesktopStatus = (
+  localName: string,
+  update: DesktopStatusUpdate,
+): void => {
+  for (const listener of desktopStatusListeners.get(localName) ?? []) {
+    listener(update);
+  }
+};
+
+const publishDesktopObservation = (
+  localName: string,
+  result: DesktopFileExists,
+): void => {
+  const observedSize = result.size;
+  publishDesktopStatus(
+    localName,
+    result.exists &&
+      typeof observedSize === "number" &&
+      Number.isSafeInteger(observedSize) &&
+      observedSize > 0
+      ? { status: "downloaded", observedSize }
+      : { status: "not-downloaded" },
+  );
+};
+
 export const useLocalFile = (
   attachment: Attachment | undefined,
+  scope: LocalFileScope,
 ): UseLocalFileResult => {
   const key = attachmentKey(attachment);
   const fileName = attachment?.fileName;
+  const expectedSize =
+    typeof attachment?.fileSize === "number" &&
+    Number.isSafeInteger(attachment.fileSize) &&
+    attachment.fileSize > 0
+      ? attachment.fileSize
+      : undefined;
   const desktop = getDesktopFiles();
-  const canOpenLocally = desktop !== null;
+  const currentUserId = scope.currentUserId.trim();
+  const conversationId = scope.conversationId.trim();
 
   const localName = React.useMemo(
-    () => (key ? buildLocalFileName(key, fileName) : ""),
-    [key, fileName],
+    () =>
+      key && currentUserId && conversationId
+        ? buildLocalFileName(
+            { currentUserId, conversationId, attachmentKey: key },
+            fileName,
+          )
+        : "",
+    [conversationId, currentUserId, fileName, key],
   );
+  const canOpenLocally = desktop !== null && localName !== "";
+  const canSaveAsLocally =
+    canOpenLocally && typeof desktop?.saveAs === "function";
 
-  // Web: đọc từ localStorage ngay (đồng bộ). Desktop: chờ hỏi đĩa → "unknown".
-  const [status, setStatus] = React.useState<LocalFileStatus>(() => {
-    if (canOpenLocally) return "unknown";
-    return isFileDownloaded(key) ? "downloaded" : "not-downloaded";
-  });
+  const webStatus = React.useSyncExternalStore<LocalFileStatus>(
+    subscribeDownloadedFiles,
+    () => (isFileDownloaded(key) ? "downloaded" : "not-downloaded"),
+    () => "not-downloaded",
+  );
+  const [desktopState, setDesktopState] = React.useState<{
+    localName: string;
+    status: LocalFileStatus;
+  }>({ localName, status: "unknown" });
+  const activeLocalNameRef = React.useRef(localName);
+  const mutationVersionRef = React.useRef(0);
+  const setDesktopStatus = React.useCallback(
+    (targetLocalName: string, nextStatus: LocalFileStatus) => {
+      if (activeLocalNameRef.current !== targetLocalName) return;
+      setDesktopState({ localName: targetLocalName, status: nextStatus });
+    },
+    [],
+  );
+  React.useEffect(() => {
+    activeLocalNameRef.current = localName;
+    return () => {
+      if (activeLocalNameRef.current === localName) {
+        activeLocalNameRef.current = "";
+      }
+    };
+  }, [localName]);
+  React.useEffect(() => {
+    if (!desktop || !localName) return;
+    return subscribeDesktopStatus(localName, (update) => {
+      mutationVersionRef.current += 1;
+      const nextStatus =
+        update.status === "downloaded" &&
+        typeof expectedSize === "number" &&
+        update.observedSize !== expectedSize
+          ? "not-downloaded"
+          : update.status;
+      setDesktopStatus(localName, nextStatus);
+    });
+  }, [desktop, expectedSize, localName, setDesktopStatus]);
+  const status = canOpenLocally
+    ? desktopState.localName === localName
+      ? desktopState.status
+      : "unknown"
+    : webStatus;
 
   // Desktop: hỏi đĩa. Đây là điểm khác biệt thật so với web — file user xoá tay
   // ngoài app sẽ quay lại trạng thái "chưa tải", không nói dối.
   React.useEffect(() => {
     if (!desktop || !localName) return;
     let cancelled = false;
+    const checkVersion = mutationVersionRef.current + 1;
+    mutationVersionRef.current = checkVersion;
 
     void desktop
       .exists(localName)
       .then((result) => {
-        if (cancelled) return;
-        setStatus(result.exists ? "downloaded" : "not-downloaded");
+        if (cancelled || mutationVersionRef.current !== checkVersion) return;
+        publishDesktopObservation(localName, result);
       })
       .catch(() => {
-        if (!cancelled) setStatus("not-downloaded");
+        if (!cancelled && mutationVersionRef.current === checkVersion) {
+          publishDesktopStatus(localName, { status: "not-downloaded" });
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [desktop, localName]);
+  }, [desktop, expectedSize, localName]);
 
-  // Web: theo dõi localStorage để nhiều card cùng file cập nhật cùng lúc.
-  React.useEffect(() => {
-    if (canOpenLocally || !key) return;
-    return subscribeDownloadedFiles(() => {
-      setStatus(isFileDownloaded(key) ? "downloaded" : "not-downloaded");
-    });
-  }, [canOpenLocally, key]);
+  const refreshDesktopStatus = React.useCallback(
+    async (targetLocalName: string): Promise<void> => {
+      if (!desktop) return;
+      const checkVersion = mutationVersionRef.current;
+      try {
+        const result = await desktop.exists(targetLocalName);
+        if (mutationVersionRef.current !== checkVersion) return;
+        publishDesktopObservation(targetLocalName, result);
+      } catch {
+        // The successful open/reveal remains valid; keep the last known status.
+      }
+    },
+    [desktop],
+  );
 
   const markDownloaded = React.useCallback(() => {
-    if (!key) return;
+    if (!key || desktop) return;
     markFileDownloaded(key);
-    setStatus("downloaded");
-  }, [key]);
+  }, [desktop, key]);
 
   const saveLocal = React.useCallback(
     async (blob: Blob): Promise<boolean> => {
@@ -106,7 +229,10 @@ export const useLocalFile = (
         const buffer = await blob.arrayBuffer();
         const result = await desktop.save(localName, buffer);
         if (result.ok) {
-          setStatus("downloaded");
+          publishDesktopStatus(localName, {
+            status: "downloaded",
+            observedSize: blob.size,
+          });
           return true;
         }
         logger.warn("desktop-file", "save-failed", { reason: result.reason });
@@ -121,39 +247,70 @@ export const useLocalFile = (
     [desktop, localName, markDownloaded],
   );
 
-  const openLocal = React.useCallback(async (): Promise<boolean> => {
-    if (!desktop || !localName) return false;
+  const openLocal = React.useCallback(async (): Promise<DesktopFileResult> => {
+    if (!desktop || !localName) return { ok: false, reason: "unsupported" };
     try {
       const result = await desktop.open(localName);
       // File bị xoá ngoài app → đồng bộ lại trạng thái thay vì báo mở được.
-      if (!result.ok && result.reason === "missing") {
-        setStatus("not-downloaded");
+      if (result.ok) {
+        void refreshDesktopStatus(localName);
+      } else if (result.reason === "missing") {
+        publishDesktopStatus(localName, { status: "not-downloaded" });
       }
-      return result.ok;
+      return result;
     } catch {
-      return false;
+      return { ok: false, reason: "open-failed" };
     }
-  }, [desktop, localName]);
+  }, [desktop, localName, refreshDesktopStatus]);
 
-  const reveal = React.useCallback(async (): Promise<boolean> => {
-    if (!desktop || !localName) return false;
+  const saveAsLocal = React.useCallback(
+    async (blob?: Blob): Promise<DesktopFileResult> => {
+      if (!desktop?.saveAs || !localName) {
+        return { ok: false, reason: "unsupported" };
+      }
+      try {
+        const data = blob ? await blob.arrayBuffer() : undefined;
+        return await desktop.saveAs(
+          localName,
+          (fileName ?? "").trim() || "download",
+          data,
+          expectedSize,
+        );
+      } catch (error) {
+        logger.warn("desktop-file", "save-as-threw", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return { ok: false, reason: "save-failed" };
+      }
+    },
+    [desktop, expectedSize, fileName, localName],
+  );
+
+  const reveal = React.useCallback(async (): Promise<DesktopFileResult> => {
+    if (!desktop || !localName) {
+      return { ok: false, reason: "unsupported" };
+    }
     try {
       const result = await desktop.reveal(localName);
-      if (!result.ok && result.reason === "missing") {
-        setStatus("not-downloaded");
+      if (result.ok) {
+        void refreshDesktopStatus(localName);
+      } else if (result.reason === "missing") {
+        publishDesktopStatus(localName, { status: "not-downloaded" });
       }
-      return result.ok;
+      return result;
     } catch {
-      return false;
+      return { ok: false, reason: "reveal-failed" };
     }
-  }, [desktop, localName]);
+  }, [desktop, localName, refreshDesktopStatus]);
 
   return {
     status,
     canOpenLocally,
+    canSaveAsLocally,
     openLocal,
     reveal,
     saveLocal,
+    saveAsLocal,
     markDownloaded,
   };
 };

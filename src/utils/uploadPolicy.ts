@@ -210,13 +210,13 @@ export const resolveUploadFileType = (mimeType: string): FileType =>
 
 export const resolveUploadMimeTypeForFile = (
   file: Pick<File, "name" | "type">,
-): string | undefined => {
+): string => {
   const normalizedType = normalizeUploadMimeType(file.type);
-  if (normalizedType) {
+  if (ALLOWED_UPLOAD_FILE_TYPES[normalizedType]) {
     return normalizedType;
   }
 
-  return inferUploadMimeTypeFromFileName(file.name);
+  return inferUploadMimeTypeFromFileName(file.name) ?? "application/octet-stream";
 };
 
 export const resolveUploadMaxBytesForMimeType = (mimeType: string): number => {
@@ -254,13 +254,22 @@ export const validateUploadFileType = (input: {
   const extension = getUploadFileExtension(input.fileName);
   const definition = ALLOWED_UPLOAD_FILE_TYPES[mimeType];
 
-  if (!definition) {
+  if (!definition && mimeType !== "application/octet-stream") {
     return {
       ok: false,
       code: UPLOAD_VALIDATION_CODES.UNSUPPORTED_MIME_TYPE,
       mimeType,
       extension,
       expectedExtensions: [],
+    };
+  }
+
+  if (!definition) {
+    return {
+      ok: true,
+      mimeType,
+      extension,
+      category: "generic",
     };
   }
 

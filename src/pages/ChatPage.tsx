@@ -10,7 +10,7 @@ import React, {
   useMemo,
   useRef,
 } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useLocation, useParams, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
@@ -49,9 +49,8 @@ import { getOtherParticipant } from "../utils/messageHelpers";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import {
   listenForContactProfileView,
-  listenForNotificationClick,
-  listenForStartDirectMessage,
   listenForMentionProfileView,
+  readChatRouteIntent,
 } from "../features/chat/events/chatUiEvents";
 import { logMessageDebug } from "../utils/messageDebug";
 import { logger } from "../utils/logger";
@@ -454,6 +453,8 @@ export const ChatPage: React.FC = () => {
   const { conversationId } = useParams<{ conversationId?: string }>();
   const routeConversationId = conversationId ?? null;
   const navigate = useNavigate();
+  const location = useLocation();
+  const routeIntent = readChatRouteIntent(location.state);
   const shouldTraceRenderLoop = import.meta.env.DEV;
 
   // Auth store
@@ -539,8 +540,10 @@ export const ChatPage: React.FC = () => {
   const [hasMoreConversations, setHasMoreConversations] = useState(true);
   const conversationsPageRef = useRef(1);
   const roomCreationLockRef = useRef(false);
-  const [externalJumpTargetMessageId, setExternalJumpTargetMessageId] =
-    useState<string | null>(null);
+  const [externalJumpTarget, setExternalJumpTarget] = useState<{
+    conversationId: string;
+    messageId: string;
+  } | null>(null);
   const [externalJumpRequestVersion, setExternalJumpRequestVersion] =
     useState(0);
   const renderCountRef = useRef(0);
@@ -1254,11 +1257,26 @@ export const ChatPage: React.FC = () => {
     [filePreview, selectedConversation],
   );
 
-  const handleExternalJumpHandled = useCallback((messageId: string) => {
-    setExternalJumpTargetMessageId((current) =>
-      current === messageId ? null : current,
-    );
-  }, []);
+  const routeJumpMessageId =
+    routeIntent?.type === "open-conversation"
+      ? routeIntent.messageId || null
+      : null;
+  const routeJumpConversationId =
+    routeIntent?.type === "open-conversation"
+      ? routeIntent.conversationId
+      : null;
+
+  const handleExternalJumpHandled = useCallback(
+    (messageId: string) => {
+      setExternalJumpTarget((current) =>
+        current?.messageId === messageId ? null : current,
+      );
+      if (routeJumpMessageId === messageId) {
+        navigate(location.pathname, { replace: true, state: null });
+      }
+    },
+    [location.pathname, navigate, routeJumpMessageId],
+  );
 
   // Jump the open timeline to a message in the current conversation (e.g. tapping
   // a poll in the info-panel history list). Bump the version so re-tapping the
@@ -1267,11 +1285,15 @@ export const ChatPage: React.FC = () => {
   const handleJumpToMessageInConversation = useCallback(
     (messageId: string) => {
       if (!messageId) return;
-      setExternalJumpTargetMessageId(messageId);
+      if (!selectedConversation) return;
+      setExternalJumpTarget({
+        conversationId: selectedConversation.id,
+        messageId,
+      });
       setExternalJumpRequestVersion((current) => current + 1);
       closeInfoPanel();
     },
-    [closeInfoPanel],
+    [closeInfoPanel, selectedConversation],
   );
 
   useEffect(() => {
@@ -1282,35 +1304,23 @@ export const ChatPage: React.FC = () => {
   }, [openContactProfile]);
 
   useEffect(() => {
-    return listenForStartDirectMessage(({ userId }) => {
-      if (!userId) return;
-      void handleStartChat(userId);
-    });
-  }, [handleStartChat]);
-
-  useEffect(() => {
     return listenForMentionProfileView(({ userId, displayName, avatarUrl }) => {
       if (!userId) return;
       setMentionProfile({ userId, displayName, avatarUrl });
     });
   }, []);
 
+  const handledRouteIntentRef = useRef<string | null>(null);
   useEffect(() => {
-    return listenForNotificationClick(
-      ({ conversationId: nextConversationId, messageId: nextMessageId }) => {
-        if (!nextConversationId) return;
+    if (!routeIntent || handledRouteIntentRef.current === routeIntent.requestId) {
+      return;
+    }
+    handledRouteIntentRef.current = routeIntent.requestId;
 
-        if (nextMessageId) {
-          setExternalJumpTargetMessageId(nextMessageId);
-          setExternalJumpRequestVersion((current) => current + 1);
-        }
-
-        if (routeConversationId !== nextConversationId) {
-          navigate(`/chat/${nextConversationId}`);
-        }
-      },
-    );
-  }, [navigate, routeConversationId]);
+    if (routeIntent.type === "start-direct-message") {
+      void handleStartChat(routeIntent.userId);
+    }
+  }, [handleStartChat, routeIntent]);
 
   const handleRetryBootstrap = useCallback(() => {
     void refreshUser().then(() => {
@@ -1420,8 +1430,22 @@ export const ChatPage: React.FC = () => {
             onReachedLatestMessage={sessionHandleReachedLatestMessage}
             connectionState={connectionState}
             isConversationReady={sessionIsConversationReady}
-            externalJumpToMessageId={externalJumpTargetMessageId}
-            externalJumpRequestVersion={externalJumpRequestVersion}
+            externalJumpToMessageId={
+              routeJumpConversationId === routeConversationId &&
+              routeJumpConversationId === selectedConversation.id
+                ? routeJumpMessageId
+                : externalJumpTarget?.conversationId ===
+                      routeConversationId &&
+                    externalJumpTarget.conversationId ===
+                      selectedConversation.id
+                  ? externalJumpTarget.messageId
+                  : null
+            }
+            externalJumpRequestVersion={
+              routeJumpMessageId
+                ? routeIntent?.requestId
+                : externalJumpRequestVersion
+            }
             onExternalJumpHandled={handleExternalJumpHandled}
           />
         ) : routeConversationId &&

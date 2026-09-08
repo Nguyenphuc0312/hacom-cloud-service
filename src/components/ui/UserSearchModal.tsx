@@ -119,6 +119,13 @@ export const UserSearchModal: React.FC<UserSearchModalProps> = ({
     };
   }, []);
 
+  const handleClose = useCallback(() => {
+    setQuery("");
+    setResults([]);
+    setSelectedIndex(0);
+    onClose();
+  }, [onClose]);
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -134,14 +141,7 @@ export const UserSearchModal: React.FC<UserSearchModalProps> = ({
         handleClose();
       }
     }
-  }, [results, selectedIndex, onSelectUser]);
-
-  const handleClose = () => {
-    setQuery("");
-    setResults([]);
-    setSelectedIndex(0);
-    onClose();
-  };
+  }, [handleClose, results, selectedIndex, onSelectUser]);
 
   const handleSelectUser = (user: SearchResult) => {
     onSelectUser(user.id, user.displayName);

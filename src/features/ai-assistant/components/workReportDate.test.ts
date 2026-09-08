@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { vnToIso, isoToVn } from "./WorkReportForm";
+import { isoToVn, vnToIso } from "../../../components/ui/dateFieldVNUtils";
 
 describe("vnToIso — dd/mm/yyyy → yyyy-mm-dd cho native picker", () => {
   it("chuyển ngày hợp lệ", () => {

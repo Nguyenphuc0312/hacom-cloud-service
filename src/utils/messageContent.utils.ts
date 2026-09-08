@@ -181,3 +181,12 @@ export function getPreviewFromMessage(message: {
   }
   return message.content ?? "";
 }
+
+export function getCompactPreviewFromMessage(
+  message: Parameters<typeof getPreviewFromMessage>[0],
+  maxLength = 180,
+): string {
+  const preview = getPreviewFromMessage(message);
+  if (preview.length <= maxLength) return preview;
+  return `${preview.slice(0, Math.max(0, maxLength - 1))}…`;
+}
