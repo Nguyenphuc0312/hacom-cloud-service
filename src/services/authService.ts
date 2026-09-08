@@ -17,6 +17,7 @@ import {
   getRefreshToken,
   isRefreshTokenCookieMode,
 } from "./tokenService";
+import { clearPersistedUploadDrafts } from "./uploadDraftStorage";
 import { usePresenceStore } from "../stores/presenceStore";
 
 type LogoutEventPayload = {
@@ -77,6 +78,7 @@ export const runClientLogoutCleanup = (reason: string): void => {
   cancelPendingRequests(`logout:${reason}`);
   disconnectSocket();
   clearTokens();
+  clearPersistedUploadDrafts();
   usePresenceStore.getState().clearAll();
 };
 
@@ -84,6 +86,7 @@ export const runCurrentTabIdentityMismatchCleanup = (reason: string): void => {
   cancelPendingRequests(`logout:${reason}`);
   disconnectSocket();
   clearCurrentTabTokens();
+  clearPersistedUploadDrafts();
   usePresenceStore.getState().clearAll();
 };
 
