@@ -157,7 +157,11 @@ describe("useUploadQueue", () => {
         expiresAt: "2026-05-13T01:05:00.000Z",
       });
     uploadClientMock.uploadToSignedUrl
-      .mockRejectedValueOnce({ status: 403, statusCode: 403, message: "expired" })
+      .mockRejectedValueOnce({
+        status: 403,
+        statusCode: 403,
+        message: "expired",
+      })
       .mockResolvedValueOnce(undefined);
     uploadClientMock.completeUpload.mockResolvedValue({
       uploadId: "upload-1",
@@ -195,6 +199,56 @@ describe("useUploadQueue", () => {
       expect(result.current.drafts[0]?.status).toBe("finalized");
       expect(result.current.drafts[0]?.fileId).toBe("file-1");
     });
+  });
+
+  it("reserves a fresh upload session after a failed draft", async () => {
+    uploadClientMock.reserveUpload
+      .mockResolvedValueOnce({
+        uploadId: "upload-1",
+        uploadUrl: "https://upload.example/1",
+        uploadMethod: "PUT",
+        uploadHeaders: {},
+        expiresAt: "2026-05-13T01:00:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        uploadId: "upload-2",
+        uploadUrl: "https://upload.example/2",
+        uploadMethod: "PUT",
+        uploadHeaders: {},
+        expiresAt: "2026-05-13T01:05:00.000Z",
+      });
+    uploadClientMock.uploadToSignedUrl
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce(undefined);
+    uploadClientMock.completeUpload.mockResolvedValue({
+      uploadId: "upload-2",
+      fileId: "file-2",
+      attachment: { id: "file-2" },
+    });
+    const { result } = renderHook(() =>
+      useUploadQueue({ conversationId: "conv-a" }),
+    );
+
+    await act(async () => {
+      result.current.addFiles([
+        new File(["hello"], "drawing.cad", {
+          type: "application/octet-stream",
+        }),
+      ]);
+    });
+    await waitFor(() => {
+      expect(result.current.drafts[0]?.status).toBe("failed");
+    });
+
+    await act(async () => {
+      result.current.retryUpload(result.current.drafts[0]!.localId);
+    });
+    await waitFor(() => {
+      expect(uploadClientMock.reserveUpload).toHaveBeenCalledTimes(2);
+    });
+    expect(uploadClientMock.reserveUpload).toHaveBeenLastCalledWith(
+      expect.objectContaining({ uploadId: undefined }),
+    );
   });
 
   it("keeps the draft in security_pending when the backend has not released the attachment", async () => {

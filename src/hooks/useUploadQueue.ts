@@ -813,6 +813,10 @@ export function useUploadQueue({
 
         return {
           ...draft,
+          uploadId: undefined,
+          fileId: undefined,
+          expiresAt: undefined,
+          uploaded: undefined,
           status: "idle",
           progress: 0,
           errorCode: undefined,
