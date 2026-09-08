@@ -513,73 +513,96 @@ export const useCloudWorkspace = (
   );
 
   const uploadFile = useCallback(
-    async (file: File): Promise<CloudItem> => {
+    async (
+      file: File,
+      onProgress?: (progress: CloudUploadProgress) => void,
+    ): Promise<CloudItem> => {
       if (!userId) {
         const error = createMissingUserError();
         setState((current) => ({ ...current, error }));
         throw error;
       }
+      const reservingProgress: CloudUploadProgress = {
+        fileName: file.name,
+        percent: 0,
+        stage: "reserving",
+      };
       setState((current) => ({
         ...current,
         isMutating: true,
         error: null,
-        uploadProgress: {
-          fileName: file.name,
-          percent: 0,
-          stage: "reserving",
-        },
+        uploadProgress: reservingProgress,
       }));
+      onProgress?.(reservingProgress);
       try {
         const session = await cloudApi.initiateUpload(userId, file);
+        const uploadStartedProgress: CloudUploadProgress = {
+          fileName: file.name,
+          percent: 2,
+          stage: "uploading",
+        };
         if (mountedRef.current) {
           setState((current) => ({
             ...current,
-            uploadProgress: {
-              fileName: file.name,
-              percent: 2,
-              stage: "uploading",
-            },
+            uploadProgress: uploadStartedProgress,
           }));
         }
+        onProgress?.(uploadStartedProgress);
         await cloudApi.uploadObject(session, file, (percent) => {
-          if (!mountedRef.current) return;
-          setState((current) => ({
-            ...current,
-            uploadProgress: {
-              fileName: file.name,
-              percent,
-              stage: "uploading",
-            },
-          }));
+          const nextProgress: CloudUploadProgress = {
+            fileName: file.name,
+            percent,
+            stage: "uploading",
+          };
+          if (mountedRef.current) {
+            setState((current) => ({
+              ...current,
+              uploadProgress: nextProgress,
+            }));
+          }
+          onProgress?.(nextProgress);
         });
+        const finalizingProgress: CloudUploadProgress = {
+          fileName: file.name,
+          percent: 100,
+          stage: "finalizing",
+        };
         if (mountedRef.current) {
           setState((current) => ({
             ...current,
-            uploadProgress: {
-              fileName: file.name,
-              percent: 100,
-              stage: "finalizing",
-            },
+            uploadProgress: finalizingProgress,
           }));
         }
+        onProgress?.(finalizingProgress);
         const completed = await cloudApi.completeUpload(
           userId,
           session.uploadSessionId,
         );
         await refreshQuota();
+        const completedItem = normalizeCloudItemType(completed.item);
+        const needsProcessing =
+          completedItem.status === "pending" ||
+          completedItem.status === "processing";
+        const processingProgress: CloudUploadProgress = {
+          fileName: file.name,
+          percent: 100,
+          stage: "processing",
+        };
         if (mountedRef.current) {
           setState((current) => ({
             ...current,
-            items: mergeItems(current.items, [normalizeCloudItemType(completed.item)], listOptions.sort, listOptions.order),
+            items: mergeItems(
+              current.items,
+              [completedItem],
+              listOptions.sort,
+              listOptions.order,
+            ),
             isMutating: false,
-            uploadProgress: {
-              fileName: file.name,
-              percent: 100,
-              stage: "processing",
-            },
+            uploadProgress: needsProcessing ? processingProgress : null,
           }));
         }
-        return normalizeCloudItemType(completed.item);
+        if (needsProcessing) onProgress?.(processingProgress);
+        return completedItem;
       } catch (error) {
         const cloudError = asCloudError(error);
         if (mountedRef.current) {
@@ -776,7 +799,10 @@ export const useCloudWorkspace = (
   );
 
   const hasProcessingItems = useMemo(
-    () => state.items.some((item) => item.status === "processing"),
+    () =>
+      state.items.some(
+        (item) => item.status === "pending" || item.status === "processing",
+      ),
     [state.items],
   );
 
@@ -798,7 +824,7 @@ export const useCloudWorkspace = (
         const hydratedItems = await hydrateMediaAccess(page.items, userId);
         if (cancelled || !mountedRef.current) return;
         const stillProcessing = hydratedItems.some(
-          (item) => item.status === "processing",
+          (item) => item.status === "pending" || item.status === "processing",
         );
         setState((current) => ({
           ...current,

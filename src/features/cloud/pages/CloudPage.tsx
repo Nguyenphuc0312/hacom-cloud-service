@@ -51,7 +51,11 @@ import {
 import { CloudDeleteDialog } from "../components/CloudDeleteDialog";
 import { CloudConversationInfoPanel } from "../components/CloudConversationInfoPanel";
 import { useCloudWorkspace } from "../hooks/useCloudWorkspace";
-import type { CloudItem, CloudViewMode } from "../types";
+import type {
+  CloudItem,
+  CloudUploadProgress,
+  CloudViewMode,
+} from "../types";
 import { cloudItemsToMessages } from "../utils/cloudMessageAdapter";
 import {
   formatCloudTime,
@@ -126,6 +130,21 @@ const getErrorTranslationKey = (code: string): string => {
       return "errors.offline";
     default:
       return "errors.generic";
+  }
+};
+
+const attachmentStatusForCloudProgress = (
+  progress: CloudUploadProgress,
+): AttachmentDraft["status"] => {
+  switch (progress.stage) {
+    case "reserving":
+      return "reserving";
+    case "uploading":
+      return "uploading";
+    case "finalizing":
+      return "completing";
+    case "processing":
+      return "security_pending";
   }
 };
 
@@ -342,6 +361,25 @@ export default function CloudPage() {
     pendingAttachmentsRef.current = pendingAttachments;
   }, [pendingAttachments]);
 
+  const updatePendingUploadProgress = useCallback(
+    (localId: string, progress: CloudUploadProgress) => {
+      setPendingAttachments((current) =>
+        current.map((draft) =>
+          draft.localId === localId
+            ? {
+                ...draft,
+                status: attachmentStatusForCloudProgress(progress),
+                progress: progress.percent,
+                errorCode: undefined,
+                errorMessage: undefined,
+              }
+            : draft,
+        ),
+      );
+    },
+    [],
+  );
+
   // Match Hacom Chat's upload queue: selecting a file starts the upload
   // immediately. Drafts remain visible as "Đang chờ"/progress and the send
   // action is enabled only after every draft is finalized.
@@ -360,25 +398,26 @@ export default function CloudPage() {
 
     void Promise.all(
       queued.map(async (draft) => {
-        setPendingAttachments((current) =>
-          current.map((item) =>
-            item.localId === draft.localId
-              ? { ...item, status: "uploading", progress: 0 }
-              : item,
-          ),
-        );
         try {
-          const item = await workspace.uploadFile(draft.file!);
+          const item = await workspace.uploadFile(draft.file!, (progress) =>
+            updatePendingUploadProgress(draft.localId, progress),
+          );
           setPendingAttachments((current) =>
             current.map((currentDraft) =>
               currentDraft.localId === draft.localId
                 ? {
                     ...currentDraft,
-                    status: "finalized",
+                    status:
+                      item.status === "ready"
+                        ? "finalized"
+                        : item.status === "failed"
+                          ? "failed"
+                          : "security_pending",
                     progress: 100,
                     fileId: item.id,
                     errorCode: undefined,
-                    errorMessage: undefined,
+                    errorMessage:
+                      item.status === "failed" ? t("errors.generic") : undefined,
                   }
                 : currentDraft,
             ),
@@ -405,7 +444,50 @@ export default function CloudPage() {
         }
       }),
     );
-  }, [pendingAttachments, t, workspace.uploadFile]);
+  }, [
+    pendingAttachments,
+    t,
+    updatePendingUploadProgress,
+    workspace.uploadFile,
+  ]);
+
+  // Completing an object upload only queues Cloud's verification worker. Keep
+  // the draft blocked until the polled Cloud item itself becomes ready; this is
+  // the same distinction Hacom Chat makes between upload and file processing.
+  useEffect(() => {
+    setPendingAttachments((current) => {
+      let changed = false;
+      const next = current.map((draft) => {
+        if (draft.status !== "security_pending" || !draft.fileId) return draft;
+        const item = workspace.items.find(
+          (candidate) => candidate.id === draft.fileId,
+        );
+        if (!item || item.status === "pending" || item.status === "processing") {
+          return draft;
+        }
+        if (item.status === "ready") {
+          changed = true;
+          return {
+            ...draft,
+            status: "finalized" as const,
+            progress: 100,
+            errorCode: undefined,
+            errorMessage: undefined,
+          };
+        }
+        if (item.status === "failed") {
+          changed = true;
+          return {
+            ...draft,
+            status: "failed" as const,
+            errorMessage: t("errors.generic"),
+          };
+        }
+        return draft;
+      });
+      return changed ? next : current;
+    });
+  }, [t, workspace.items]);
 
   useEffect(
     () => () => {
@@ -533,19 +615,37 @@ export default function CloudPage() {
         let failed = false;
         try {
           for (const draft of attachments) {
-            setPendingAttachments((current) =>
-              current.map((item) =>
-                item.localId === draft.localId
-                  ? { ...item, status: "uploading", progress: 0 }
-                  : item,
-              ),
-            );
             try {
-              await workspace.uploadFile(draft.file!);
-              setPendingAttachments((current) =>
-                current.filter((item) => item.localId !== draft.localId),
+              const item = await workspace.uploadFile(draft.file!, (progress) =>
+                updatePendingUploadProgress(draft.localId, progress),
               );
-              if (draft.previewUrl) URL.revokeObjectURL(draft.previewUrl);
+              if (item.status === "ready") {
+                setPendingAttachments((current) =>
+                  current.filter((candidate) => candidate.localId !== draft.localId),
+                );
+                if (draft.previewUrl) URL.revokeObjectURL(draft.previewUrl);
+              } else {
+                failed = true;
+                setPendingAttachments((current) =>
+                  current.map((candidate) =>
+                    candidate.localId === draft.localId
+                      ? {
+                          ...candidate,
+                          fileId: item.id,
+                          progress: 100,
+                          status:
+                            item.status === "failed"
+                              ? "failed"
+                              : "security_pending",
+                          errorMessage:
+                            item.status === "failed"
+                              ? t("errors.generic")
+                              : undefined,
+                        }
+                      : candidate,
+                  ),
+                );
+              }
             } catch {
               failed = true;
               setPendingAttachments((current) =>
@@ -618,7 +718,7 @@ export default function CloudPage() {
       setDraft("");
       setDraftResetKey((value) => value + 1);
     },
-    [pendingAttachments, t, workspace],
+    [pendingAttachments, t, updatePendingUploadProgress, workspace],
   );
 
   useEffect(() => {

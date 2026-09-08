@@ -124,4 +124,81 @@ describe("useCloudWorkspace trash lifecycle", () => {
       status: 400,
     });
   });
+
+  it("reports every upload stage before the file is considered ready", async () => {
+    const processingItem: CloudItem = {
+      ...activeItem,
+      id: "33333333-3333-4333-8333-333333333333",
+      type: "image",
+      status: "processing",
+      content: undefined,
+      title: "image.png",
+      sizeBytes: 5,
+    };
+    vi.spyOn(cloudApi, "listItems").mockResolvedValue({ items: [] });
+    vi.spyOn(cloudApi, "listTrash").mockResolvedValue({ items: [] });
+    vi.spyOn(cloudApi, "health").mockResolvedValue({
+      status: "UP",
+      service: "hacom-cloud-api",
+    });
+    vi.spyOn(cloudApi, "getQuota").mockResolvedValue(activeQuota);
+    vi.spyOn(cloudApi, "getCurrentQuotaRequest").mockRejectedValue(
+      new CloudApiError({
+        status: 404,
+        code: "QUOTA_REQUEST_NOT_FOUND",
+        message: "No quota request",
+      }),
+    );
+    vi.spyOn(cloudApi, "getItemSummary").mockResolvedValue({
+      totalCount: 0,
+      totalBytes: 0,
+      byType: {},
+    });
+    vi.spyOn(cloudApi, "initiateUpload").mockResolvedValue({
+      uploadSessionId: "upload-1",
+      itemId: processingItem.id,
+      status: "initiated",
+      uploadUrl: "https://cloud.test/upload",
+      method: "PUT",
+      requiredHeaders: {},
+      sizeBytes: 5,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    vi.spyOn(cloudApi, "uploadObject").mockImplementation(
+      async (_session, _file, onProgress) => {
+        onProgress(47);
+        onProgress(100);
+      },
+    );
+    vi.spyOn(cloudApi, "completeUpload").mockResolvedValue({
+      item: processingItem,
+      job: {
+        id: "job-1",
+        type: "hash_file",
+        status: "pending",
+      },
+    });
+
+    const { result } = renderHook(() => useCloudWorkspace(userId));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    const progressEvents: Array<{ stage: string; percent: number }> = [];
+
+    await act(async () => {
+      await result.current.uploadFile(
+        new File(["image"], "image.png", { type: "image/png" }),
+        ({ stage, percent }) => progressEvents.push({ stage, percent }),
+      );
+    });
+
+    expect(progressEvents).toEqual([
+      { stage: "reserving", percent: 0 },
+      { stage: "uploading", percent: 2 },
+      { stage: "uploading", percent: 47 },
+      { stage: "uploading", percent: 100 },
+      { stage: "finalizing", percent: 100 },
+      { stage: "processing", percent: 100 },
+    ]);
+    expect(result.current.items).toContainEqual(processingItem);
+    expect(result.current.uploadProgress?.stage).toBe("processing");
+  });
 });
