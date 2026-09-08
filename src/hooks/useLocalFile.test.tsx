@@ -39,7 +39,6 @@ describe("useLocalFile desktop files", () => {
         }),
     ),
     save: vi.fn().mockResolvedValue({ ok: true }),
-    saveAs: vi.fn().mockResolvedValue({ ok: true }),
     open: vi.fn().mockResolvedValue({ ok: true }),
     reveal: vi.fn().mockResolvedValue({ ok: true }),
   };
@@ -198,22 +197,6 @@ describe("useLocalFile desktop files", () => {
     });
 
     expect(result.current.status).toBe("not-downloaded");
-  });
-
-  it("passes the managed source, original name and expected size to native Save As", async () => {
-    const { result } = renderHook(() => useLocalFile(attachment, scope));
-
-    await act(async () => {
-      await expect(result.current.saveAsLocal()).resolves.toEqual({ ok: true });
-    });
-
-    expect(result.current.canSaveAsLocally).toBe(true);
-    expect(files.saveAs).toHaveBeenCalledWith(
-      expectedLocalName,
-      "PC (1).rar",
-      undefined,
-      attachment.fileSize,
-    );
   });
 
   it("keeps markDownloaded browser-only when the desktop bridge is present", () => {

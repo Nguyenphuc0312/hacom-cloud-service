@@ -34,16 +34,6 @@ interface DesktopFilesApi {
     data: ArrayBuffer | Uint8Array,
     displayName?: string,
   ) => Promise<DesktopFileResult>;
-  /**
-   * Native Save As. With no data, copies the already-managed local file;
-   * otherwise writes the supplied bytes to the user-selected destination.
-   */
-  saveAs?: (
-    sourceFileName: string,
-    suggestedFileName: string,
-    data?: ArrayBuffer | Uint8Array,
-    expectedBytes?: number,
-  ) => Promise<DesktopFileResult>;
   open: (fileName: string) => Promise<DesktopFileResult>;
   reveal: (fileName: string) => Promise<DesktopFileResult>;
   exists: (fileName: string) => Promise<DesktopFileExists>;
