@@ -1,32 +1,51 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   canAutoOpenDownloadedFile,
+  canExplicitlyOpenDownloadedFile,
   downloadResourceWithName,
   fetchResourceBlob,
 } from "./downloadFile";
 
-describe("canAutoOpenDownloadedFile", () => {
-  it.each(["PC (1).rar", "bao-cao.docx", "du-lieu.xlsx", "tai-lieu.pdf"])(
-    "allows passive document %s",
+describe("downloaded file open policy", () => {
+  it.each(["bao-cao.docx", "du-lieu.xlsx", "tai-lieu.pdf", "anh.png"])(
+    "allows one-gesture card open for standard files: %s",
     (fileName) => {
       expect(canAutoOpenDownloadedFile(fileName)).toBe(true);
     },
   );
 
   it.each([
+    "PC (1).rar",
+    "ban-ve.dwg",
+    "video.mkv",
+    "note.txt",
+    "export.csv",
+    "unknown.custom",
+  ])("keeps specialized files download-first: %s", (fileName) => {
+    expect(canAutoOpenDownloadedFile(fileName)).toBe(false);
+    expect(canExplicitlyOpenDownloadedFile(fileName)).toBe(true);
+  });
+
+  it.each([
     "setup.exe",
     "invoice.pdf.EXE",
     "run.ps1. ",
     "shortcut.lnk",
+    "macro.docm",
+    "macro.sldm",
+    "diagram.svg",
+    "compressed.svgz",
     "installer.command",
     "launcher.desktop",
     "tool.appimage",
     "automation.scpt",
     "manual.chm",
-    "unknown.custom",
+    "page.html",
+    "automation.js",
     "README",
-  ])("blocks silent open for %s", (fileName) => {
+  ])("never opens unsafe names: %s", (fileName) => {
     expect(canAutoOpenDownloadedFile(fileName)).toBe(false);
+    expect(canExplicitlyOpenDownloadedFile(fileName)).toBe(false);
   });
 });
 
@@ -143,11 +162,9 @@ describe("downloadResourceWithName", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      downloadResourceWithName(
-        "https://storage.example/file.rar",
-        "file.rar",
-        { onProgress: vi.fn() },
-      ),
+      downloadResourceWithName("https://storage.example/file.rar", "file.rar", {
+        onProgress: vi.fn(),
+      }),
     ).rejects.toBe(networkError);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -177,14 +194,10 @@ describe("downloadResourceWithName", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
 
     await expect(
-      downloadResourceWithName(
-        "https://storage.example/file.rar",
-        "file.rar",
-        {
-          expectedBytes: 7,
-          onProgress: vi.fn(),
-        },
-      ),
+      downloadResourceWithName("https://storage.example/file.rar", "file.rar", {
+        expectedBytes: 7,
+        onProgress: vi.fn(),
+      }),
     ).rejects.toThrow("does not match attachment");
     expect(anchorClick).not.toHaveBeenCalled();
   });
@@ -197,10 +210,7 @@ describe("downloadResourceWithName", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      downloadResourceWithName(
-        "https://storage.example/file.rar",
-        "file.rar",
-      ),
+      downloadResourceWithName("https://storage.example/file.rar", "file.rar"),
     ).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);

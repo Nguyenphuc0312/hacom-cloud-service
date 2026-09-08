@@ -17,22 +17,32 @@ const batchState = vi.hoisted(() => ({
   >,
 }));
 
+const hookState = vi.hoisted(() => ({
+  batch: vi.fn(),
+  fetchPreview: vi.fn(),
+}));
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: { defaultValue?: string }) =>
-      options?.defaultValue ?? key,
+      key === "chat:image.notPreviewable"
+        ? key
+        : options?.defaultValue ?? key,
   }),
 }));
 
 vi.mock("../../hooks", () => ({
-  useBatchThumbnailUrl: () => ({
-    urls: batchState.current,
-    isLoading: false,
-    refresh: vi.fn(),
-  }),
+  useBatchThumbnailUrl: (...args: unknown[]) => {
+    hookState.batch(...args);
+    return {
+      urls: batchState.current,
+      isLoading: false,
+      refresh: vi.fn(),
+    };
+  },
   usePreviewUrl: () => ({
     url: null,
-    fetchUrl: vi.fn().mockResolvedValue(null),
+    fetchUrl: hookState.fetchPreview,
   }),
 }));
 
@@ -65,6 +75,9 @@ const attachment = {
 describe("ImageMessage large-image timeline source", () => {
   beforeEach(() => {
     batchState.current = {};
+    hookState.batch.mockClear();
+    hookState.fetchPreview.mockReset();
+    hookState.fetchPreview.mockResolvedValue(null);
   });
 
   it("renders the ready thumbnail behind the explicit HD control", () => {
@@ -137,4 +150,66 @@ describe("ImageMessage large-image timeline source", () => {
     expect(container.querySelector('[style*="data:image/jpeg;base64"]')).toBeTruthy();
     expect(container.innerHTML).not.toContain(attachment.url);
   });
+
+  it("disables the HD download action when download is explicitly blocked", () => {
+    batchState.current = {
+      "image-1": {
+        fileId: "image-1",
+        url: "https://storage.example/variants/thumbnail.jpg",
+        status: "ready",
+      },
+    };
+
+    render(
+      <ImageMessage
+        conversationId="conversation-1"
+        attachment={{ ...attachment, canDownload: false }}
+        isOwn
+      />,
+    );
+
+    expect(screen.getByRole("button")).toBeDisabled();
+  });
+
+  it("does not request, render, or open an explicitly blocked image", () => {
+    const batchThumbnail = "https://storage.example/variants/blocked-thumbnail.jpg";
+    const storedThumbnail = "https://storage.example/variants/stored-thumbnail.jpg";
+    batchState.current = {
+      "image-1": {
+        fileId: "image-1",
+        url: batchThumbnail,
+        status: "ready",
+      },
+    };
+    const onClick = vi.fn();
+    const blockedAttachment = {
+      ...attachment,
+      canPreview: false,
+      thumbnailUrl: storedThumbnail,
+      placeholder: "data:image/jpeg;base64,cGxhY2Vob2xkZXI=",
+    } as Attachment;
+
+    const { container } = render(
+      <ImageMessage
+        conversationId="conversation-1"
+        attachment={blockedAttachment}
+        isOwn
+        onClick={onClick}
+      />,
+    );
+
+    expect(hookState.batch).toHaveBeenLastCalledWith(
+      "conversation-1",
+      [],
+      { autoFetch: false },
+    );
+    expect(hookState.fetchPreview).not.toHaveBeenCalled();
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.getByText("chat:image.notPreviewable")).toBeVisible();
+    expect(container.innerHTML).not.toContain(batchThumbnail);
+    expect(container.innerHTML).not.toContain(storedThumbnail);
+    expect(container.innerHTML).not.toContain(attachment.url);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
 });

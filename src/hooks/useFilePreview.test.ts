@@ -253,4 +253,21 @@ describe("useFilePreview", () => {
     );
     expect(fileApi.getDownloadUrl).toHaveBeenCalledTimes(2);
   });
+
+  it("does not fetch or open an explicitly blocked preview", () => {
+    const blocked: PreviewTarget = {
+      ...mockTarget1,
+      attachment: { ...mockTarget1.attachment, canPreview: false },
+    };
+    const { result } = renderHook(() => useFilePreview());
+
+    act(() => {
+      result.current.open(blocked, [blocked, mockTarget2]);
+    });
+
+    expect(result.current.isOpen).toBe(false);
+    expect(result.current.current).toBeNull();
+    expect(fileApi.getDownloadUrl).not.toHaveBeenCalled();
+  });
+
 });

@@ -29,6 +29,15 @@ const expectedLocalName = buildLocalFileName(
 );
 
 describe("useLocalFile desktop files", () => {
+  let downloadProgressListener:
+    | ((progress: {
+        id: string;
+        status: "started" | "progress" | "completed" | "canceled" | "failed";
+        loadedBytes: number;
+        totalBytes?: number;
+        reason?: string;
+      }) => void)
+    | undefined;
   let resolveExists:
     ((value: { exists: boolean; size?: number }) => void) | undefined;
   const files = {
@@ -39,15 +48,23 @@ describe("useLocalFile desktop files", () => {
         }),
     ),
     save: vi.fn().mockResolvedValue({ ok: true }),
-    saveAs: vi.fn().mockResolvedValue({ ok: true }),
     open: vi.fn().mockResolvedValue({ ok: true }),
     reveal: vi.fn().mockResolvedValue({ ok: true }),
+    getDownloadDirectory: vi.fn().mockResolvedValue({ ok: true }),
+    chooseDownloadDirectory: vi.fn().mockResolvedValue({ ok: true }),
+    download: vi.fn().mockResolvedValue({ ok: true, bytes: attachment.fileSize }),
+    cancelDownload: vi.fn().mockResolvedValue({ ok: true }),
+    onDownloadProgress: vi.fn((callback) => {
+      downloadProgressListener = callback;
+      return vi.fn();
+    }),
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
     clearDownloadedFiles();
     resolveExists = undefined;
+    downloadProgressListener = undefined;
     Object.defineProperty(window, "chatDesktop", {
       configurable: true,
       value: { files },
@@ -200,20 +217,72 @@ describe("useLocalFile desktop files", () => {
     expect(result.current.status).toBe("not-downloaded");
   });
 
-  it("passes the managed source, original name and expected size to native Save As", async () => {
-    const { result } = renderHook(() => useLocalFile(attachment, scope));
+  it("streams the authorized URL directly through the native bridge without Blob save", async () => {
+    const expectedBytes = 7;
+    const matchingAttachment = { ...attachment, fileSize: expectedBytes };
+    files.exists.mockResolvedValueOnce({ exists: false });
+    files.download.mockResolvedValueOnce({ ok: true, bytes: expectedBytes });
+    const onProgress = vi.fn();
+    const { result } = renderHook(() => useLocalFile(matchingAttachment, scope));
 
     await act(async () => {
-      await expect(result.current.saveAsLocal()).resolves.toEqual({ ok: true });
+      const download = result.current.downloadToLocal(
+        "https://chat.hacomholdings.com.vn/chat-files/attachments/archive-1.rar",
+        { onProgress },
+      );
+      downloadProgressListener?.({
+        id: expectedLocalName,
+        status: "progress",
+        loadedBytes: 3,
+        totalBytes: expectedBytes,
+      });
+      await expect(download).resolves.toBe(true);
     });
 
-    expect(result.current.canSaveAsLocally).toBe(true);
-    expect(files.saveAs).toHaveBeenCalledWith(
+    expect(files.download).toHaveBeenCalledWith(
       expectedLocalName,
+      "https://chat.hacomholdings.com.vn/chat-files/attachments/archive-1.rar",
       "PC (1).rar",
-      undefined,
-      attachment.fileSize,
+      expectedBytes,
     );
+    expect(onProgress).toHaveBeenCalledWith({
+      loadedBytes: 3,
+      totalBytes: expectedBytes,
+    });
+    expect(files.save).not.toHaveBeenCalled();
+    expect(result.current.status).toBe("downloaded");
+  });
+
+  it("cancels a direct native download through the same opaque local identity", async () => {
+    let finishDownload:
+      | ((result: { ok: boolean; reason?: string }) => void)
+      | undefined;
+    files.exists.mockResolvedValueOnce({ exists: false });
+    files.download.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishDownload = resolve;
+        }),
+    );
+    const controller = new AbortController();
+    const { result } = renderHook(() => useLocalFile(attachment, scope));
+
+    let pendingDownload: Promise<boolean>;
+    act(() => {
+      pendingDownload = result.current.downloadToLocal(
+        "https://chat.hacomholdings.com.vn/chat-files/attachments/archive-1.rar",
+        { signal: controller.signal },
+      );
+    });
+    await waitFor(() => expect(files.download).toHaveBeenCalledTimes(1));
+
+    act(() => controller.abort());
+    expect(files.cancelDownload).toHaveBeenCalledWith(expectedLocalName);
+    await act(async () => {
+      finishDownload?.({ ok: false, reason: "canceled" });
+      await expect(pendingDownload!).resolves.toBe(false);
+    });
+    expect(result.current.status).not.toBe("downloaded");
   });
 
   it("keeps markDownloaded browser-only when the desktop bridge is present", () => {
@@ -223,6 +292,29 @@ describe("useLocalFile desktop files", () => {
 
     expect(isFileDownloaded(attachment.id)).toBe(false);
     expect(result.current.status).toBe("unknown");
+  });
+
+  it("falls back to browser state for a legacy desktop shell without folder settings", async () => {
+    Object.defineProperty(window, "chatDesktop", {
+      configurable: true,
+      value: {
+        files: {
+          save: files.save,
+          open: files.open,
+          reveal: files.reveal,
+          exists: files.exists,
+        },
+      },
+    });
+    const { result } = renderHook(() => useLocalFile(attachment, scope));
+
+    expect(result.current.canOpenLocally).toBe(false);
+    await act(async () => {
+      expect(await result.current.saveLocal(new Blob(["archive"]))).toBe(false);
+    });
+
+    expect(files.save).not.toHaveBeenCalled();
+    expect(isFileDownloaded(attachment.id)).toBe(true);
   });
 
   it("recomputes browser status when the attachment identity changes", () => {

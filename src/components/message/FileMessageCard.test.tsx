@@ -1,5 +1,11 @@
 import "@testing-library/jest-dom/vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FileType, type Attachment } from "../../types";
@@ -9,11 +15,13 @@ import { FileMessageCard } from "./FileMessageCard";
 const testState = vi.hoisted(() => ({
   localStatus: "not-downloaded" as "unknown" | "not-downloaded" | "downloaded",
   canOpenLocally: false,
+  canDownloadToLocal: false,
   resolveUrl: vi.fn(),
   fetchResourceBlob: vi.fn(),
   downloadResourceWithName: vi.fn(),
   downloadBlobWithName: vi.fn(),
   saveLocal: vi.fn(),
+  downloadToLocal: vi.fn(),
   openLocal: vi.fn(),
   reveal: vi.fn(),
   markDownloaded: vi.fn(),
@@ -56,16 +64,20 @@ vi.mock("../../hooks/useLocalFile", () => ({
   useLocalFile: () => ({
     status: testState.localStatus,
     canOpenLocally: testState.canOpenLocally,
-    canSaveAsLocally: false,
+    canDownloadToLocal: testState.canDownloadToLocal,
+    downloadToLocal: testState.downloadToLocal,
     openLocal: testState.openLocal,
     reveal: testState.reveal,
     saveLocal: testState.saveLocal,
-    saveAsLocal: vi.fn(),
     markDownloaded: testState.markDownloaded,
   }),
 }));
 
 vi.mock("../../utils/downloadFile", () => ({
+  canAutoOpenDownloadedFile: (fileName?: string | null) =>
+    /\.(?:pdf|docx|xlsx|png)$/i.test(fileName ?? ""),
+  canExplicitlyOpenDownloadedFile: (fileName?: string | null) =>
+    !/\.(?:exe|lnk|ps1|docm)$/i.test(fileName ?? ""),
   fetchResourceBlob: testState.fetchResourceBlob,
   downloadResourceWithName: testState.downloadResourceWithName,
   downloadBlobWithName: testState.downloadBlobWithName,
@@ -107,10 +119,12 @@ describe("FileMessageCard download flow", () => {
     vi.clearAllMocks();
     testState.localStatus = "not-downloaded";
     testState.canOpenLocally = false;
+    testState.canDownloadToLocal = false;
     testState.resolveUrl.mockResolvedValue("https://storage.example/file");
     testState.fetchResourceBlob.mockResolvedValue(new Blob(["file"]));
     testState.downloadResourceWithName.mockResolvedValue(undefined);
     testState.saveLocal.mockResolvedValue(true);
+    testState.downloadToLocal.mockResolvedValue(true);
     testState.openLocal.mockResolvedValue({ ok: true });
     testState.reveal.mockResolvedValue({ ok: true });
   });
@@ -198,6 +212,48 @@ describe("FileMessageCard download flow", () => {
     expect(testState.downloadResourceWithName).not.toHaveBeenCalled();
   });
 
+  it("downloads then opens a desktop document from its card", async () => {
+    const user = userEvent.setup();
+    const onPreview = vi.fn();
+    testState.canOpenLocally = true;
+    renderCard(previewableDocument, onPreview);
+
+    await user.click(
+      screen.getByRole("button", { name: "Tải và mở Bao cao.pdf" }),
+    );
+
+    await waitFor(() => {
+      expect(testState.saveLocal).toHaveBeenCalledTimes(1);
+      expect(testState.openLocal).toHaveBeenCalledTimes(1);
+    });
+    expect(onPreview).not.toHaveBeenCalled();
+    expect(testState.downloadResourceWithName).not.toHaveBeenCalled();
+  });
+
+  it("keeps untrusted file types download-only on desktop", async () => {
+    const user = userEvent.setup();
+    const executable: Attachment = {
+      ...archive,
+      id: "executable-1",
+      fileName: "setup.exe",
+      mimeType: "application/octet-stream",
+      objectKey: "attachments/setup.exe",
+    };
+    testState.canOpenLocally = true;
+    renderCard(executable);
+
+    expect(
+      screen.getByRole("button", { name: "Tải setup.exe" }),
+    ).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Chỉ tải setup.exe" }));
+
+    await waitFor(() => {
+      expect(testState.saveLocal).toHaveBeenCalledTimes(1);
+    });
+    expect(testState.openLocal).not.toHaveBeenCalled();
+  });
+
   it("shares one desktop byte transfer across duplicate file cards", async () => {
     testState.canOpenLocally = true;
     let finishDownload: ((blob: Blob) => void) | undefined;
@@ -251,26 +307,178 @@ describe("FileMessageCard download flow", () => {
     expect(testState.openLocal).not.toHaveBeenCalled();
   });
 
-  it("keeps open and reveal as explicit desktop actions after saving", async () => {
+  it("opens a saved desktop document from its card and keeps reveal explicit", async () => {
     const user = userEvent.setup();
     const onPreview = vi.fn();
     testState.canOpenLocally = true;
     testState.localStatus = "downloaded";
     renderCard(previewableDocument, onPreview);
 
-    await user.click(
-      screen.getByRole("button", { name: "Xem trước Bao cao.pdf" }),
-    );
-    await user.click(screen.getByRole("button", { name: "Mở Bao cao.pdf" }));
+    const openActions = screen.getAllByRole("button", {
+      name: "Mở Bao cao.pdf",
+    });
+    expect(openActions).toHaveLength(2);
+    await user.click(openActions[0]);
     await user.click(
       screen.getByRole("button", {
         name: "Mở thư mục chứa Bao cao.pdf",
       }),
     );
 
-    expect(onPreview).toHaveBeenCalledWith(previewableDocument, "pdf");
+    expect(onPreview).not.toHaveBeenCalled();
     expect(testState.openLocal).toHaveBeenCalledTimes(1);
     expect(testState.reveal).toHaveBeenCalledTimes(1);
     expect(testState.resolveUrl).not.toHaveBeenCalled();
+  });
+
+  it("leaves specialized files download-first and opens them only on an explicit action", async () => {
+    const user = userEvent.setup();
+    const drawing: Attachment = {
+      ...archive,
+      id: "drawing-1",
+      fileName: "ban-ve.dwg",
+      mimeType: "application/acad",
+      objectKey: "attachments/drawing-1.dwg",
+    };
+    testState.canOpenLocally = true;
+    testState.localStatus = "downloaded";
+    renderCard(drawing);
+
+    expect(
+      screen.getByRole("button", { name: "Tải ban-ve.dwg" }),
+    ).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Mở ban-ve.dwg" }));
+    expect(testState.openLocal).toHaveBeenCalledTimes(1);
+  });
+
+  it("never offers explicit Open for an unsafe downloaded file", () => {
+    const executable: Attachment = {
+      ...archive,
+      id: "downloaded-executable-1",
+      fileName: "setup.exe",
+      mimeType: "application/octet-stream",
+      objectKey: "attachments/setup.exe",
+    };
+    testState.canOpenLocally = true;
+    testState.localStatus = "downloaded";
+    renderCard(executable);
+
+    expect(screen.queryByRole("button", { name: "Mở setup.exe" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Mở thư mục chứa setup.exe" }),
+    ).toBeTruthy();
+  });
+
+  it("streams a desktop download to the selected folder without creating a Blob", async () => {
+    const user = userEvent.setup();
+    testState.canOpenLocally = true;
+    testState.canDownloadToLocal = true;
+    renderCard(previewableDocument, vi.fn());
+
+    await user.click(
+      screen.getByRole("button", { name: "Ch\u1ec9 t\u1ea3i Bao cao.pdf" }),
+    );
+
+    await waitFor(() => {
+      expect(testState.downloadToLocal).toHaveBeenCalledWith(
+        "https://storage.example/file",
+        expect.objectContaining({ onProgress: expect.any(Function) }),
+      );
+    });
+    expect(testState.fetchResourceBlob).not.toHaveBeenCalled();
+    expect(testState.saveLocal).not.toHaveBeenCalled();
+    expect(testState.downloadResourceWithName).not.toHaveBeenCalled();
+    expect(testState.openLocal).not.toHaveBeenCalled();
+  });
+
+  it("does not start another native transfer until cancellation settles", async () => {
+    testState.canOpenLocally = true;
+    testState.canDownloadToLocal = true;
+    let resolveDownload: ((result: boolean) => void) | undefined;
+    let downloadSignal: AbortSignal | undefined;
+    testState.downloadToLocal.mockImplementationOnce(
+      (_url: string, options?: { signal?: AbortSignal }) =>
+        new Promise<boolean>((resolve) => {
+          downloadSignal = options?.signal;
+          resolveDownload = resolve;
+        }),
+    );
+    renderCard(previewableDocument, vi.fn());
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Chỉ tải Bao cao.pdf" }),
+    );
+    await waitFor(() => {
+      expect(testState.downloadToLocal).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Hủy tải Bao cao.pdf" }),
+    );
+    expect(downloadSignal?.aborted).toBe(true);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Hủy tải Bao cao.pdf" }),
+    );
+    expect(testState.downloadToLocal).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveDownload?.(false);
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Chỉ tải Bao cao.pdf" }),
+      ).toBeTruthy();
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Chỉ tải Bao cao.pdf" }),
+    );
+    await waitFor(() => {
+      expect(testState.downloadToLocal).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("honors an explicit server download block on the card and the download action", async () => {
+    const user = userEvent.setup();
+    const blocked = { ...previewableDocument, canDownload: false };
+    const onPreview = vi.fn();
+    renderCard(blocked, onPreview);
+
+    const previewButton = screen.getByRole("button", {
+      name: "Xem tr\u01b0\u1edbc Bao cao.pdf",
+    });
+    expect(previewButton).not.toBeDisabled();
+    await user.click(previewButton);
+    expect(onPreview).toHaveBeenCalledWith(blocked, "pdf");
+    const downloadButton = screen.getByRole("button", {
+      name: "Ch\u1ec9 t\u1ea3i Bao cao.pdf",
+    });
+    expect(downloadButton).toBeDisabled();
+    await user.click(downloadButton);
+
+    expect(testState.resolveUrl).not.toHaveBeenCalled();
+    expect(testState.downloadToLocal).not.toHaveBeenCalled();
+    expect(testState.downloadResourceWithName).not.toHaveBeenCalled();
+  });
+
+  it("does not open a server-blocked preview from the file card", async () => {
+    const user = userEvent.setup();
+    const onPreview = vi.fn();
+    const blocked = { ...previewableDocument, canPreview: false };
+    renderCard(blocked, onPreview);
+
+    expect(
+      screen.getByRole("button", { name: "T\u1ea3i Bao cao.pdf" }),
+    ).toBeDisabled();
+    expect(onPreview).not.toHaveBeenCalled();
+    expect(testState.resolveUrl).not.toHaveBeenCalled();
+    await user.click(
+      screen.getByRole("button", { name: "Ch\u1ec9 t\u1ea3i Bao cao.pdf" }),
+    );
+    await waitFor(() => {
+      expect(testState.downloadResourceWithName).toHaveBeenCalledTimes(1);
+    });
+    expect(onPreview).not.toHaveBeenCalled();
   });
 });

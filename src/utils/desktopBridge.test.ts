@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { buildLocalFileName } from "./desktopBridge";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  buildLocalFileName,
+  getDesktopFiles,
+  getManagedDesktopFiles,
+  getStreamingDesktopFiles,
+} from "./desktopBridge";
 
 const identity = {
   currentUserId: "user-1",
@@ -48,5 +53,66 @@ describe("buildLocalFileName", () => {
       new TextEncoder().encode(localName).byteLength,
     ).toBeLessThanOrEqual(180);
     expect(localName).toMatch(/\.xlsx$/);
+  });
+});
+
+describe("getManagedDesktopFiles", () => {
+  afterEach(() => {
+    Reflect.deleteProperty(window, "chatDesktop");
+  });
+
+  it("does not route downloads into a legacy shell without folder settings", () => {
+    Object.defineProperty(window, "chatDesktop", {
+      configurable: true,
+      value: {
+        files: {
+          save: vi.fn(),
+          open: vi.fn(),
+          reveal: vi.fn(),
+          exists: vi.fn(),
+        },
+      },
+    });
+
+    expect(getDesktopFiles()).not.toBeNull();
+    expect(getManagedDesktopFiles()).toBeNull();
+  });
+
+  it("accepts the folder-aware native contract", () => {
+    const files = {
+      save: vi.fn(),
+      open: vi.fn(),
+      reveal: vi.fn(),
+      exists: vi.fn(),
+      getDownloadDirectory: vi.fn(),
+      chooseDownloadDirectory: vi.fn(),
+    };
+    Object.defineProperty(window, "chatDesktop", {
+      configurable: true,
+      value: { files },
+    });
+
+    expect(getManagedDesktopFiles()).toBe(files);
+    expect(getStreamingDesktopFiles()).toBeNull();
+  });
+
+  it("accepts only the complete direct-stream native contract", () => {
+    const files = {
+      save: vi.fn(),
+      open: vi.fn(),
+      reveal: vi.fn(),
+      exists: vi.fn(),
+      getDownloadDirectory: vi.fn(),
+      chooseDownloadDirectory: vi.fn(),
+      download: vi.fn(),
+      cancelDownload: vi.fn(),
+      onDownloadProgress: vi.fn(),
+    };
+    Object.defineProperty(window, "chatDesktop", {
+      configurable: true,
+      value: { files },
+    });
+
+    expect(getStreamingDesktopFiles()).toBe(files);
   });
 });

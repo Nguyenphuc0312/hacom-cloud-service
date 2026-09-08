@@ -24,6 +24,10 @@ export interface GalleryImage {
   senderName?: string;
   senderAvatar?: string;
   sentAt?: Date | string;
+  /** Explicit false blocks preview; omitted preserves legacy behavior. */
+  canPreview?: boolean;
+  /** Explicit false disables download; omitted preserves legacy behavior. */
+  canDownload?: boolean;
   /** Optional group key — images sharing the same key are shown as one thumbnail cell with +N badge */
   groupKey?: string;
 }
@@ -33,6 +37,10 @@ export interface ImagePreviewModalProps {
   onClose: () => void;
   /** Single-image mode (backward-compatible) */
   imageUrl?: string;
+  /** Explicit false blocks the single-image viewer; omitted preserves legacy behavior. */
+  canPreview?: boolean;
+  /** Explicit false disables the single-image download action. */
+  canDownload?: boolean;
   alt?: string;
   /** Gallery mode: pass all images + which one to open */
   images?: GalleryImage[];
@@ -136,6 +144,8 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   isOpen,
   onClose,
   imageUrl,
+  canPreview,
+  canDownload,
   alt,
   images,
   initialIndex = 0,
@@ -158,14 +168,33 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   const stageRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
-  // Normalise to gallery array regardless of which props were used
+  // Normalise to gallery array regardless of which props were used.
+  // Explicit false is authoritative; missing fields retain legacy behavior.
   const gallery = useMemo<GalleryImage[]>(() => {
-    if (images && images.length > 0) return images;
-    if (imageUrl) return [{ url: imageUrl, alt, senderName, senderAvatar, sentAt }];
-    return [];
-  }, [images, imageUrl, alt, senderName, senderAvatar, sentAt]);
+    if (canPreview === false) return [];
+    const candidates = images && images.length > 0
+      ? images
+      : imageUrl
+        ? [{ url: imageUrl, alt, senderName, senderAvatar, sentAt, canPreview, canDownload }]
+        : [];
+    // Do not fall through to a neighboring allowed image when the requested
+    // gallery index itself is explicitly blocked.
+    if (candidates[initialIndex]?.canPreview === false) return [];
+    return candidates.filter((image) => image.canPreview !== false);
+  }, [
+    alt,
+    canDownload,
+    canPreview,
+    imageUrl,
+    images,
+    initialIndex,
+    senderAvatar,
+    senderName,
+    sentAt,
+  ]);
 
   const current = gallery[currentIndex] ?? gallery[0];
+  const viewerIsOpen = isOpen && Boolean(current);
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex < gallery.length - 1;
   const showNav = gallery.length > 1;
@@ -181,27 +210,27 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
 
   // Mount animation
   useEffect(() => {
-    if (isOpen) {
+    if (viewerIsOpen) {
       setCardSize((s) => s ?? loadCardSize());
       const id = requestAnimationFrame(() => setMounted(true));
       return () => cancelAnimationFrame(id);
     } else {
       setMounted(false);
     }
-  }, [isOpen]);
+  }, [viewerIsOpen]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!viewerIsOpen) return;
     const previous = document.activeElement;
     const focusTimer = window.requestAnimationFrame(() => dialogRef.current?.focus());
     return () => {
       window.cancelAnimationFrame(focusTimer);
       if (previous instanceof HTMLElement) previous.focus();
     };
-  }, [isOpen]);
+  }, [viewerIsOpen]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!viewerIsOpen) return;
     const handler = (event: KeyboardEvent) => {
       if (event.key !== "Tab") return;
       const dialog = dialogRef.current;
@@ -228,11 +257,11 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [isOpen]);
+  }, [viewerIsOpen]);
 
   // Keep the card within the viewport when the window shrinks
   useEffect(() => {
-    if (!isOpen) return;
+    if (!viewerIsOpen) return;
     const onResize = () =>
       setCardSize((s) =>
         s
@@ -244,17 +273,17 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
       );
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [isOpen]);
+  }, [viewerIsOpen]);
 
   // Sync index when caller changes initialIndex or reopens
   useEffect(() => {
     setCurrentIndex(initialIndex);
-  }, [isOpen, initialIndex]);
+  }, [viewerIsOpen, initialIndex]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!viewerIsOpen) return;
     onIndexChange?.(currentIndex);
-  }, [currentIndex, isOpen, onIndexChange]);
+  }, [currentIndex, viewerIsOpen, onIndexChange]);
 
   // Reset zoom whenever the displayed image changes
   useEffect(() => {
@@ -263,11 +292,11 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
 
   // Body scroll lock
   useEffect(() => {
-    if (!isOpen) return;
+    if (!viewerIsOpen) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
-  }, [isOpen]);
+  }, [viewerIsOpen]);
 
   // Scroll active thumbnail into view
   useEffect(() => {
@@ -285,7 +314,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
 
   // Keyboard: ESC, arrows, zoom +/-/0
   useEffect(() => {
-    if (!isOpen) return;
+    if (!viewerIsOpen) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         onClose();
@@ -303,7 +332,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [isOpen, onClose, goPrev, goNext]);
+  }, [viewerIsOpen, onClose, goPrev, goNext]);
 
   const handleZoomIn = useCallback(
     () => setZoom((z) => ({ ...z, scale: Math.min(+(z.scale + 0.25).toFixed(2), MAX_SCALE) })),
@@ -320,7 +349,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   );
 
   const handleDownload = useCallback(async () => {
-    if (!current?.url) return;
+    if (!current?.url || current.canDownload === false) return;
     try {
       const response = await fetch(current.url);
       const blob = await response.blob();
@@ -342,7 +371,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   // was blowing up the whole app behind the (now no longer full-bleed) overlay.
   useEffect(() => {
     const stage = stageRef.current;
-    if (!isOpen || !stage) return;
+    if (!viewerIsOpen || !stage) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const delta = e.deltaY < 0 ? 0.2 : -0.2;
@@ -353,7 +382,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
     };
     stage.addEventListener("wheel", onWheel, { passive: false });
     return () => stage.removeEventListener("wheel", onWheel);
-  }, [isOpen]);
+  }, [viewerIsOpen]);
 
   // Corner resize (Zalo-style). Card is centered, so its size = 2× the distance
   // from viewport center to the pointer. One math for all four corners.
@@ -410,7 +439,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
 
   const handleMouseUp = useCallback(() => setIsDragging(false), []);
 
-  if (!isOpen || !current || typeof document === "undefined") return null;
+  if (!viewerIsOpen || !current || typeof document === "undefined") return null;
 
   const resolvedAlt = current.alt ?? t("profile:imagePreview.defaultAlt", { defaultValue: "Ảnh" });
   const { scale, x, y, rotation } = zoom;
@@ -692,6 +721,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
           <button
             type="button"
             onClick={() => void handleDownload()}
+            disabled={current.canDownload === false}
             aria-label={t("profile:imagePreview.download", { defaultValue: "Tải về" })}
             className={clsx(VIEWER_BTN, "h-8 w-8")}
           >

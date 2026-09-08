@@ -41,6 +41,7 @@ export interface UploadedFileMeta {
   width?: number;
   height?: number;
   duration?: number;
+  scanStatus?: "pending" | "scanning" | "clean" | "skipped" | "rejected" | "failed";
   canAttach?: boolean;
   canDownload?: boolean;
   canPreview?: boolean;

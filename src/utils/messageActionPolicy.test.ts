@@ -37,6 +37,28 @@ describe("resolveMessageActions", () => {
     });
   });
 
+  it("hides attachment download when every attachment is blocked by server capability", () => {
+    const attachments = [
+      {
+        id: "blocked-file",
+        type: "other",
+        fileName: "pending.pdf",
+        mimeType: "application/pdf",
+        fileSize: 10,
+        objectKey: "attachments/pending.pdf",
+        canDownload: false,
+      },
+    ];
+
+    expect(
+      resolveMessageActions({
+        message: message({ type: MessageType.FILE, attachments }),
+        isOwn: false,
+        isCoarsePointer: false,
+      }).menuActions,
+    ).not.toContain("downloadAttachment");
+  });
+
   it("offers recall before delete-for-me on own messages", () => {
     expect(
       resolveMessageActions({
