@@ -30,16 +30,12 @@ export interface UseLocalFileResult {
   status: LocalFileStatus;
   /** Desktop mới mở được file bằng app hệ thống / mở thư mục chứa. */
   canOpenLocally: boolean;
-  /** Bản desktop hỗ trợ hộp thoại Save As native. */
-  canSaveAsLocally: boolean;
   /** Mở file đã tải bằng app mặc định của OS. Giữ reason để caller phục hồi. */
   openLocal: () => Promise<DesktopFileResult>;
   /** Mở File Explorer và bôi đen file. Giữ reason để caller phục hồi. */
   reveal: () => Promise<DesktopFileResult>;
   /** Ghi file xuống máy (desktop: thư mục tải mặc định; web: chỉ đánh dấu đã tải). */
   saveLocal: (blob: Blob) => Promise<boolean>;
-  /** Lưu một bản sao tới vị trí user chọn; bỏ blob để copy từ cache. */
-  saveAsLocal: (blob?: Blob) => Promise<DesktopFileResult>;
   /** Đánh dấu đã tải mà không ghi đĩa (dùng cho luồng tải của trình duyệt). */
   markDownloaded: () => void;
 }
@@ -126,9 +122,6 @@ export const useLocalFile = (
     [conversationId, currentUserId, fileName, key],
   );
   const canOpenLocally = desktop !== null && localName !== "";
-  const canSaveAsLocally =
-    canOpenLocally && typeof desktop?.saveAs === "function";
-
   const webStatus = React.useSyncExternalStore<LocalFileStatus>(
     subscribeDownloadedFiles,
     () => (isFileDownloaded(key) ? "downloaded" : "not-downloaded"),
@@ -267,29 +260,6 @@ export const useLocalFile = (
     }
   }, [desktop, localName, refreshDesktopStatus]);
 
-  const saveAsLocal = React.useCallback(
-    async (blob?: Blob): Promise<DesktopFileResult> => {
-      if (!desktop?.saveAs || !localName) {
-        return { ok: false, reason: "unsupported" };
-      }
-      try {
-        const data = blob ? await blob.arrayBuffer() : undefined;
-        return await desktop.saveAs(
-          localName,
-          (fileName ?? "").trim() || "download",
-          data,
-          expectedSize,
-        );
-      } catch (error) {
-        logger.warn("desktop-file", "save-as-threw", {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return { ok: false, reason: "save-failed" };
-      }
-    },
-    [desktop, expectedSize, fileName, localName],
-  );
-
   const reveal = React.useCallback(async (): Promise<DesktopFileResult> => {
     if (!desktop || !localName) {
       return { ok: false, reason: "unsupported" };
@@ -310,11 +280,9 @@ export const useLocalFile = (
   return {
     status,
     canOpenLocally,
-    canSaveAsLocally,
     openLocal,
     reveal,
     saveLocal,
-    saveAsLocal,
     markDownloaded,
   };
 };

@@ -49,6 +49,7 @@ import { FileTypeIcon } from "./FileTypeIcon";
 import { Skeleton, SkeletonCircle } from "../ui";
 import { truncateFilename } from "../../utils/truncateFilename";
 import {
+  canAutoOpenDownloadedFile,
   downloadBlobWithName,
   downloadResourceWithName,
   fetchResourceBlob,
@@ -305,6 +306,11 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   const activeDownloadIdentityRef = useRef(downloadIdentity);
   const isDownloadBusy = downloadState.status === "downloading";
   const isCheckingLocalFile = canOpenLocally && localStatus === "unknown";
+  // Desktop follows the native-app model: known passive file types are saved
+  // to the configured folder and opened by the operating system. The main
+  // process validates this again before dispatching anything to the OS.
+  const canOpenFromCard =
+    canOpenLocally && canAutoOpenDownloadedFile(attachment.fileName);
   const progressPercent = downloadState.totalBytes
     ? Math.min(
         100,
@@ -408,7 +414,27 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
 
   // ─ Handlers ─
 
-  const handleDownload = useCallback(async () => {
+  const openSavedFile = useCallback(async (): Promise<boolean> => {
+    if (activeOpenRef.current) return false;
+
+    activeOpenRef.current = true;
+    try {
+      const result = await openLocal();
+      if (result.ok) return true;
+
+      setDownloadState({
+        identity: downloadIdentity,
+        status: "open-error",
+        loadedBytes: attachment.fileSize ?? 0,
+        totalBytes: attachment.fileSize,
+      });
+      return false;
+    } finally {
+      activeOpenRef.current = false;
+    }
+  }, [attachment.fileSize, downloadIdentity, openLocal]);
+
+  const handleDownload = useCallback(async (openAfterSave = false) => {
     if (activeDownloadRef.current) return;
 
     const controller = new AbortController();
@@ -471,6 +497,12 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           });
           return;
         }
+
+        if (openAfterSave && canOpenFromCard) {
+          const opened = await openSavedFile();
+          throwIfDownloadAborted(controller.signal);
+          if (!opened) return;
+        }
       } else {
         const downloadUrl = await resolveUrl(true);
         if (!downloadUrl) throw new Error("Missing download URL");
@@ -507,9 +539,11 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   }, [
     attachment.fileName,
     attachment.fileSize,
+    canOpenFromCard,
     canOpenLocally,
     downloadIdentity,
     markDownloaded,
+    openSavedFile,
     resolveUrl,
     saveLocal,
   ]);
@@ -531,39 +565,33 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   }, [onPreview, isPreviewable, attachment, previewType]);
 
   const handleOpen = useCallback(async () => {
-    if (
-      !canOpenLocally ||
-      localStatus !== "downloaded" ||
-      activeOpenRef.current
-    ) {
+    if (!canOpenLocally || localStatus !== "downloaded") return;
+    await openSavedFile();
+  }, [canOpenLocally, localStatus, openSavedFile]);
+
+  const handleCardClick = useCallback(() => {
+    if (isDownloadBusy || isCheckingLocalFile) return;
+
+    if (canOpenFromCard) {
+      if (localStatus === "downloaded") {
+        void handleOpen();
+      } else {
+        void handleDownload(true);
+      }
       return;
     }
 
-    activeOpenRef.current = true;
-    try {
-      const result = await openLocal();
-      if (!result.ok) {
-        setDownloadState({
-          identity: downloadIdentity,
-          status: "open-error",
-          loadedBytes: attachment.fileSize ?? 0,
-          totalBytes: attachment.fileSize,
-        });
-      }
-    } finally {
-      activeOpenRef.current = false;
-    }
+    if (isPreviewable) handlePreview();
   }, [
-    attachment.fileSize,
-    canOpenLocally,
-    downloadIdentity,
+    canOpenFromCard,
+    handleDownload,
+    handleOpen,
+    handlePreview,
+    isCheckingLocalFile,
+    isDownloadBusy,
+    isPreviewable,
     localStatus,
-    openLocal,
   ]);
-
-  const handleCardClick = useCallback(() => {
-    if (!isDownloadBusy && isPreviewable) handlePreview();
-  }, [handlePreview, isDownloadBusy, isPreviewable]);
 
   // ─ Edge-case renderers ─
 
@@ -878,9 +906,15 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   // ─ Generic file card (PDF, documents, archives, etc.) ─
 
   const isDownloaded = localStatus === "downloaded";
-  const willPreview = isPreviewable && Boolean(onPreview);
+  // Browser keeps the existing in-app preview. Desktop uses the user-selected
+  // download folder and the OS default app (Word/Excel/PDF reader, etc.).
+  const willPreview =
+    !canOpenFromCard && isPreviewable && Boolean(onPreview);
   const canActivateCard =
-    willPreview && fileStatus === "ready" && !isDownloadBusy;
+    fileStatus === "ready" &&
+    !isDownloadBusy &&
+    !isCheckingLocalFile &&
+    (canOpenFromCard || willPreview);
 
   const hasDownloadError = downloadState.status === "download-error";
   const hasOpenError = downloadState.status === "open-error";
@@ -921,22 +955,48 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
                 : t("chat:file.alreadyDownloaded", {
                     defaultValue: "Đã yêu cầu tải",
                   })
-              : isPreviewable
-                ? t("chat:file.downloadToKeep", {
-                    defaultValue: "Tải về để xem lâu dài",
+              : canOpenFromCard
+                ? t("chat:file.clickToDownloadAndOpen", {
+                    defaultValue: "Tải và mở",
                   })
-                : t("chat:file.clickToDownload", {
-                    defaultValue: "Tải về",
-                  });
+                : isPreviewable
+                  ? t("chat:file.downloadToKeep", {
+                      defaultValue: "Tải về để xem lâu dài",
+                    })
+                  : t("chat:file.clickToDownload", {
+                      defaultValue: "Tải về",
+                    });
 
-  const cardActionLabel = willPreview
-    ? t("chat:filePreview.previewNamed", {
-        defaultValue: "Xem trước {{name}}",
-        name: displayFileName,
-      })
-    : t("chat:file.downloadNamed", {
-        defaultValue: "Tải {{name}}",
-        name: displayFileName,
+  const cardActionLabel = canOpenFromCard
+    ? isDownloaded
+      ? t("chat:file.openFile", {
+          defaultValue: "Mở {{name}}",
+          name: displayFileName,
+        })
+      : t("chat:file.downloadAndOpenFile", {
+          defaultValue: "Tải và mở {{name}}",
+          name: displayFileName,
+        })
+    : willPreview
+      ? t("chat:filePreview.previewNamed", {
+          defaultValue: "Xem trước {{name}}",
+          name: displayFileName,
+        })
+      : t("chat:file.downloadNamed", {
+          defaultValue: "Tải {{name}}",
+          name: displayFileName,
+        });
+  const cardHint = canOpenFromCard
+    ? isDownloaded
+      ? t("chat:file.openFile", {
+          defaultValue: "Mở {{name}}",
+          name: displayFileName,
+        })
+      : t("chat:file.clickToDownloadAndOpen", {
+          defaultValue: "Tải và mở",
+        })
+    : t("chat:file.clickToPreview", {
+        defaultValue: "Nhấn để xem trước",
       });
 
   const downloadActionLabel = isDownloadBusy
@@ -1021,15 +1081,14 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
                 className="min-w-0 truncate tabular-nums"
                 title={statusLabel}
               >
-                {willPreview &&
+                {(willPreview || canOpenFromCard) &&
                 !hasDownloadError &&
                 !hasOpenError &&
-                !isDownloadBusy ? (
+                !isDownloadBusy &&
+                !isCheckingLocalFile ? (
                   <>
                     <span className="hidden group-hover/file:inline">
-                      {t("chat:file.clickToPreview", {
-                        defaultValue: "Nhấn để xem trước",
-                      })}
+                      {cardHint}
                     </span>
                     <span className="group-hover/file:hidden">
                       {statusLabel}
