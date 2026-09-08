@@ -1,6 +1,6 @@
 import React from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PreviewTarget } from '../../hooks/useFilePreview';
 import { FilePreviewModal, type FilePreviewModalProps } from './FilePreviewModal';
 
@@ -30,8 +30,33 @@ vi.mock('../preview/OfficeOnlinePreview', () => ({
 vi.mock('../common/SafeImage', () => ({
   SafeImage: ({ alt }: { alt: string }) => <span role="img" aria-label={alt} />,
 }));
-vi.mock('../../utils/downloadFile', () => ({ downloadResourceWithName: vi.fn() }));
-vi.mock('../../utils/downloadedFiles', () => ({ markFileDownloaded: vi.fn() }));
+const downloadState = vi.hoisted(() => ({
+  canOpenLocally: false,
+  saveLocal: vi.fn(),
+  markDownloaded: vi.fn(),
+  downloadResourceWithName: vi.fn(),
+  fetchResourceBlob: vi.fn(),
+  downloadBlobWithName: vi.fn(),
+}));
+
+vi.mock('../../utils/downloadFile', () => ({
+  downloadResourceWithName: downloadState.downloadResourceWithName,
+  fetchResourceBlob: downloadState.fetchResourceBlob,
+  downloadBlobWithName: downloadState.downloadBlobWithName,
+}));
+
+vi.mock('../../hooks/useLocalFile', () => ({
+  useLocalFile: () => ({
+    canOpenLocally: downloadState.canOpenLocally,
+    saveLocal: downloadState.saveLocal,
+    markDownloaded: downloadState.markDownloaded,
+  }),
+}));
+
+vi.mock('../../stores/authStore', () => ({
+  useAuthStore: (selector: (state: { user: { id: string } }) => unknown): unknown =>
+    selector({ user: { id: 'user-1' } }),
+}));
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
@@ -61,6 +86,14 @@ const props = (overrides: Partial<FilePreviewModalProps> = {}): FilePreviewModal
   onNext: vi.fn(),
   onRefreshUrl: vi.fn().mockResolvedValue(undefined),
   ...overrides,
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  downloadState.canOpenLocally = false;
+  downloadState.saveLocal.mockResolvedValue(true);
+  downloadState.downloadResourceWithName.mockResolvedValue(undefined);
+  downloadState.fetchResourceBlob.mockResolvedValue(new Blob(['file']));
 });
 
 afterEach(cleanup);
@@ -130,5 +163,41 @@ describe('FilePreviewModal — Excel 1:1', () => {
     );
     expect(screen.getByTestId('word-preview')).toBeTruthy();
     expect(screen.queryByTestId('office-preview')).toBeNull();
+  });
+});
+
+
+describe('FilePreviewModal download flow', () => {
+  it('uses the browser download path when running on web', async () => {
+    render(<FilePreviewModal {...props()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tải về' }));
+
+    await waitFor(() => {
+      expect(downloadState.downloadResourceWithName).toHaveBeenCalledWith(
+        'https://chat.hacomholdings.com.vn/files/bcc.xlsx?signature=valid',
+        '1. BCC TCT 2026.xlsx',
+        expect.objectContaining({ expectedBytes: 4_282_174, totalBytesHint: 4_282_174 }),
+      );
+    });
+    expect(downloadState.markDownloaded).toHaveBeenCalledTimes(1);
+    expect(downloadState.fetchResourceBlob).not.toHaveBeenCalled();
+  });
+
+  it('saves a desktop download without opening it', async () => {
+    downloadState.canOpenLocally = true;
+    render(<FilePreviewModal {...props()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tải về' }));
+
+    await waitFor(() => {
+      expect(downloadState.saveLocal).toHaveBeenCalledTimes(1);
+    });
+    expect(downloadState.fetchResourceBlob).toHaveBeenCalledWith(
+      'https://chat.hacomholdings.com.vn/files/bcc.xlsx?signature=valid',
+      expect.objectContaining({ expectedBytes: 4_282_174, totalBytesHint: 4_282_174 }),
+    );
+    expect(downloadState.downloadResourceWithName).not.toHaveBeenCalled();
+    expect(downloadState.markDownloaded).not.toHaveBeenCalled();
   });
 });

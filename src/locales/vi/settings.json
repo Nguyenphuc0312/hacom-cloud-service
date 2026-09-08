@@ -8,6 +8,7 @@
   "navigation": {
     "profile": "Hồ sơ",
     "notifications": "Thông báo",
+    "chat": "Tin nhắn",
     "privacy": "Quyền riêng tư",
     "security": "Bảo mật",
     "appearance": "Giao diện",
@@ -97,7 +98,23 @@
     "enterNewline": "Enter để xuống dòng",
     "enterNewlineDesc": "Nhấn Ctrl + Enter để gửi.",
     "saveSearchHistory": "Lưu lịch sử tìm kiếm",
-    "saveSearchHistoryDesc": "Ghi nhớ lịch sử tìm kiếm gần đây trên thiết bị này."
+    "saveSearchHistoryDesc": "Ghi nhớ lịch sử tìm kiếm gần đây trên thiết bị này.",
+    "downloadFolder": {
+      "cardTitle": "File tải về",
+      "label": "File được lưu tại thư mục",
+      "description": "File bạn tải về sẽ tự động lưu vào thư mục này.",
+      "loading": "Đang xác định thư mục lưu…",
+      "browserPath": "Do trình duyệt quản lý",
+      "browserDescription": "Trình duyệt không cho ứng dụng đọc hoặc chọn thư mục tải xuống. Hãy dùng cài đặt của trình duyệt, hoặc mở ứng dụng desktop để đặt thư mục mặc định.",
+      "unsupportedPath": "Chưa hỗ trợ trên phiên bản desktop này",
+      "unsupportedDescription": "Cập nhật ứng dụng desktop để chọn thư mục tải file mặc định.",
+      "readError": "Không thể đọc thư mục tải về hiện tại. Hãy thử thay đổi thư mục.",
+      "chooseError": "Không thể thay đổi thư mục tải về. Hãy thử lại.",
+      "change": "Thay đổi",
+      "choosing": "Đang chọn…",
+      "changeHint": "Chọn thư mục mặc định cho file tải về",
+      "browserChangeHint": "Chỉ khả dụng trên ứng dụng desktop"
+    }
   },
   "language": {
     "title": "Ngôn ngữ",

@@ -2,7 +2,7 @@
  * @fileoverview useLocalFile — trạng thái "file này đã có trên máy chưa" + các
  * thao tác kèm theo, hợp nhất hai nền tảng.
  *
- * Trên **desktop** (Electron): hỏi thẳng đĩa qua `chatDesktop.files.exists`, mở
+ * Trên **desktop** (Electron): hỏi file đã lưu qua `chatDesktop.files.exists`, mở
  * file bằng Word/Excel thật (`open`), mở thư mục chứa (`reveal`) — đúng như Zalo PC.
  *
  * Trên **web**: trình duyệt không cho đọc thư mục Downloads, nên chỉ ghi nhớ
@@ -36,7 +36,7 @@ export interface UseLocalFileResult {
   openLocal: () => Promise<DesktopFileResult>;
   /** Mở File Explorer và bôi đen file. Giữ reason để caller phục hồi. */
   reveal: () => Promise<DesktopFileResult>;
-  /** Ghi file xuống máy (desktop: đĩa thật; web: chỉ đánh dấu đã tải). */
+  /** Ghi file xuống máy (desktop: thư mục tải mặc định; web: chỉ đánh dấu đã tải). */
   saveLocal: (blob: Blob) => Promise<boolean>;
   /** Lưu một bản sao tới vị trí user chọn; bỏ blob để copy từ cache. */
   saveAsLocal: (blob?: Blob) => Promise<DesktopFileResult>;
@@ -227,7 +227,11 @@ export const useLocalFile = (
       }
       try {
         const buffer = await blob.arrayBuffer();
-        const result = await desktop.save(localName, buffer);
+        const result = await desktop.save(
+          localName,
+          buffer,
+          (fileName ?? "").trim() || "download",
+        );
         if (result.ok) {
           publishDesktopStatus(localName, {
             status: "downloaded",
@@ -244,7 +248,7 @@ export const useLocalFile = (
         return false;
       }
     },
-    [desktop, localName, markDownloaded],
+    [desktop, fileName, localName, markDownloaded],
   );
 
   const openLocal = React.useCallback(async (): Promise<DesktopFileResult> => {
