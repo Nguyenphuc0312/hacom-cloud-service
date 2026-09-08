@@ -23,7 +23,7 @@ export interface DesktopFileExists {
   size?: number;
 }
 
-interface DesktopFilesApi {
+export interface DesktopFilesApi {
   /**
    * Save bytes under an opaque attachment id while keeping the user-visible
    * filename in the desktop download directory. Older desktop shells ignore
@@ -70,6 +70,26 @@ export function getDesktopFiles(): DesktopFilesApi | null {
   if (typeof window === "undefined") return null;
   const files = window.chatDesktop?.files;
   return typeof files?.open === "function" ? files : null;
+}
+
+/**
+ * API desktop có đủ hợp đồng quản lý thư mục tải.
+ *
+ * Shell Desktop cũ từng nhận bytes rồi đặt bản cache riêng trong AppData. Không
+ * dùng đường native đó khi thiếu picker/thư mục mặc định, vì nó có thể tạo một
+ * bản cache nữa thay vì lưu đúng nơi người dùng đã chọn. Settings vẫn dùng
+ * getDesktopFiles() để báo người dùng cần cập nhật shell.
+ */
+export function getManagedDesktopFiles(): DesktopFilesApi | null {
+  const files = getDesktopFiles();
+  return typeof files?.save === "function" &&
+    typeof files.open === "function" &&
+    typeof files.reveal === "function" &&
+    typeof files.exists === "function" &&
+    typeof files.getDownloadDirectory === "function" &&
+    typeof files.chooseDownloadDirectory === "function"
+    ? files
+    : null;
 }
 
 /** Đang chạy trong vỏ desktop có hỗ trợ thao tác file hay không. */
