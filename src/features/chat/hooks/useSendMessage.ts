@@ -9,9 +9,6 @@ import type { Attachment, AudioMessagePayload, LocationMessagePayload, Message, 
 import { MessageType as MessageTypeEnum } from "../../../types";
 import { logMessageDebug } from "../../../utils/messageDebug";
 import {
-  DOCUMENT_UPLOAD_ACCEPT,
-  PHOTO_UPLOAD_ACCEPT,
-  UPLOAD_INPUT_ACCEPT,
   resolveUploadFileType,
   resolveUploadMimeTypeForFile,
 } from "../../../utils/uploadPolicy";
@@ -418,13 +415,10 @@ export const useSendMessage = ({
     (mode: AttachmentPickerMode, input: HTMLInputElement | null) => {
       if (!input) return;
 
-      if (mode === "photo") {
-        input.accept = PHOTO_UPLOAD_ACCEPT;
-      } else if (mode === "document") {
-        input.accept = DOCUMENT_UPLOAD_ACCEPT;
-      } else {
-        input.accept = UPLOAD_INPUT_ACCEPT;
-      }
+      // A missing accept attribute opens the native picker as "All files (*.*)".
+      // Keep the menu choice as a UI affordance, not a file-type restriction.
+      void mode;
+      input.accept = "";
       input.value = "";
       input.click();
     },
