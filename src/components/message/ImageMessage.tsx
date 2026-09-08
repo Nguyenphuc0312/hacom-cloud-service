@@ -93,6 +93,9 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
   const [tabVisibilityTick, setTabVisibilityTick] = useState(0);
 
   const isLargeImage = (attachment.fileSize || 0) > HD_THRESHOLD;
+  // Missing capability fields are legacy payloads and remain allowed.
+  const canPreview = attachment.canPreview !== false;
+  const canDownload = attachment.canDownload !== false;
   const [showHd, setShowHd] = useState(!isLargeImage);
 
   // Phase 02: Use batch thumbnail URLs for timeline.
@@ -102,8 +105,8 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
     urls: thumbnailUrls,
     isLoading: isLoadingThumbnail,
     refresh: refreshThumbnail,
-  } = useBatchThumbnailUrl(conversationId, [attachment.id], {
-    autoFetch: isVisible,
+  } = useBatchThumbnailUrl(conversationId, canPreview ? [attachment.id] : [], {
+    autoFetch: canPreview && isVisible,
   });
 
   // Phase 02: Use preview URL for lightbox
@@ -116,6 +119,7 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
   // Only poll when the thumbnail pipeline is still in-flight AND the server says retryable.
   // Terminal states (not_previewable / failed / not_found / forbidden) must never poll.
   const isThumbnailPending =
+    canPreview &&
     (thumbnailUrl?.status === 'processing' || thumbnailUrl?.status === 'queued') &&
     (thumbnailUrl?.isRetryable !== false);
 
@@ -126,8 +130,9 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
       : attachment.width && attachment.height
       ? `${attachment.width} / ${attachment.height}`
       : "4 / 3";
-  const placeholderCandidate =
-    attachment.placeholder ?? thumbnailUrl?.placeholder ?? undefined;
+  const placeholderCandidate = canPreview
+    ? attachment.placeholder ?? thumbnailUrl?.placeholder ?? undefined
+    : undefined;
   const placeholderUrl =
     placeholderCandidate && placeholderCandidate.length <= 2_048
       ? resolvePublicResourceUrl(placeholderCandidate, {
@@ -178,35 +183,41 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
   // blobPreviewCache holds a separate ObjectURL created in getReadyMeta(), valid
   // even after the draft's previewUrl is revoked in acknowledgeSent(). Used as
   // fallback when the real server message (no attachment.url) replaces optimistic.
-  const cachedBlobUrl = blobPreviewCache.get(attachment.id) ?? null;
+  const cachedBlobUrl = canPreview
+    ? blobPreviewCache.get(attachment.id) ?? null
+    : null;
 
-  const attachmentThumbnailUrl = resolvePublicResourceUrl(
-    attachment.thumbnailUrl,
-    { context: "image", allowBlob: true },
-  );
-  const optimisticDirectUrl = attachment.url?.startsWith("blob:")
-    ? resolvePublicResourceUrl(attachment.url, {
+  const attachmentThumbnailUrl = canPreview
+    ? resolvePublicResourceUrl(attachment.thumbnailUrl, {
         context: "image",
         allowBlob: true,
       })
     : null;
+  const optimisticDirectUrl =
+    canPreview && attachment.url?.startsWith("blob:")
+      ? resolvePublicResourceUrl(attachment.url, {
+          context: "image",
+          allowBlob: true,
+        })
+      : null;
 
   // Timeline rendering is thumbnail-only. A persisted attachment's original URL
   // must never be an eager fallback while the batch thumbnail request is pending.
   // Optimistic local blobs remain available until the server message reconciles.
-  const activeSource =
-    thumbnailUrl?.url ??
-    attachmentThumbnailUrl ??
-    cachedBlobUrl ??
-    optimisticDirectUrl ??
-    null;
+  const activeSource = canPreview
+    ? thumbnailUrl?.url ??
+      attachmentThumbnailUrl ??
+      cachedBlobUrl ??
+      optimisticDirectUrl ??
+      null
+    : null;
   const hasDisplayUrl = Boolean(activeSource);
   const hasCaption = Boolean(caption);
   const isLoaded = Boolean(activeSource && loadedSource === activeSource);
   const isError = Boolean(activeSource && failedSource === activeSource);
   // Terminal states where no URL will ever be available — show a static fallback icon,
   // never a spinning skeleton.
-  const isTerminalNoUrl = !activeSource && terminalBatchStatus;
+  const isTerminalNoUrl = !activeSource && (!canPreview || terminalBatchStatus);
 
   useEffect(() => {
     imageRequestedAtRef.current = activeSource ? performance.now() : null;
@@ -359,14 +370,16 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
   // Manual retry: restarts the bounded polling budget and forces a fresh network call,
   // bypassing the TTL cache.
   const handleManualRetry = useCallback(() => {
+    if (!canPreview) return;
     pollAttemptRef.current = 0;
     setRetryExhausted(false);
     void refreshThumbnail(true);
-  }, [refreshThumbnail]);
+  }, [canPreview, refreshThumbnail]);
 
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   const handleImageClick = useCallback(async () => {
+    if (!canPreview) return;
     if (onClick) {
       let url = activeSource;
       if (!url && previewUrl) url = previewUrl;
@@ -374,6 +387,8 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
       if (url) {
         onClick({
           url,
+          canPreview: attachment.canPreview,
+          canDownload: attachment.canDownload,
           alt: attachment.fileName,
           senderName,
           senderAvatar,
@@ -394,8 +409,11 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
     }
   }, [
     activeSource,
+    attachment.canDownload,
+    attachment.canPreview,
     attachment.fileName,
     attachment.id,
+    canPreview,
     conversationId,
     fetchPreview,
     onClick,
@@ -406,11 +424,12 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
   ]);
 
   const handleLoadHd = useCallback(async () => {
+    if (!canPreview || !canDownload) return;
     setShowHd(true);
     if (!activeSource) {
       await fetchPreview();
     }
-  }, [activeSource, fetchPreview]);
+  }, [activeSource, canDownload, canPreview, fetchPreview]);
 
   const handleClose = useCallback(() => {
     setShowFullScreen(false);
@@ -433,7 +452,7 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
 
   // Large image with thumbnail (show thumbnail + HD download button)
   // Skip this UI in gallery/fillContainer mode — show thumbnail directly instead
-  if (isLargeImage && !showHd && !fillContainer) {
+  if (canPreview && isLargeImage && !showHd && !fillContainer) {
     return (
       <div className={clsx("relative", className)}>
         <div
@@ -513,9 +532,11 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
             <button
               type="button"
               onClick={handleLoadHd}
+              disabled={!canDownload}
               className={clsx(
                 "flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium shadow-lg transition-transform",
                 "bg-surface/90 text-text-primary hover:bg-surface backdrop-blur",
+                !canDownload && "cursor-not-allowed opacity-50 hover:bg-surface",
               )}
             >
               <ArrowDownTrayIcon className="h-4 w-4" />
@@ -607,7 +628,7 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4">
               <PhotoIcon className="h-10 w-10 text-text-muted" />
               <span className="text-center text-xs text-text-muted">
-                {thumbnailUrl?.status === 'not_previewable'
+                {!canPreview || thumbnailUrl?.status === 'not_previewable'
                   ? t("chat:image.notPreviewable", { defaultValue: "Không hỗ trợ xem trước" })
                   : t("chat:image.previewFailed", { defaultValue: "Không tạo được xem trước" })}
               </span>
@@ -694,6 +715,8 @@ const ImageMessageComponent: React.FC<ImageMessageProps> = ({
         isOpen={showFullScreen && lightboxUrl !== null}
         onClose={handleClose}
         imageUrl={lightboxUrl ?? undefined}
+        canPreview={canPreview}
+        canDownload={attachment.canDownload}
         alt={attachment.fileName}
         senderName={senderName}
         senderAvatar={senderAvatar}

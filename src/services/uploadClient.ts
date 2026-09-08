@@ -1,3 +1,8 @@
+import type {
+  FileReleaseReason,
+  FileReleaseStatus,
+  FileScanStatus,
+} from "@hacom/chat-shared-types/chat";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import {
   fileApi,
@@ -102,11 +107,12 @@ export const uploadClient = {
     height?: number;
     duration?: number;
     thumbnailUrl?: string;
+    scanStatus?: FileScanStatus;
     canAttach?: boolean;
     canDownload?: boolean;
     canPreview?: boolean;
-    releaseStatus?: "released" | "blocked";
-    releaseReason?: string;
+    releaseStatus?: FileReleaseStatus;
+    releaseReason?: FileReleaseReason;
   }) {
     return {
       fileId: input.fileId,
@@ -121,6 +127,7 @@ export const uploadClient = {
       height: input.height,
       duration: input.duration,
       thumbnailUrl: input.thumbnailUrl,
+      scanStatus: input.scanStatus,
       canAttach: input.canAttach,
       canDownload: input.canDownload,
       canPreview: input.canPreview,

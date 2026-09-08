@@ -2,7 +2,11 @@ import "@testing-library/jest-dom/vitest";
 import React from "react";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TipTapEditor, type TipTapEditorHandle } from "./TipTapEditor";
+import {
+  collectClipboardFiles,
+  TipTapEditor,
+  type TipTapEditorHandle,
+} from "./TipTapEditor";
 import { buildMentionMatch } from "./MessageInput/utils";
 
 afterEach(() => {
@@ -11,6 +15,39 @@ afterEach(() => {
 });
 
 describe("TipTapEditor", () => {
+  describe("clipboard files", () => {
+    const clipboardItem = (file: File) => ({
+      kind: "file" as const,
+      type: file.type,
+      getAsFile: () => file,
+    });
+
+    it("keeps named non-image files on the attachment queue path", () => {
+      const report = new File(["report"], "report.pdf", {
+        type: "application/pdf",
+      });
+      const unnamedDocument = new File(["report"], "", {
+        type: "application/pdf",
+      });
+
+      const selection = collectClipboardFiles([
+        clipboardItem(report),
+        clipboardItem(unnamedDocument),
+      ]);
+
+      expect(selection.files).toEqual([report]);
+      expect(selection.unnamedNonImageFileCount).toBe(1);
+    });
+
+    it("assigns a safe name to an unnamed pasted image", () => {
+      const screenshot = new File(["image"], "", { type: "image/png" });
+
+      const selection = collectClipboardFiles([clipboardItem(screenshot)]);
+
+      expect(selection.unnamedNonImageFileCount).toBe(0);
+      expect(selection.files[0]?.name).toMatch(/^pasted-image-\d+\.png$/);
+    });
+  });
   it("does not register duplicate link extensions across remounts", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
