@@ -120,6 +120,9 @@ jobs:
           # Màn "Công & Phép": để trống vars → mặc định "true" (bật trên
           # production). Đặt vars.VITE_WORK_MODULE_ENABLED="false" chỉ để rollback.
           VITE_WORK_MODULE_ENABLED: ${{ vars.VITE_WORK_MODULE_ENABLED }}
+          # P5 rollout values are public build inputs, never runtime compose env.
+          VITE_FILE_VIEWER_ENABLED: ${{ vars.VITE_FILE_VIEWER_ENABLED }}
+          VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED: ${{ vars.VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED }}
           SERVER_RUNTIME_ENV_FILE: ${{ vars.SERVER_RUNTIME_ENV_FILE }}
           SERVER_INFRA_ROOT: ${{ vars.SERVER_INFRA_ROOT }}
           SERVER_PORT: ${{ secrets.SERVER_PORT }}
@@ -206,13 +209,18 @@ jobs:
           VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN="$(trim "${VITE_CHAT_USE_LEGACY_TIMELINE:-}")"; [[ -n "${VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN}" ]] || VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN="false"
           VITE_HR_API_BASE_URL_CLEAN="$(trim "${VITE_HR_API_BASE_URL:-}")"
           VITE_WORK_MODULE_ENABLED_CLEAN="$(trim "${VITE_WORK_MODULE_ENABLED:-}")"; [[ -n "${VITE_WORK_MODULE_ENABLED_CLEAN}" ]] || VITE_WORK_MODULE_ENABLED_CLEAN="true"
+          # P5 viewer and telemetry are opt-in; missing values fail closed.
+          VITE_FILE_VIEWER_ENABLED_CLEAN="$(trim "${VITE_FILE_VIEWER_ENABLED:-}")"; [[ -n "${VITE_FILE_VIEWER_ENABLED_CLEAN}" ]] || VITE_FILE_VIEWER_ENABLED_CLEAN="false"
+          VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED_CLEAN="$(trim "${VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED:-}")"; [[ -n "${VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED_CLEAN}" ]] || VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED_CLEAN="false"
 
           # Whitelist values. Vite needs the literal "true" or "false".
           for v_name in \
               VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE_CLEAN \
               VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN \
               VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN \
-              VITE_WORK_MODULE_ENABLED_CLEAN; do
+              VITE_WORK_MODULE_ENABLED_CLEAN \
+              VITE_FILE_VIEWER_ENABLED_CLEAN \
+              VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED_CLEAN; do
             v_val="${!v_name}"
             if [[ "${v_val}" != "true" && "${v_val}" != "false" ]]; then
               echo "::error title=Invalid boolean flag::${v_name} must be 'true' or 'false', got '${v_val}'"
@@ -299,20 +307,23 @@ jobs:
             printf 'VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN=%s\n' "${VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN}"
             printf 'VITE_HR_API_BASE_URL_CLEAN=%s\n' "${VITE_HR_API_BASE_URL_CLEAN}"
             printf 'VITE_WORK_MODULE_ENABLED_CLEAN=%s\n' "${VITE_WORK_MODULE_ENABLED_CLEAN}"
+            printf 'VITE_FILE_VIEWER_ENABLED_CLEAN=%s\n' "${VITE_FILE_VIEWER_ENABLED_CLEAN}"
+            printf 'VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED_CLEAN=%s\n' "${VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED_CLEAN}"
             printf 'IMAGE_REF=%s\n' "${IMAGE_REF}"
             printf 'RELEASE_DIR=%s\n' "${RELEASE_DIR}"
             printf 'USE_TAG=%s\n' "${IMAGE_TAG}"
           } >> "${GITHUB_ENV}"
 
-      - name: Print resolved timeline flags
-        # Surface the post-validate values so anyone reading the run can see
-        # what the Vite bundle is about to bake in. Production default is
-        # SIMPLE=true, DEBUG=false, USE_LEGACY=false (post-cleanup 2026-05).
+      - name: Print resolved build flags
+        # Surface public, post-validate values that Vite will bake into this
+        # image. P5 defaults remain off until an approved rollout flips them.
         run: |
           set -Eeuo pipefail
           echo "SIMPLE=${VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE_CLEAN}"
           echo "SIMPLE_DEBUG=${VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN}"
           echo "USE_LEGACY=${VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN}"
+          echo "FILE_VIEWER=${VITE_FILE_VIEWER_ENABLED_CLEAN}"
+          echo "FILE_LIFECYCLE_TELEMETRY=${VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED_CLEAN}"
 
       - name: Preflight Docker build context
         if: env.SKIP_BUILD == 'false'
@@ -381,6 +392,8 @@ jobs:
             --build-arg VITE_CHAT_USE_LEGACY_TIMELINE="${VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN}" \
             --build-arg VITE_HR_API_BASE_URL="${VITE_HR_API_BASE_URL_CLEAN}" \
             --build-arg VITE_WORK_MODULE_ENABLED="${VITE_WORK_MODULE_ENABLED_CLEAN}" \
+            --build-arg VITE_FILE_VIEWER_ENABLED="${VITE_FILE_VIEWER_ENABLED_CLEAN}" \
+            --build-arg VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED="${VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED_CLEAN}" \
             --tag "${IMAGE_REF}" \
             --push \
             .

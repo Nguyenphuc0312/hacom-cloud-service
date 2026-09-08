@@ -16,6 +16,7 @@ import { registerStoreResetter } from "../stores/storeResetRegistry";
 import { ExpiringLruCache } from "../utils/expiringLruCache";
 import { createSingleFlight } from "../utils/singleFlight";
 import { buildAttachmentResolverCacheKey } from "./useAttachmentDownloadUrl";
+import { recordFileViewerLifecycle } from "../utils/fileViewerLifecycleTelemetry";
 
 interface CacheEntry {
   url: string;
@@ -227,6 +228,9 @@ export function useFilePreview(): UseFilePreviewReturn {
       setSecureUrl(null);
       setUrlError("Tệp chưa sẵn sàng để xem trước.");
       setIsLoadingUrl(false);
+      recordFileViewerLifecycle("source_unavailable", current.previewType, {
+        outcome: "blocked",
+      });
       return;
     }
 
@@ -236,6 +240,10 @@ export function useFilePreview(): UseFilePreviewReturn {
       setSecureUrl(null);
       setUrlError(null);
       setIsLoadingUrl(false);
+      recordFileViewerLifecycle("source_ready", current.previewType, {
+        source: "none",
+        outcome: "success",
+      });
       return;
     }
 
@@ -246,6 +254,10 @@ export function useFilePreview(): UseFilePreviewReturn {
       setSecureUrl(cached.url);
       setUrlError(null);
       setIsLoadingUrl(false);
+      recordFileViewerLifecycle("source_ready", current.previewType, {
+        source: "cache",
+        outcome: "success",
+      });
       return;
     }
 
@@ -254,6 +266,14 @@ export function useFilePreview(): UseFilePreviewReturn {
       setSecureUrl(legacyUrl);
       setUrlError(legacyUrl ? null : "File không có định danh để xin liên kết xem.");
       setIsLoadingUrl(false);
+      recordFileViewerLifecycle(
+        legacyUrl ? "source_ready" : "source_unavailable",
+        current.previewType,
+        {
+          source: "legacy",
+          outcome: legacyUrl ? "success" : "error",
+        },
+      );
       return;
     }
 
@@ -261,6 +281,10 @@ export function useFilePreview(): UseFilePreviewReturn {
       setSecureUrl(null);
       setUrlError("Không thể xác định ngữ cảnh xem file.");
       setIsLoadingUrl(false);
+      recordFileViewerLifecycle("source_unavailable", current.previewType, {
+        source: "none",
+        outcome: "error",
+      });
       return;
     }
 
@@ -286,12 +310,20 @@ export function useFilePreview(): UseFilePreviewReturn {
         if (requestSequence !== requestSequenceRef.current || controller.signal.aborted) return;
         setSecureUrl(entry.url);
         setUrlError(null);
+        recordFileViewerLifecycle("source_ready", current.previewType, {
+          source: "network",
+          outcome: "success",
+        });
       } catch (error) {
         if (requestSequence !== requestSequenceRef.current || controller.signal.aborted || isAbortError(error)) {
           return;
         }
         setSecureUrl(null);
         setUrlError("Không thể lấy liên kết xem file.");
+        recordFileViewerLifecycle("source_unavailable", current.previewType, {
+          source: "network",
+          outcome: "error",
+        });
       } finally {
         if (requestSequence === requestSequenceRef.current && !controller.signal.aborted) {
           setIsLoadingUrl(false);
@@ -308,8 +340,12 @@ export function useFilePreview(): UseFilePreviewReturn {
       setUrlError("Tệp chưa sẵn sàng để xem trước.");
       setIsLoadingUrl(false);
       setIsOpen(false);
+      recordFileViewerLifecycle("open_blocked", target.previewType, {
+        outcome: "blocked",
+      });
       return;
     }
+    recordFileViewerLifecycle("open_requested", target.previewType);
     const items = (galleryItems ?? [target]).filter((item) => item.attachment.canPreview !== false);
     const index = items.findIndex(
       (item) =>
@@ -325,13 +361,14 @@ export function useFilePreview(): UseFilePreviewReturn {
   }, []);
 
   const close = useCallback(() => {
+    if (current) recordFileViewerLifecycle("closed", current.previewType);
     abortRef.current?.abort();
     abortRef.current = null;
     setIsOpen(false);
     setSecureUrl(null);
     setUrlError(null);
     setIsLoadingUrl(false);
-  }, []);
+  }, [current]);
 
   const prev = useCallback(() => setCurrentIndex((index) => Math.max(0, index - 1)), []);
   const next = useCallback(

@@ -7,7 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FileType, type Attachment } from "../../types";
 import type { PreviewType } from "../../utils/formatFileSize";
 import { FileMessageCard } from "./FileMessageCard";
@@ -140,6 +140,7 @@ const renderCard = (
 
 describe("FileMessageCard download flow", () => {
   beforeEach(() => {
+    vi.stubEnv("VITE_FILE_VIEWER_ENABLED", "true");
     vi.clearAllMocks();
     testState.localStatus = "not-downloaded";
     testState.canOpenLocally = false;
@@ -154,6 +155,34 @@ describe("FileMessageCard download flow", () => {
     testState.downloadToLocal.mockResolvedValue(true);
     testState.openLocal.mockResolvedValue({ ok: true });
     testState.reveal.mockResolvedValue({ ok: true });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps a previewable file download-only when the in-app viewer is disabled", async () => {
+    vi.stubEnv("VITE_FILE_VIEWER_ENABLED", "false");
+    const user = userEvent.setup();
+    const onPreview = vi.fn();
+    renderCard(previewableDocument, onPreview);
+
+    expect(
+      screen.getByRole("button", { name: "Tải Bao cao.pdf" }),
+    ).toBeDisabled();
+
+    await user.click(
+      screen.getByRole("button", { name: "Chỉ tải Bao cao.pdf" }),
+    );
+
+    await waitFor(() => {
+      expect(testState.downloadResourceWithName).toHaveBeenCalledWith(
+        "https://storage.example/file",
+        "Bao cao.pdf",
+        expect.objectContaining({ expectedBytes: 7, totalBytesHint: 7 }),
+      );
+    });
+    expect(onPreview).not.toHaveBeenCalled();
   });
 
   it("keeps an opaque file card non-activating and downloads only from its explicit action", async () => {
@@ -217,6 +246,33 @@ describe("FileMessageCard download flow", () => {
     expect(testState.resolveUrl).not.toHaveBeenCalled();
     expect(testState.downloadResourceWithName).not.toHaveBeenCalled();
     expect(testState.saveLocal).not.toHaveBeenCalled();
+  });
+
+  it("keeps image thumbnails and explicit download available when the viewer is disabled", async () => {
+    vi.stubEnv("VITE_FILE_VIEWER_ENABLED", "false");
+    testState.isVisible = true;
+    const user = userEvent.setup();
+    const onPreview = vi.fn();
+    renderCard(previewableImage, onPreview);
+
+    await waitFor(() => {
+      expect(testState.resolveThumbnailUrl).toHaveBeenCalledTimes(1);
+    });
+    expect(
+      screen.getByRole("button", { name: "chat:file.download" }),
+    ).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Preview" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "chat:file.download" }));
+
+    await waitFor(() => {
+      expect(testState.downloadResourceWithName).toHaveBeenCalledWith(
+        "https://storage.example/file",
+        "preview.png",
+        expect.objectContaining({ expectedBytes: 7, totalBytesHint: 7 }),
+      );
+    });
+    expect(onPreview).not.toHaveBeenCalled();
   });
 
   it("resolves a visible image thumbnail through the preview intent, never the download resolver", async () => {
