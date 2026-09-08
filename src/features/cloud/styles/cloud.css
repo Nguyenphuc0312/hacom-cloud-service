@@ -1705,9 +1705,9 @@ button.cloud-delete-choice--danger:hover {
 
   .cloud-manage-upgrade-card {
     grid-area: upgrade;
-    align-self: stretch;
-    min-height: 0;
-    height: 100%;
+    align-self: start;
+    min-height: 300px;
+    height: auto;
     margin: 0;
   }
 
