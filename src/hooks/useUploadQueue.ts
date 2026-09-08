@@ -22,7 +22,6 @@ import {
   toPersistedAttachmentDraft,
 } from "../types/attachmentDraft";
 import {
-  DEFAULT_ALLOWED_UPLOAD_MIME_TYPES,
   resolveUploadCategoryForMimeType,
   resolveUploadMaxBytesForFile,
   resolveUploadMimeTypeForFile,
@@ -666,7 +665,6 @@ export function useUploadQueue({
 
   const addFiles = useCallback(
     (files: File[]): UploadQueueAddFilesResult => {
-      const allowedTypes = new Set<string>(DEFAULT_ALLOWED_UPLOAD_MIME_TYPES);
       const result: UploadQueueAddFilesResult = {
         acceptedCount: 0,
         rejectedCount: 0,
@@ -711,17 +709,6 @@ export function useUploadQueue({
           }
 
           const resolvedMimeType = resolveUploadMimeTypeForFile(file);
-          if (!resolvedMimeType || !allowedTypes.has(resolvedMimeType)) {
-            result.errors.push(
-              t("error:upload.unsupportedTypeNamed", {
-                name: file.name,
-                defaultValue: `${file.name} has an unsupported file type`,
-              }),
-            );
-            result.rejectedCount += 1;
-            continue;
-          }
-
           const validatedType = validateUploadFileType({
             fileName: file.name,
             mimeType: resolvedMimeType,
@@ -826,6 +813,10 @@ export function useUploadQueue({
 
         return {
           ...draft,
+          uploadId: undefined,
+          fileId: undefined,
+          expiresAt: undefined,
+          uploaded: undefined,
           status: "idle",
           progress: 0,
           errorCode: undefined,
