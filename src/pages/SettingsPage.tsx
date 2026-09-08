@@ -6,6 +6,7 @@ import {
   ArrowLeftIcon,
   ArrowLeftOnRectangleIcon,
   BellIcon,
+  ChatBubbleLeftRightIcon,
   Cog6ToothIcon,
   GlobeAltIcon,
   LifebuoyIcon,
@@ -15,6 +16,7 @@ import {
 } from "@heroicons/react/24/outline";
 import {
   AppearanceSection,
+  ChatSection,
   HelpSection,
   LanguageSection,
   NotificationSection,
@@ -40,6 +42,7 @@ const MOBILE_MEDIA_QUERY = `(max-width: ${RSP_BREAKPOINT_MIN.md - 1}px)`;
 const SETTINGS_TARGETS = {
   profile: "settings-profile",
   notifications: "settings-notifications",
+  chat: "settings-chat",
   privacy: "settings-privacy",
   security: "settings-security",
   appearance: "settings-appearance",
@@ -168,6 +171,12 @@ export const SettingsPage: React.FC = () => {
       icon: <BellIcon className="h-4 w-4" />,
     },
     {
+      navId: "chat",
+      id: "chat",
+      label: t("settings:navigation.chat", { defaultValue: "Tin nhắn" }),
+      icon: <ChatBubbleLeftRightIcon className="h-4 w-4" />,
+    },
+    {
       navId: "privacy",
       id: "privacy",
       label: t("settings:navigation.privacy", {
@@ -279,6 +288,8 @@ export const SettingsPage: React.FC = () => {
         return <ProfileSettingsSection id="settings-profile" />;
       case "notifications":
         return <NotificationSection id="settings-notifications" />;
+      case "chat":
+        return <ChatSection id="settings-chat" />;
       case "privacy":
         return <PrivacySection id="settings-privacy" />;
       case "security":
