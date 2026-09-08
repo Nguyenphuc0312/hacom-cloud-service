@@ -123,6 +123,16 @@ export function useFilePreview(): UseFilePreviewReturn {
       return;
     }
 
+    // The server is authoritative for preview eligibility. Do this before
+    // reading a cached/direct URL so a stale caller cannot render a blocked
+    // attachment merely by opening the shared modal directly.
+    if (current.attachment.canPreview === false) {
+      setSecureUrl(null);
+      setUrlError("Tệp chưa sẵn sàng để xem trước.");
+      setIsLoadingUrl(false);
+      return;
+    }
+
     const key = cacheKey(current.conversationId, current.attachment);
 
     // 1. Check cache (unless this run was triggered by refreshUrl)
@@ -254,7 +264,16 @@ export function useFilePreview(): UseFilePreviewReturn {
 
   const open = useCallback(
     (target: PreviewTarget, galleryItems?: PreviewTarget[]) => {
-      const items = galleryItems ?? [target];
+      if (target.attachment.canPreview === false) {
+        setSecureUrl(null);
+        setUrlError("Tệp chưa sẵn sàng để xem trước.");
+        setIsLoadingUrl(false);
+        setIsOpen(false);
+        return;
+      }
+      const items = (galleryItems ?? [target]).filter(
+        (item) => item.attachment.canPreview !== false,
+      );
       setGallery(items);
       const idx = items.findIndex(
         (it) =>

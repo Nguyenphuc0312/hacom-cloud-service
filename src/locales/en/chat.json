@@ -301,7 +301,8 @@
   "dropZone": {
     "title": "Drop files here",
     "subtitle": "Release to attach files to this conversation",
-    "limits": "Up to 10 files · Images 37.5 MB · Documents 150 MB · Video 300 MB"
+    "limits": "Up to {{count}} files · Images {{imageLimit}} · Video, audio, documents & archives {{standardLimit}} · Other files {{genericLimit}} · Total {{totalLimit}}",
+    "folderUnsupported": "Folders cannot be attached. Choose files instead."
   },
   "attachmentTray": {
     "queued": "Queued",
@@ -373,6 +374,7 @@
     "clickToDownloadAndOpen": "Download and open",
     "preparingDownload": "Preparing download…",
     "checkingLocalFile": "Checking local file…",
+    "notReadyToDownload": "This file is not ready to download",
     "downloadingSize": "Downloading {{size}}",
     "downloadingProgress": "Downloading {{progress}}%",
     "downloadingNamed": "Downloading {{name}}",

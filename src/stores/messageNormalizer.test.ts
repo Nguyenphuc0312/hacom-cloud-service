@@ -68,6 +68,30 @@ describe("normalizeAttachments", () => {
     ]);
     expect(attachment.type).toBe("other");
   });
+
+  it("giữ capability bảo mật khi server trả về", () => {
+    const [attachment] = normalizeAttachments([
+      {
+        id: "safe-state",
+        url: "https://x/safe-state.bin",
+        scanStatus: "scanning",
+        releaseStatus: "blocked",
+        releaseReason: "FILE_SCAN_IN_PROGRESS",
+        canAttach: false,
+        canDownload: false,
+        canPreview: false,
+      },
+    ]);
+
+    expect(attachment).toMatchObject({
+      scanStatus: "scanning",
+      releaseStatus: "blocked",
+      releaseReason: "FILE_SCAN_IN_PROGRESS",
+      canAttach: false,
+      canDownload: false,
+      canPreview: false,
+    });
+  });
 });
 
 describe("normalizeReactions", () => {

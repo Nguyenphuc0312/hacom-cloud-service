@@ -81,6 +81,12 @@ const isAbortError = (error: unknown): boolean => {
   );
 };
 
+const createAbortError = (): Error => {
+  const error = new Error("Upload cancelled");
+  error.name = "AbortError";
+  return error;
+};
+
 const isSignedUrlExpiredError = (error: unknown): boolean => {
   const apiError = extractApiError(error);
   return apiError.statusCode === 403;
@@ -313,6 +319,7 @@ export function useUploadQueue({
   const { t } = useTranslation();
   const [drafts, setDrafts] = useState<AttachmentDraft[]>([]);
   const abortControllers = useRef(new Map<string, AbortController>());
+  const abandonedUploadIds = useRef(new Set<string>());
   const activePreviewUrls = useRef(new Set<string>());
   const draftsRef = useRef<AttachmentDraft[]>([]);
 
@@ -356,24 +363,27 @@ export function useUploadQueue({
   );
 
   const abandonDraft = useCallback(async (draft: AttachmentDraft, reason: string) => {
-    if (!draft.uploadId) {
+    const uploadId = draft.uploadId;
+    if (!uploadId || abandonedUploadIds.current.has(uploadId)) {
       return;
     }
 
+    abandonedUploadIds.current.add(uploadId);
     try {
       await uploadClient.abandonUpload({
-        uploadId: draft.uploadId,
+        uploadId,
         reason,
       });
     } catch {
-      // Best effort only.
+      // Allow a later cleanup path to retry a best-effort release.
+      abandonedUploadIds.current.delete(uploadId);
     }
   }, []);
 
   const uploadOne = useCallback(
     async (localId: string) => {
       const draft = draftsRef.current.find((item) => item.localId === localId);
-      if (!draft || !conversationId) {
+      if (!draft || !conversationId || abortControllers.current.has(localId)) {
         return;
       }
 
@@ -389,9 +399,41 @@ export function useUploadQueue({
         return;
       }
 
+      const abortController = new AbortController();
+      abortControllers.current.set(localId, abortController);
+      const isCurrentOperation = () =>
+        abortControllers.current.get(localId) === abortController &&
+        !abortController.signal.aborted;
+      const throwIfCancelled = () => {
+        if (!isCurrentOperation()) {
+          throw createAbortError();
+        }
+      };
+      const updateCurrentDraft = (
+        updater:
+          | Partial<AttachmentDraft>
+          | ((currentDraft: AttachmentDraft) => AttachmentDraft),
+      ) => {
+        if (isCurrentOperation()) {
+          updateDraft(localId, updater);
+        }
+      };
+      let signed: Awaited<ReturnType<typeof uploadClient.reserveUpload>> | undefined;
+      const abandonSignedUpload = async (reason: string) => {
+        if (!signed) return;
+        await abandonDraft(
+          {
+            ...draft,
+            uploadId: signed.uploadId,
+          },
+          reason,
+        );
+      };
+
       try {
         const validated = uploadClient.validateUpload(draft.file, draft.purpose);
-        updateDraft(localId, {
+        throwIfCancelled();
+        updateCurrentDraft({
           status: "validating",
           errorCode: undefined,
           errorMessage: undefined,
@@ -399,12 +441,15 @@ export function useUploadQueue({
         });
 
         const reserve = async (uploadId?: string) => {
-          updateDraft(localId, {
+          throwIfCancelled();
+          updateCurrentDraft({
             status: "reserving",
             progress: 0,
           });
 
-          const signed = await uploadClient.reserveUpload({
+          // The current reserve/complete API wrappers do not accept AbortSignal.
+          // This guard makes a late response stale and releases its reservation.
+          const nextSigned = await uploadClient.reserveUpload({
             uploadId,
             purpose: draft.purpose,
             conversationId,
@@ -413,90 +458,80 @@ export function useUploadQueue({
             mimeType: validated.mimeType,
             sizeBytes: draft.sizeBytes,
           });
+          if (!isCurrentOperation()) {
+            await abandonDraft(
+              {
+                ...draft,
+                uploadId: nextSigned.uploadId,
+              },
+              "cancelled",
+            );
+            throw createAbortError();
+          }
 
-          updateDraft(localId, {
-            uploadId: signed.uploadId,
-            expiresAt: signed.expiresAt,
+          updateCurrentDraft({
+            uploadId: nextSigned.uploadId,
+            expiresAt: nextSigned.expiresAt,
             status: "reserving",
           });
-
-          return signed;
+          return nextSigned;
         };
 
         const uploadWithSignedUrl = async (
-          signed: Awaited<ReturnType<typeof uploadClient.reserveUpload>>,
+          nextSigned: Awaited<ReturnType<typeof uploadClient.reserveUpload>>,
         ) => {
-          const abortController = new AbortController();
-          abortControllers.current.set(localId, abortController);
-
-          updateDraft(localId, {
+          throwIfCancelled();
+          updateCurrentDraft({
             status: "uploading",
             progress: 0,
           });
 
-          try {
-            await uploadClient.uploadToSignedUrl({
-              signedUrl: signed.uploadUrl,
-              method: signed.uploadMethod || "PUT",
-              headers: {
-                ...(signed.uploadHeaders || {}),
-                "Content-Type": validated.mimeType,
-              },
-              file: draft.file!,
-              abortSignal: abortController.signal,
-              onProgress: (progress) => {
-                updateDraft(localId, {
-                  progress,
-                  status: "uploading",
-                });
-              },
-            });
-          } finally {
-            abortControllers.current.delete(localId);
-          }
+          await uploadClient.uploadToSignedUrl({
+            signedUrl: nextSigned.uploadUrl,
+            method: nextSigned.uploadMethod || "PUT",
+            headers: {
+              ...(nextSigned.uploadHeaders || {}),
+              "Content-Type": validated.mimeType,
+            },
+            file: draft.file!,
+            abortSignal: abortController.signal,
+            onProgress: (progress) => {
+              updateCurrentDraft({
+                progress,
+                status: "uploading",
+              });
+            },
+          });
+          throwIfCancelled();
         };
 
-        let signed = await reserve(draft.uploadId);
-
+        signed = await reserve(draft.uploadId);
         try {
           await uploadWithSignedUrl(signed);
         } catch (error) {
-          if (isAbortError(error)) {
-            updateDraft(localId, {
-              status: "cancelled",
-              errorCode: "UPLOAD_CANCELLED",
-              errorMessage: t("error:upload.cancelled", {
-                defaultValue: "Upload cancelled",
-              }),
-            });
-            await abandonDraft(
-              {
-                ...draft,
-                uploadId: signed.uploadId,
-              },
-              "cancelled",
-            );
-            return;
-          }
-
-          if (isSignedUrlExpiredError(error)) {
-            signed = await reserve(signed.uploadId);
-            await uploadWithSignedUrl(signed);
-          } else {
+          if (isAbortError(error) || !isCurrentOperation()) {
             throw error;
           }
+          if (!isSignedUrlExpiredError(error)) {
+            throw error;
+          }
+
+          signed = await reserve(signed.uploadId);
+          await uploadWithSignedUrl(signed);
         }
 
-        updateDraft(localId, {
+        throwIfCancelled();
+        updateCurrentDraft({
           status: "completing",
           progress: 100,
         });
 
         const completed = await uploadClient.completeUpload({
           uploadId: signed.uploadId,
-          conversationId: conversationId,
+          conversationId,
           objectKey: signed.objectKey,
         });
+        throwIfCancelled();
         // ponytail: cast until shared-types ships security fields (canAttach/canDownload/canPreview/releaseStatus/releaseReason)
         const attachment = completed.attachment as typeof completed.attachment & {
           canAttach?: boolean;
@@ -511,7 +546,7 @@ export function useUploadQueue({
           throw new Error("UPLOAD_COMPLETE_MISSING_FILE_ID");
         }
 
-        updateDraft(localId, {
+        updateCurrentDraft({
           status: attachment.canAttach === false ? "security_pending" : "finalized",
           progress: 100,
           uploadId: signed.uploadId,
@@ -540,6 +575,7 @@ export function useUploadQueue({
             height: attachment.height,
             duration: attachment.duration,
             thumbnailUrl: attachment.thumbnailUrl,
+            scanStatus: attachment.scanStatus,
             canAttach: attachment.canAttach,
             canDownload: attachment.canDownload,
             canPreview: attachment.canPreview,
@@ -548,6 +584,27 @@ export function useUploadQueue({
           }),
         });
       } catch (error) {
+        const wasCancelled =
+          isAbortError(error) || abortController.signal.aborted;
+        if (wasCancelled) {
+          if (abortControllers.current.get(localId) === abortController) {
+            updateDraft(localId, (currentDraft) => ({
+              ...currentDraft,
+              status: "cancelled",
+              errorCode: "UPLOAD_CANCELLED",
+              errorMessage: t("error:upload.cancelled", {
+                defaultValue: "Upload cancelled",
+              }),
+            }));
+          }
+          await abandonSignedUpload("cancelled");
+          return;
+        }
+
+        if (!isCurrentOperation()) {
+          return;
+        }
+
         const resolved = resolveUploadError(error, t);
         updateDraft(localId, (currentDraft) => ({
           ...currentDraft,
@@ -558,21 +615,25 @@ export function useUploadQueue({
           errorMessage: resolved.message,
           retryCount: currentDraft.retryCount + 1,
         }));
+      } finally {
+        if (abortControllers.current.get(localId) === abortController) {
+          abortControllers.current.delete(localId);
+        }
       }
     },
     [abandonDraft, conversationId, t, updateDraft],
   );
 
   useEffect(() => {
-    if (!conversationId) {
-      setDrafts([]);
-      return;
-    }
-
     for (const controller of abortControllers.current.values()) {
       controller.abort();
     }
     abortControllers.current.clear();
+
+    if (!conversationId) {
+      setDrafts([]);
+      return;
+    }
 
     const interruptedUploadMessage = t("error:upload.interruptedNeedsReupload", {
       defaultValue:
@@ -789,12 +850,29 @@ export function useUploadQueue({
     [abandonDraft, revokePreviewUrl],
   );
 
-  const cancelUpload = useCallback((localId: string) => {
-    const controller = abortControllers.current.get(localId);
-    if (controller) {
+  const cancelUpload = useCallback(
+    (localId: string) => {
+      const controller = abortControllers.current.get(localId);
+      if (!controller) {
+        return;
+      }
+
+      const draft = draftsRef.current.find((item) => item.localId === localId);
       controller.abort();
-    }
-  }, []);
+      updateDraft(localId, (currentDraft) => ({
+        ...currentDraft,
+        status: "cancelled",
+        errorCode: "UPLOAD_CANCELLED",
+        errorMessage: t("error:upload.cancelled", {
+          defaultValue: "Upload cancelled",
+        }),
+      }));
+      if (draft) {
+        void abandonDraft(draft, "cancelled");
+      }
+    },
+    [abandonDraft, t, updateDraft],
+  );
 
   const retryUpload = useCallback(
     (localId: string) => {

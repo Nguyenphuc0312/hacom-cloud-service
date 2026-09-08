@@ -180,6 +180,14 @@ const PREFERRED_MIME_BY_EXTENSION: Record<string, string> = {
   ".tar.gz": "application/gzip",
 };
 
+// Keep genuinely unknown business formats (for example CAD/DWG) generic, but
+// never let an executable or script masquerade as application/octet-stream.
+const UNSAFE_GENERIC_UPLOAD_EXTENSIONS = new Set([
+  ".appimage", ".bat", ".cmd", ".com", ".command", ".cpl", ".dll", ".exe",
+  ".hta", ".jar", ".jse", ".lnk", ".msi", ".msp", ".pif", ".ps1", ".reg",
+  ".scr", ".sh", ".sys", ".vbs", ".wsc", ".wsf", ".wsh",
+]);
+
 export const normalizeUploadMimeType = (value: unknown): string =>
   typeof value === "string" ? value.trim().toLowerCase() : "";
 
@@ -251,7 +259,11 @@ export const validateUploadFileType = (input: {
   mimeType: string;
 }): UploadFileTypeValidationResult => {
   const mimeType = normalizeUploadMimeType(input.mimeType);
-  const extension = getUploadFileExtension(input.fileName);
+  // Windows ignores trailing dots/spaces, so evaluate the extension after
+  // normalizing them instead of accepting report.exe. as a generic file.
+  const extension = getUploadFileExtension(
+    input.fileName.trim().replace(/[.\s]+$/g, ""),
+  );
   const definition = ALLOWED_UPLOAD_FILE_TYPES[mimeType];
 
   if (!definition && mimeType !== "application/octet-stream") {
@@ -265,6 +277,15 @@ export const validateUploadFileType = (input: {
   }
 
   if (!definition) {
+    if (UNSAFE_GENERIC_UPLOAD_EXTENSIONS.has(extension)) {
+      return {
+        ok: false,
+        code: UPLOAD_VALIDATION_CODES.UNSUPPORTED_MIME_TYPE,
+        mimeType,
+        extension,
+        expectedExtensions: [],
+      };
+    }
     return {
       ok: true,
       mimeType,

@@ -290,4 +290,124 @@ describe("useUploadQueue", () => {
       expect(result.current.drafts[0]?.errorCode).toBe("FILE_SCAN_PENDING");
     });
   });
+
+  it("keeps a canceled reservation from starting a late PUT", async () => {
+    let resolveReserve!: (value: {
+      uploadId: string;
+      uploadUrl: string;
+      uploadMethod: string;
+      uploadHeaders: Record<string, string>;
+      expiresAt: string;
+    }) => void;
+    uploadClientMock.reserveUpload.mockReturnValue(
+      new Promise((resolve) => {
+        resolveReserve = resolve;
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      useUploadQueue({ conversationId: "conv-a" }),
+    );
+
+    await act(async () => {
+      result.current.addFiles([
+        new File(["hello"], "photo.png", { type: "image/png" }),
+      ]);
+    });
+    await waitFor(() => {
+      expect(uploadClientMock.reserveUpload).toHaveBeenCalledTimes(1);
+    });
+
+    const localId = result.current.drafts[0]!.localId;
+    await act(async () => {
+      result.current.cancelUpload(localId);
+    });
+    await waitFor(() => {
+      expect(result.current.drafts[0]?.status).toBe("cancelled");
+    });
+
+    await act(async () => {
+      resolveReserve({
+        uploadId: "upload-late",
+        uploadUrl: "https://upload.example/late",
+        uploadMethod: "PUT",
+        uploadHeaders: {},
+        expiresAt: "2026-05-13T01:00:00.000Z",
+      });
+    });
+
+    await waitFor(() => {
+      expect(uploadClientMock.abandonUpload).toHaveBeenCalledWith({
+        uploadId: "upload-late",
+        reason: "cancelled",
+      });
+    });
+    expect(uploadClientMock.uploadToSignedUrl).not.toHaveBeenCalled();
+    expect(result.current.drafts[0]?.status).toBe("cancelled");
+  });
+
+  it("keeps a late complete response from finalizing a canceled draft", async () => {
+    uploadClientMock.reserveUpload.mockResolvedValue({
+      uploadId: "upload-1",
+      uploadUrl: "https://upload.example/1",
+      uploadMethod: "PUT",
+      uploadHeaders: {},
+      expiresAt: "2026-05-13T01:00:00.000Z",
+    });
+    uploadClientMock.uploadToSignedUrl.mockResolvedValue(undefined);
+
+    let resolveComplete!: (value: {
+      uploadId: string;
+      fileId: string;
+      attachment: { id: string };
+    }) => void;
+    uploadClientMock.completeUpload.mockReturnValue(
+      new Promise((resolve) => {
+        resolveComplete = resolve;
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      useUploadQueue({ conversationId: "conv-a" }),
+    );
+
+    await act(async () => {
+      result.current.addFiles([
+        new File(["hello"], "photo.png", { type: "image/png" }),
+      ]);
+    });
+    await waitFor(() => {
+      expect(uploadClientMock.completeUpload).toHaveBeenCalledWith({
+        uploadId: "upload-1",
+        conversationId: "conv-a",
+        objectKey: undefined,
+      });
+    });
+
+    const localId = result.current.drafts[0]!.localId;
+    await act(async () => {
+      result.current.cancelUpload(localId);
+    });
+    await waitFor(() => {
+      expect(result.current.drafts[0]?.status).toBe("cancelled");
+    });
+
+    await act(async () => {
+      resolveComplete({
+        uploadId: "upload-1",
+        fileId: "file-1",
+        attachment: { id: "file-1" },
+      });
+    });
+
+    await waitFor(() => {
+      expect(uploadClientMock.abandonUpload).toHaveBeenCalledWith({
+        uploadId: "upload-1",
+        reason: "cancelled",
+      });
+    });
+    expect(result.current.drafts[0]?.status).toBe("cancelled");
+    expect(result.current.drafts[0]?.fileId).toBeUndefined();
+    expect(uploadClientMock.attachToMessageDraft).not.toHaveBeenCalled();
+  });
 });

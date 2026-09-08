@@ -19,6 +19,7 @@ import {
 import {
   buildLocalFileName,
   getManagedDesktopFiles,
+  getStreamingDesktopFiles,
 } from "../utils/desktopBridge";
 import type {
   DesktopFileExists,
@@ -39,6 +40,12 @@ export interface UseLocalFileResult {
   reveal: () => Promise<DesktopFileResult>;
   /** Ghi file xuống máy (desktop: thư mục tải mặc định; web: chỉ đánh dấu đã tải). */
   saveLocal: (blob: Blob) => Promise<boolean>;
+  /** Desktop mới tải URL đã được API cấp thẳng xuống thư mục đã chọn, không qua Blob. */
+  canDownloadToLocal: boolean;
+  downloadToLocal: (
+    url: string,
+    options?: LocalFileDownloadOptions,
+  ) => Promise<boolean>;
   /** Đánh dấu đã tải mà không ghi đĩa (dùng cho luồng tải của trình duyệt). */
   markDownloaded: () => void;
 }
@@ -46,6 +53,11 @@ export interface UseLocalFileResult {
 export interface LocalFileScope {
   currentUserId: string;
   conversationId: string;
+}
+
+export interface LocalFileDownloadOptions {
+  signal?: AbortSignal;
+  onProgress?: (progress: { loadedBytes: number; totalBytes?: number }) => void;
 }
 
 const attachmentKey = (attachment: Attachment | undefined): string =>
@@ -113,6 +125,7 @@ export const useLocalFile = (
   // Chỉ dùng native khi shell cũng quản lý được thư mục tải đã chọn. Shell cũ
   // sẽ fallback về download của trình duyệt thay vì lén tạo cache AppData.
   const desktop = getManagedDesktopFiles();
+  const streamingDesktop = getStreamingDesktopFiles();
   const currentUserId = scope.currentUserId.trim();
   const conversationId = scope.conversationId.trim();
 
@@ -127,6 +140,7 @@ export const useLocalFile = (
     [conversationId, currentUserId, fileName, key],
   );
   const canOpenLocally = desktop !== null && localName !== "";
+  const canDownloadToLocal = streamingDesktop !== null && localName !== "";
   const webStatus = React.useSyncExternalStore<LocalFileStatus>(
     subscribeDownloadedFiles,
     () => (isFileDownloaded(key) ? "downloaded" : "not-downloaded"),
@@ -249,6 +263,78 @@ export const useLocalFile = (
     [desktop, fileName, localName, markDownloaded],
   );
 
+  const downloadToLocal = React.useCallback(
+    async (url: string, options: LocalFileDownloadOptions = {}): Promise<boolean> => {
+      if (!streamingDesktop || !localName || !url) return false;
+
+      let didAbort = false;
+      const onAbort = () => {
+        didAbort = true;
+        void streamingDesktop.cancelDownload(localName).catch(() => undefined);
+      };
+      const unsubscribe = streamingDesktop.onDownloadProgress((progress) => {
+        if (progress.id !== localName) return;
+        if (progress.status === "started" || progress.status === "progress") {
+          options.onProgress?.({
+            loadedBytes: progress.loadedBytes,
+            totalBytes: progress.totalBytes,
+          });
+        }
+      });
+
+      if (options.signal?.aborted) {
+        onAbort();
+      } else {
+        options.signal?.addEventListener("abort", onAbort, { once: true });
+      }
+
+      try {
+        if (didAbort) return false;
+        const result = await streamingDesktop.download(
+          localName,
+          url,
+          (fileName ?? "").trim() || "download",
+          expectedSize,
+        );
+        if (!result.ok || didAbort || options.signal?.aborted) {
+          if (!result.ok && !didAbort) {
+            logger.warn("desktop-file", "native-download-failed", {
+              reason: result.reason,
+            });
+          }
+          return false;
+        }
+
+        const observedSize =
+          typeof result.bytes === "number" &&
+          Number.isSafeInteger(result.bytes) &&
+          result.bytes > 0
+            ? result.bytes
+            : expectedSize;
+        if (observedSize) {
+          publishDesktopStatus(localName, {
+            status: "downloaded",
+            observedSize,
+          });
+        } else {
+          void refreshDesktopStatus(localName);
+        }
+        return true;
+      } catch (error) {
+        if (!didAbort && !options.signal?.aborted) {
+          logger.warn("desktop-file", "native-download-threw", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return false;
+      } finally {
+        options.signal?.removeEventListener("abort", onAbort);
+        unsubscribe();
+      }
+    },
+    [expectedSize, fileName, localName, refreshDesktopStatus, streamingDesktop],
+  );
+
   const openLocal = React.useCallback(async (): Promise<DesktopFileResult> => {
     if (!desktop || !localName) return { ok: false, reason: "unsupported" };
     try {
@@ -288,6 +374,8 @@ export const useLocalFile = (
     openLocal,
     reveal,
     saveLocal,
+    canDownloadToLocal,
+    downloadToLocal,
     markDownloaded,
   };
 };

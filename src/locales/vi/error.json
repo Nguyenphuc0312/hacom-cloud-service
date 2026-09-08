@@ -42,6 +42,7 @@
     "unsupportedTypeNamed": "{{name}} có định dạng tệp không được hỗ trợ",
     "totalSizeTooLarge": "Tổng dung lượng tệp không được vượt quá 450 MB trong một tin nhắn.",
     "mimeExtensionMismatch": "Phần mở rộng file không khớp với loại file",
+    "clipboardFileMissingName": "Không thể đính kèm tệp đã dán vì tệp không có tên. Hãy lưu tệp rồi thử lại.",
     "messageSendFailedKeepDraft": "Gửi tin nhắn thất bại, tệp đã tải lên vẫn được giữ để bạn thử lại."
   }
 }

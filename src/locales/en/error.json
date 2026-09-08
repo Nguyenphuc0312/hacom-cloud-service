@@ -42,6 +42,7 @@
     "unsupportedTypeNamed": "{{name}} has an unsupported file type",
     "totalSizeTooLarge": "Total attachment size cannot exceed 450 MB in one message.",
     "mimeExtensionMismatch": "File extension does not match file type",
+    "clipboardFileMissingName": "A pasted file without a name cannot be attached. Save it first and try again.",
     "messageSendFailedKeepDraft": "Message send failed. Your uploaded files were kept so you can retry."
   }
 }

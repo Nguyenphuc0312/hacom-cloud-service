@@ -3,6 +3,7 @@ import {
   buildLocalFileName,
   getDesktopFiles,
   getManagedDesktopFiles,
+  getStreamingDesktopFiles,
 } from "./desktopBridge";
 
 const identity = {
@@ -92,5 +93,26 @@ describe("getManagedDesktopFiles", () => {
     });
 
     expect(getManagedDesktopFiles()).toBe(files);
+    expect(getStreamingDesktopFiles()).toBeNull();
+  });
+
+  it("accepts only the complete direct-stream native contract", () => {
+    const files = {
+      save: vi.fn(),
+      open: vi.fn(),
+      reveal: vi.fn(),
+      exists: vi.fn(),
+      getDownloadDirectory: vi.fn(),
+      chooseDownloadDirectory: vi.fn(),
+      download: vi.fn(),
+      cancelDownload: vi.fn(),
+      onDownloadProgress: vi.fn(),
+    };
+    Object.defineProperty(window, "chatDesktop", {
+      configurable: true,
+      value: { files },
+    });
+
+    expect(getStreamingDesktopFiles()).toBe(files);
   });
 });
