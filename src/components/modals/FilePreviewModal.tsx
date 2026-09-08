@@ -26,10 +26,15 @@ import {
   getIconTypeFromPreviewType,
 } from '../../utils/filePreviewUtils';
 import { truncateFilename } from '../../utils/truncateFilename';
-import { downloadResourceWithName } from '../../utils/downloadFile';
-import { markFileDownloaded } from '../../utils/downloadedFiles';
+import {
+  downloadBlobWithName,
+  downloadResourceWithName,
+  fetchResourceBlob,
+} from '../../utils/downloadFile';
 import { asString } from '../../utils/payloadGuards';
 import { isPubliclyFetchableUrl } from '../../utils/publicUrl';
+import { useLocalFile } from '../../hooks/useLocalFile';
+import { useAuthStore } from '../../stores/authStore';
 import { SafeImage } from '../common/SafeImage';
 import {
   FileTypeIcon,
@@ -83,6 +88,9 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [isZoomMenuOpen, setIsZoomMenuOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [pageCount, setPageCount] = useState(1);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadFailed, setDownloadFailed] = useState(false);
+  const currentUserId = useAuthStore((state) => state.user?.id ?? '');
   const overlayRef = useRef<HTMLDivElement>(null);
   const zoomMenuRef = useRef<HTMLDivElement>(null);
   const officeViewerKey = `${currentIndex}:${secureUrl ?? ''}`;
@@ -108,6 +116,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     setScale(1);
     setIsZoomMenuOpen(false);
     setPageCount(1);
+    setIsDownloading(false);
+    setDownloadFailed(false);
   }, [currentIndex, secureUrl]);
 
   // Keyboard navigation & escape
@@ -176,6 +186,10 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         ? rawAtt.size
         : undefined;
   const mimeType = asString(rawAtt?.mimeType) || 'application/octet-stream';
+  const { canOpenLocally, saveLocal, markDownloaded } = useLocalFile(att, {
+    currentUserId,
+    conversationId: current?.conversationId ?? '',
+  });
 
   const previewType: PreviewType = useMemo(() => {
     if (!current) return 'unknown';
@@ -222,9 +236,30 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   if (!isOpen || !current) return null;
 
   const handleDownload = async () => {
-    if (!secureUrl) return;
-    await downloadResourceWithName(secureUrl, fileName);
-    markFileDownloaded(att?.id || att?.objectKey || att?.url);
+    if (!secureUrl || isDownloading) return;
+
+    setIsDownloading(true);
+    setDownloadFailed(false);
+    try {
+      if (canOpenLocally) {
+        const blob = await fetchResourceBlob(secureUrl, {
+          expectedBytes: fileSize,
+          totalBytesHint: fileSize,
+        });
+        const saved = await saveLocal(blob);
+        if (!saved) downloadBlobWithName(blob, fileName);
+      } else {
+        await downloadResourceWithName(secureUrl, fileName, {
+          expectedBytes: fileSize,
+          totalBytesHint: fileSize,
+        });
+        markDownloaded();
+      }
+    } catch {
+      setDownloadFailed(true);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const renderContent = () => {
@@ -583,7 +618,10 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
               type="button"
               className={styles.actionBtn}
               onClick={() => void handleDownload()}
-              aria-label="Tải về"
+              disabled={!secureUrl || isDownloading}
+              aria-busy={isDownloading}
+              aria-label={downloadFailed ? "Thử tải lại" : "Tải về"}
+              title={downloadFailed ? "Tải lại" : "Tải về"}
             >
               <Download size={18} />
             </button>

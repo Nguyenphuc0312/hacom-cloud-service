@@ -24,9 +24,15 @@ export interface DesktopFileExists {
 }
 
 interface DesktopFilesApi {
+  /**
+   * Save bytes under an opaque attachment id while keeping the user-visible
+   * filename in the desktop download directory. Older desktop shells ignore
+   * the optional display name and keep their legacy behavior.
+   */
   save: (
-    fileName: string,
+    fileId: string,
     data: ArrayBuffer | Uint8Array,
+    displayName?: string,
   ) => Promise<DesktopFileResult>;
   /**
    * Native Save As. With no data, copies the already-managed local file;
@@ -41,6 +47,10 @@ interface DesktopFilesApi {
   open: (fileName: string) => Promise<DesktopFileResult>;
   reveal: (fileName: string) => Promise<DesktopFileResult>;
   exists: (fileName: string) => Promise<DesktopFileExists>;
+  /** Read the folder used for default downloads by the desktop shell. */
+  getDownloadDirectory?: () => Promise<DesktopFileResult>;
+  /** Ask the operating system for a new default download folder. */
+  chooseDownloadDirectory?: () => Promise<DesktopFileResult>;
 }
 
 /**
@@ -78,10 +88,11 @@ export function isDesktopApp(): boolean {
 }
 
 /**
- * Tên cache v2: hash toàn bộ account/conversation/attachment identity để hai
- * file cùng tên không dùng nhầm bytes giữa conversation hoặc account.
+ * Khoá mapping local v2: hash toàn bộ account/conversation/attachment identity
+ * để hai file cùng tên không dùng nhầm bytes giữa conversation hoặc account.
  *
- * Giữ nguyên tên gốc ở phần đầu để user còn nhận ra file trong Explorer.
+ * Desktop mới dùng khoá này nội bộ và lưu tên gốc người dùng nhìn thấy trong
+ * thư mục tải đã chọn. Desktop cũ vẫn có thể dùng nó như tên file legacy.
  */
 export function buildLocalFileName(
   identity: DesktopFileCacheIdentity,

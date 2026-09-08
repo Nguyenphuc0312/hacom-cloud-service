@@ -28,7 +28,7 @@ const expectedLocalName = buildLocalFileName(
   attachment.fileName,
 );
 
-describe("useLocalFile desktop cache", () => {
+describe("useLocalFile desktop files", () => {
   let resolveExists:
     ((value: { exists: boolean; size?: number }) => void) | undefined;
   const files = {
@@ -68,6 +68,11 @@ describe("useLocalFile desktop cache", () => {
     await act(async () => {
       expect(await result.current.saveLocal(blob)).toBe(true);
     });
+    expect(files.save).toHaveBeenCalledWith(
+      expectedLocalName,
+      expect.any(ArrayBuffer),
+      "PC (1).rar",
+    );
     expect(result.current.status).toBe("downloaded");
 
     await act(async () => {
