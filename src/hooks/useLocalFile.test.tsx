@@ -41,6 +41,8 @@ describe("useLocalFile desktop files", () => {
     save: vi.fn().mockResolvedValue({ ok: true }),
     open: vi.fn().mockResolvedValue({ ok: true }),
     reveal: vi.fn().mockResolvedValue({ ok: true }),
+    getDownloadDirectory: vi.fn().mockResolvedValue({ ok: true }),
+    chooseDownloadDirectory: vi.fn().mockResolvedValue({ ok: true }),
   };
 
   beforeEach(() => {
@@ -206,6 +208,29 @@ describe("useLocalFile desktop files", () => {
 
     expect(isFileDownloaded(attachment.id)).toBe(false);
     expect(result.current.status).toBe("unknown");
+  });
+
+  it("falls back to browser state for a legacy desktop shell without folder settings", async () => {
+    Object.defineProperty(window, "chatDesktop", {
+      configurable: true,
+      value: {
+        files: {
+          save: files.save,
+          open: files.open,
+          reveal: files.reveal,
+          exists: files.exists,
+        },
+      },
+    });
+    const { result } = renderHook(() => useLocalFile(attachment, scope));
+
+    expect(result.current.canOpenLocally).toBe(false);
+    await act(async () => {
+      expect(await result.current.saveLocal(new Blob(["archive"]))).toBe(false);
+    });
+
+    expect(files.save).not.toHaveBeenCalled();
+    expect(isFileDownloaded(attachment.id)).toBe(true);
   });
 
   it("recomputes browser status when the attachment identity changes", () => {
