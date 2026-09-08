@@ -19,6 +19,7 @@ import {
 } from "./tokenService";
 import { clearPersistedUploadDrafts } from "./uploadDraftStorage";
 import { usePresenceStore } from "../stores/presenceStore";
+import { runRegisteredStoreResets } from "../stores/storeResetRegistry";
 
 type LogoutEventPayload = {
   reason: string;
@@ -77,6 +78,7 @@ export const requestServerLogout = async (): Promise<void> => {
 export const runClientLogoutCleanup = (reason: string): void => {
   cancelPendingRequests(`logout:${reason}`);
   disconnectSocket();
+  void runRegisteredStoreResets().catch(() => undefined);
   clearTokens();
   clearPersistedUploadDrafts();
   usePresenceStore.getState().clearAll();
@@ -85,6 +87,7 @@ export const runClientLogoutCleanup = (reason: string): void => {
 export const runCurrentTabIdentityMismatchCleanup = (reason: string): void => {
   cancelPendingRequests(`logout:${reason}`);
   disconnectSocket();
+  void runRegisteredStoreResets().catch(() => undefined);
   clearCurrentTabTokens();
   clearPersistedUploadDrafts();
   usePresenceStore.getState().clearAll();

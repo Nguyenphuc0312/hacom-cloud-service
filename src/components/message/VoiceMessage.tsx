@@ -33,7 +33,7 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
   const { url: resolvedUrl, resolveUrl, isLoading } = useAttachmentDownloadUrl(
     conversationId,
     attachment,
-    { autoResolve: false },
+    { autoResolve: false, intent: "view" },
   );
 
   const [duration, setDuration] = useState(attachment.duration || 0);

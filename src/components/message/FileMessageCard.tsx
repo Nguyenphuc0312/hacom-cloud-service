@@ -287,7 +287,6 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
     saveLocal,
     canDownloadToLocal,
     downloadToLocal,
-    markDownloaded,
   } = useLocalFile(attachment, {
     currentUserId,
     conversationId,
@@ -384,6 +383,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
     resolveUrl: resolveThumbnailUrl,
   } = useAttachmentDownloadUrl(conversationId, attachment, {
     autoResolve: false,
+    intent: "preview",
   });
   const thumbnailUrl = directThumbnailUrl || resolvedThumbnailUrl;
   const shouldResolveThumbnail =
@@ -540,7 +540,6 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             downloadOptions,
           );
           throwIfDownloadAborted(controller.signal);
-          markDownloaded();
         }
 
         throwIfDownloadAborted(controller.signal);
@@ -573,7 +572,6 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
       canOpenLocally,
       downloadIdentity,
       downloadToLocal,
-      markDownloaded,
       openSavedFile,
       resolveUrl,
       saveLocal,

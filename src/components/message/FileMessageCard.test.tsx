@@ -17,6 +17,9 @@ const testState = vi.hoisted(() => ({
   canOpenLocally: false,
   canDownloadToLocal: false,
   resolveUrl: vi.fn(),
+  resolveThumbnailUrl: vi.fn(),
+  resolverOptions: [] as Array<{ autoResolve?: boolean; intent?: string } | undefined>,
+  isVisible: false,
   fetchResourceBlob: vi.fn(),
   downloadResourceWithName: vi.fn(),
   downloadBlobWithName: vi.fn(),
@@ -48,16 +51,26 @@ vi.mock("../../stores/authStore", () => ({
 }));
 
 vi.mock("../../hooks", () => ({
-  useAttachmentDownloadUrl: () => ({
-    url: undefined,
-    isLoading: false,
-    error: null,
-    resolveUrl: testState.resolveUrl,
-  }),
+  useAttachmentDownloadUrl: (
+    _conversationId: unknown,
+    _attachment: unknown,
+    options?: { autoResolve?: boolean; intent?: string },
+  ) => {
+    testState.resolverOptions.push(options);
+    const isPreview = options?.intent === "preview";
+    return {
+      url: undefined,
+      isLoading: false,
+      error: null,
+      resolveUrl: isPreview
+        ? testState.resolveThumbnailUrl
+        : testState.resolveUrl,
+    };
+  },
 }));
 
 vi.mock("../../hooks/useInViewport", () => ({
-  useInViewport: () => false,
+  useInViewport: () => testState.isVisible,
 }));
 
 vi.mock("../../hooks/useLocalFile", () => ({
@@ -101,6 +114,17 @@ const previewableDocument: Attachment = {
   objectKey: "attachments/document-1.pdf",
 };
 
+const previewableImage: Attachment = {
+  ...archive,
+  id: "image-1",
+  type: FileType.IMAGE,
+  fileName: "preview.png",
+  mimeType: "image/png",
+  objectKey: "attachments/image-1.png",
+  width: 120,
+  height: 80,
+};
+
 const renderCard = (
   file = archive,
   onPreview?: (attachment: Attachment, previewType: PreviewType) => void,
@@ -121,6 +145,9 @@ describe("FileMessageCard download flow", () => {
     testState.canOpenLocally = false;
     testState.canDownloadToLocal = false;
     testState.resolveUrl.mockResolvedValue("https://storage.example/file");
+    testState.resolveThumbnailUrl.mockResolvedValue("https://storage.example/preview");
+    testState.resolverOptions = [];
+    testState.isVisible = false;
     testState.fetchResourceBlob.mockResolvedValue(new Blob(["file"]));
     testState.downloadResourceWithName.mockResolvedValue(undefined);
     testState.saveLocal.mockResolvedValue(true);
@@ -148,7 +175,7 @@ describe("FileMessageCard download flow", () => {
         expect.objectContaining({ expectedBytes: 7, totalBytesHint: 7 }),
       );
     });
-    expect(testState.markDownloaded).toHaveBeenCalledTimes(1);
+    expect(testState.markDownloaded).not.toHaveBeenCalled();
     expect(testState.openLocal).not.toHaveBeenCalled();
   });
 
@@ -174,7 +201,7 @@ describe("FileMessageCard download flow", () => {
     await waitFor(() => {
       expect(testState.downloadResourceWithName).toHaveBeenCalledTimes(2);
     });
-    expect(testState.markDownloaded).toHaveBeenCalledTimes(1);
+    expect(testState.markDownloaded).not.toHaveBeenCalled();
   });
 
   it("uses card click only for a supported preview and never starts a download", async () => {
@@ -190,6 +217,19 @@ describe("FileMessageCard download flow", () => {
     expect(testState.resolveUrl).not.toHaveBeenCalled();
     expect(testState.downloadResourceWithName).not.toHaveBeenCalled();
     expect(testState.saveLocal).not.toHaveBeenCalled();
+  });
+
+  it("resolves a visible image thumbnail through the preview intent, never the download resolver", async () => {
+    testState.isVisible = true;
+    renderCard(previewableImage, vi.fn());
+
+    await waitFor(() => {
+      expect(testState.resolveThumbnailUrl).toHaveBeenCalledTimes(1);
+    });
+    expect(testState.resolverOptions).toContainEqual(
+      expect.objectContaining({ intent: "preview" }),
+    );
+    expect(testState.resolveUrl).not.toHaveBeenCalled();
   });
 
   it("saves an explicit desktop download without opening the file", async () => {

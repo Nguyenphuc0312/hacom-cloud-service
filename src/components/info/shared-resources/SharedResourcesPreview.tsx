@@ -43,7 +43,6 @@ import { useResolvedName } from "../../../stores/enrichedProfileStore";
 import { useAuthStore, useChatStore } from "../../../stores";
 import {
   isFileDownloaded,
-  markFileDownloaded,
   subscribeDownloadedFiles,
 } from "../../../utils/downloadedFiles";
 import { buildResourceDeleteMenuItems } from "./resourceMenuPolicy";
@@ -934,7 +933,6 @@ const DrawerMediaThumb: React.FC<{
       const url = await getDownloadUrl();
       if (url) {
         await downloadResourceWithName(url, item.fileName);
-        markFileDownloaded(item.fileId);
       }
     } catch {
       toast.error("Không thể lưu về máy");
@@ -1211,7 +1209,6 @@ const DrawerFileRow: React.FC<{
       const url = await getFileDownloadUrl();
       if (url) {
         await downloadResourceWithName(url, item.fileName);
-        markFileDownloaded(item.fileId);
       }
     } catch {
       // silent — user can retry

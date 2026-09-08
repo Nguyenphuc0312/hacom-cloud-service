@@ -7,6 +7,8 @@ const testState = vi.hoisted(() => ({
   gallery: [] as Array<{ canPreview?: boolean; canDownload?: boolean }>,
   fetchThumbnailUrlsShared: vi.fn(),
   getDownloadUrl: vi.fn(),
+  downloadResourceWithName: vi.fn(),
+  markFileDownloaded: vi.fn(),
 }));
 
 vi.mock("../../../features/api/chatApi", () => ({
@@ -39,11 +41,17 @@ vi.mock("../../../hooks/useBatchThumbnailUrl", () => ({
 }));
 
 vi.mock("../../../utils/downloadFile", () => ({
-  downloadResourceWithName: vi.fn(),
+  downloadResourceWithName: testState.downloadResourceWithName,
 }));
 
 vi.mock("../../../config", () => ({
   resolvePublicResourceUrl: (value: string) => value,
+}));
+
+vi.mock("../../../utils/downloadedFiles", () => ({
+  isFileDownloaded: () => false,
+  markFileDownloaded: testState.markFileDownloaded,
+  subscribeDownloadedFiles: () => () => undefined,
 }));
 
 vi.mock("../../ui", () => ({
@@ -107,12 +115,35 @@ const summaryWith = (media: Record<string, unknown>[]) => ({
   links: { total: 0, preview: [] },
 });
 
+const summaryWithFiles = (files: Record<string, unknown>[]) => ({
+  conversationId: "conversation-1",
+  members: { total: 0, preview: [] },
+  media: { total: 0, preview: [] },
+  files: { total: files.length, preview: files },
+  links: { total: 0, preview: [] },
+});
+
+const fileItem = (overrides: Record<string, unknown> = {}) => ({
+  messageId: "message-file-1",
+  fileId: "file-document-1",
+  messageType: "file",
+  fileName: "tai-lieu.pdf",
+  mimeType: "application/pdf",
+  sizeBytes: 128,
+  senderId: "sender-1",
+  senderName: "Người gửi",
+  senderAvatarUrl: null,
+  createdAt: "2026-09-08T00:00:00.000Z",
+  ...overrides,
+});
+
 describe("SharedResourcesPreview capability gates", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     testState.gallery = [];
     testState.fetchThumbnailUrlsShared.mockResolvedValue({});
-    testState.getDownloadUrl.mockResolvedValue({ data: { url: "https://storage.example/file" } });
+    testState.getDownloadUrl.mockResolvedValue({ success: true, data: { url: "https://storage.example/file" } });
+    testState.downloadResourceWithName.mockResolvedValue(undefined);
   });
 
   it("does not fetch a thumbnail or activate a media tile when preview is explicitly blocked", async () => {
@@ -161,5 +192,22 @@ describe("SharedResourcesPreview capability gates", () => {
     fireEvent.click(download);
 
     expect(testState.getDownloadUrl).not.toHaveBeenCalled();
+  });
+
+  it("does not mark a browser handoff as a locally saved file", async () => {
+    testState.summary = summaryWithFiles([fileItem()]);
+
+    render(<SharedResourcesPreview conversationId="conversation-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /File/ }));
+    fireEvent.click((await screen.findAllByTitle("tai-lieu.pdf"))[0]);
+
+    await waitFor(() => {
+      expect(testState.downloadResourceWithName).toHaveBeenCalledWith(
+        "https://storage.example/file",
+        "tai-lieu.pdf",
+      );
+    });
+    expect(testState.markFileDownloaded).not.toHaveBeenCalled();
   });
 });
