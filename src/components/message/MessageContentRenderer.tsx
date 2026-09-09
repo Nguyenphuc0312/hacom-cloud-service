@@ -48,7 +48,7 @@ export const MessageContentRenderer: React.FC<MessageContentRendererProps> = ({
           "[&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-1",
           "[&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-1",
           "[&_li]:my-0.5",
-          "[&_p]:m-0 [&_p+p]:mt-1",
+          "[&_p]:m-0 [&_p+p]:mt-1 [&_p:empty]:min-h-[21px]",
           "[&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_pre]:my-1",
           "[&_code]:rounded [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_code]:whitespace-pre-wrap [&_code]:[overflow-wrap:anywhere] [&_code]:text-inherit",
           "[&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto",

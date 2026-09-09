@@ -40,16 +40,26 @@ describe("getCopyableMessageText", () => {
     expect(getCopyableMessageText(message)).toBe("Xin chào bạn\nDòng 2");
   });
 
-  it("prefers plainText for rich text messages", () => {
+  it("uses canonical HTML for rich text messages", () => {
     const message = baseMessage({
       contentFormat: "rich_text",
       content: "<p><strong>raw</strong></p>",
-      plainText: "@Nguyễn Văn A kiểm tra giúp mình nhé",
-      mentions: [{ userId: "u-2", displayName: "Nguyễn Văn A" }],
+      plainText: "stale plain text",
+    });
+
+    expect(getCopyableMessageText(message)).toBe("raw");
+  });
+
+  it("keeps mention-all and line breaks from rich HTML when legacy plainText is corrupt", () => {
+    const message = baseMessage({
+      contentFormat: "rich_text",
+      content: "<p>@all Desktop updated.</p><p>Please install it.</p>",
+      plainText: "Desktop updated. Please install it. @all",
+      mentions: [{ userId: "all", displayName: "all" }],
     });
 
     expect(getCopyableMessageText(message)).toBe(
-      "@Nguyễn Văn A kiểm tra giúp mình nhé",
+      "@all Desktop updated.\nPlease install it.",
     );
   });
 
