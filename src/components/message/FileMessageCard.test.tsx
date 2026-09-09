@@ -27,6 +27,8 @@ const testState = vi.hoisted(() => ({
   downloadToLocal: vi.fn(),
   openLocal: vi.fn(),
   reveal: vi.fn(),
+  canSaveAs: false,
+  saveAs: vi.fn(),
   markDownloaded: vi.fn(),
 }));
 
@@ -81,6 +83,8 @@ vi.mock("../../hooks/useLocalFile", () => ({
     downloadToLocal: testState.downloadToLocal,
     openLocal: testState.openLocal,
     reveal: testState.reveal,
+    canSaveAs: testState.canSaveAs,
+    saveAs: testState.saveAs,
     saveLocal: testState.saveLocal,
     markDownloaded: testState.markDownloaded,
   }),
@@ -145,6 +149,7 @@ describe("FileMessageCard download flow", () => {
     testState.localStatus = "not-downloaded";
     testState.canOpenLocally = false;
     testState.canDownloadToLocal = false;
+    testState.canSaveAs = false;
     testState.resolveUrl.mockResolvedValue("https://storage.example/file");
     testState.resolveThumbnailUrl.mockResolvedValue("https://storage.example/preview");
     testState.resolverOptions = [];
@@ -155,6 +160,7 @@ describe("FileMessageCard download flow", () => {
     testState.downloadToLocal.mockResolvedValue(true);
     testState.openLocal.mockResolvedValue({ ok: true });
     testState.reveal.mockResolvedValue({ ok: true });
+    testState.saveAs.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -204,7 +210,7 @@ describe("FileMessageCard download flow", () => {
         expect.objectContaining({ expectedBytes: 7, totalBytesHint: 7 }),
       );
     });
-    expect(testState.markDownloaded).not.toHaveBeenCalled();
+    expect(testState.markDownloaded).toHaveBeenCalledTimes(1);
     expect(testState.openLocal).not.toHaveBeenCalled();
   });
 
@@ -230,7 +236,7 @@ describe("FileMessageCard download flow", () => {
     await waitFor(() => {
       expect(testState.downloadResourceWithName).toHaveBeenCalledTimes(2);
     });
-    expect(testState.markDownloaded).not.toHaveBeenCalled();
+    expect(testState.markDownloaded).toHaveBeenCalledTimes(1);
   });
 
   it("uses card click only for a supported preview and never starts a download", async () => {
@@ -246,6 +252,35 @@ describe("FileMessageCard download flow", () => {
     expect(testState.resolveUrl).not.toHaveBeenCalled();
     expect(testState.downloadResourceWithName).not.toHaveBeenCalled();
     expect(testState.saveLocal).not.toHaveBeenCalled();
+  });
+
+  it("records a browser download handoff without claiming the file exists on disk", async () => {
+    const user = userEvent.setup();
+    renderCard();
+
+    await user.click(
+      screen.getByRole("button", { name: "Chỉ tải PC (1).rar" }),
+    );
+
+    await waitFor(() => {
+      expect(testState.markDownloaded).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("uses native Save As for a downloaded desktop file instead of downloading it again", async () => {
+    const user = userEvent.setup();
+    testState.canOpenLocally = true;
+    testState.canSaveAs = true;
+    testState.localStatus = "downloaded";
+    renderCard(previewableDocument);
+
+    await user.click(
+      screen.getByRole("button", { name: "Lưu Bao cao.pdf vào vị trí khác" }),
+    );
+
+    await waitFor(() => expect(testState.saveAs).toHaveBeenCalledTimes(1));
+    expect(testState.resolveUrl).not.toHaveBeenCalled();
+    expect(testState.downloadToLocal).not.toHaveBeenCalled();
   });
 
   it("keeps image thumbnails and explicit download available when the viewer is disabled", async () => {
@@ -413,7 +448,7 @@ describe("FileMessageCard download flow", () => {
     const openActions = screen.getAllByRole("button", {
       name: "Mở Bao cao.pdf",
     });
-    expect(openActions).toHaveLength(2);
+    expect(openActions).toHaveLength(1);
     await user.click(openActions[0]);
     await user.click(
       screen.getByRole("button", {
