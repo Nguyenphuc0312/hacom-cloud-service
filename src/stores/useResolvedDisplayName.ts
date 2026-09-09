@@ -16,6 +16,19 @@ import { useFriendshipStore } from "./friendshipStore";
  * Sống ở file riêng (không nằm trong 2 store) vì friendshipStore đã import
  * enrichedProfileStore — đặt hook vào đó sẽ tạo circular import.
  */
+export function resolveStoredDisplayName(
+  userId: string | undefined,
+  fallback: string,
+): string {
+  const alias = userId
+    ? useFriendshipStore.getState().friendByUserId[userId]?.alias?.trim()
+    : undefined;
+  const enriched = userId
+    ? useEnrichedProfileStore.getState().nameByUserId[userId]
+    : undefined;
+  return alias || enriched || fallback;
+}
+
 export function useResolvedDisplayName(
   userId: string | undefined,
   fallback: string,
