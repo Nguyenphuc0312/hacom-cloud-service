@@ -1153,6 +1153,9 @@ export const useWebSocket = (
           id: notificationId,
           title: conversationLabel,
           body: message,
+          onClick: () => {
+            dispatchNotificationClick({ conversationId });
+          },
         });
       }
     },
@@ -1195,6 +1198,9 @@ export const useWebSocket = (
           id: notificationId,
           title: conversationLabel,
           body,
+          onClick: () => {
+            dispatchNotificationClick({ conversationId });
+          },
         });
       }
     },
