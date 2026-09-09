@@ -48,6 +48,7 @@ import { logChatPerformance } from "../../utils/chatPerformance";
 import { resolveUploadFileType } from "../../utils/uploadPolicy";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { getConversationDisplayName, getOtherParticipant } from "../../utils/messageHelpers";
+import { getCopyableMessageText } from "../../utils/messageCopy";
 import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import { useFriendshipStore } from "../../stores/friendshipStore";
 import { enrichUserProfile } from "../../services/enrichUserProfile";
@@ -1337,7 +1338,8 @@ const [composerHeight, setComposerHeight] = React.useState(0);
 
     const selectedMsgs = cachedMessages
       .filter(isSelectedMessage)
-      .map((message) => message.content)
+      .map(getCopyableMessageText)
+      .filter((text): text is string => Boolean(text))
       .join("\n");
     void navigator.clipboard.writeText(selectedMsgs);
     toast.success(t("chat:message.copySuccess", { defaultValue: "Đã sao chép" }));

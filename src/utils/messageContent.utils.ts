@@ -121,13 +121,27 @@ export function sanitizeMessageHtml(html: string): string {
 export function stripHtmlToText(html: string): string {
   if (typeof window === "undefined") return html;
   const div = document.createElement("div");
-  div.innerHTML = sanitizeMessageHtml(html);
+  div.innerHTML = sanitizeMessageHtml(html)
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|blockquote|li|pre)>/gi, "\n");
   return (div.textContent ?? div.innerText ?? "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/[ \t]*\n[ \t]*/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
 export function hasRichFormatting(html: string): boolean {
+  // A line break is formatting too. TipTap represents Shift+Enter as <br> and
+  // pasted/multi-paragraph text as adjacent <p> blocks. If either is sent as
+  // plain_text, the server's plain-text normalisation may collapse it, joining
+  // sentences such as "Drive,Thầy/Cô". Send the editor HTML instead so the
+  // message keeps the author-visible layout.
+  if (/<br\s*\/?>|<\/p>\s*<p\b/i.test(html)) {
+    return true;
+  }
+
   // `a` is included so any message containing a hyperlink is sent as
   // rich_text — this preserves the `href` even when the link's display text
   // differs from the URL (e.g. inserted via the toolbar as

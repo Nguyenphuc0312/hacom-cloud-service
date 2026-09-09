@@ -107,22 +107,21 @@ const replaceMentionTokens = (text: string, mentions?: Mention[]): string => {
 };
 
 const readMessageText = (message: Message): string => {
+  const content = typeof message.content === "string" ? message.content : "";
+  const isRichText = shouldTreatMessageContentAsRichText({
+    contentFormat: message.contentFormat,
+    content,
+  });
+
+  // HTML is the canonical visual source for rich text. Older messages may have
+  // a legacy plainText value in which paragraph breaks were collapsed or a
+  // mention was moved; copying that value reproduces the corruption on paste.
+  if (isRichText && content.trim()) {
+    return stripHtmlToReadableText(content);
+  }
+
   if (typeof message.plainText === "string" && message.plainText.trim()) {
     return message.plainText;
-  }
-
-  const content = typeof message.content === "string" ? message.content : "";
-  if (!content.trim()) {
-    return "";
-  }
-
-  if (
-    shouldTreatMessageContentAsRichText({
-      contentFormat: message.contentFormat,
-      content,
-    })
-  ) {
-    return stripHtmlToReadableText(content);
   }
 
   return content;

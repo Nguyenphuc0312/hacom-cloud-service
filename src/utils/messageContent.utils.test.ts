@@ -115,6 +115,17 @@ describe("sanitizeMessageHtml", () => {
 });
 
 describe("hasRichFormatting", () => {
+  it.each([
+    ['<p>Dòng một<br>Dòng hai</p>', "xuống dòng mềm"],
+    ["<p>Đoạn một</p><p>Đoạn hai</p>", "nhiều đoạn"],
+  ])("coi %s là rich text để giữ nguyên bố cục (%s)", (html) => {
+    expect(hasRichFormatting(html)).toBe(true);
+  });
+
+  it("không đổi một đoạn văn đơn thành rich text", () => {
+    expect(hasRichFormatting("<p>Chỉ một dòng</p>")).toBe(false);
+  });
+
   it("nhận diện tin chỉ tô màu là rich text", () => {
     expect(
       hasRichFormatting(
@@ -136,6 +147,12 @@ describe("stripHtmlToText", () => {
   it("không để sót payload khi rút text cho preview sidebar", () => {
     const out = stripHtmlToText('<a href="javascript:alert(1)">Báo cáo</a>');
     expect(out).toBe("Báo cáo");
+  });
+
+  it("giữ ngắt dòng của rich text khi rút text cho copy và preview", () => {
+    expect(
+      stripHtmlToText("<p>Dòng một<br>Dòng hai</p><p>Dòng ba</p>"),
+    ).toBe("Dòng một\nDòng hai\nDòng ba");
   });
 });
 
