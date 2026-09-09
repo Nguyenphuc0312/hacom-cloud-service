@@ -317,6 +317,22 @@ export const useWebSocket = (
   const isBootstrappingAuth = useAuthStore((s) => s.isBootstrappingAuth);
   const totalUnreadCount = useChatStore((s) => s.totalUnreadCount);
   const conversations = useChatStore((s) => s.conversations);
+  const friendByUserId = useFriendshipStore((s) => s.friendByUserId);
+
+  // Electron's preload receives socket frames before React can construct its
+  // notification. Give it the viewer's private aliases in memory only, so its
+  // native Windows toast follows the same alias-first rule as the web UI.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.chatDesktop) return;
+    const aliases = Object.fromEntries(
+      Object.entries(friendByUserId)
+        .map(([userId, friend]) => [userId, friend.alias?.trim() ?? ""])
+        .filter(([, alias]) => alias.length > 0),
+    );
+    window.dispatchEvent(
+      new CustomEvent("chat:friend-aliases", { detail: aliases }),
+    );
+  }, [friendByUserId]);
 
   const applyConversationParticipantSummary = useChatStore(
     (s) => s.applyConversationParticipantSummary,
