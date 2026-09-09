@@ -55,6 +55,7 @@ import {
   broadcastUnreadSnapshot,
   emitDesktopNotification,
   isDocumentVisibleAndFocused,
+  shouldEmitDesktopNotification,
   subscribeUnreadSnapshotBroadcast,
   syncAppBadge,
   syncDocumentTitleBadge,
@@ -854,6 +855,7 @@ export const useWebSocket = (
         hasMention,
         isInMessageModule,
         visibleAndFocused,
+        forceDesktopNative: typeof window !== "undefined" && Boolean(window.chatDesktop),
       });
 
       if (decision.bailReason === "self_message") {
@@ -1146,7 +1148,7 @@ export const useWebSocket = (
         cooldownMs: 20_000,
       });
 
-      if (!isDocumentVisibleAndFocused()) {
+      if (shouldEmitDesktopNotification()) {
         emitDesktopNotification({
           id: notificationId,
           title: conversationLabel,
@@ -1188,7 +1190,7 @@ export const useWebSocket = (
         cooldownMs: 15_000,
       });
 
-      if (!isDocumentVisibleAndFocused()) {
+      if (shouldEmitDesktopNotification()) {
         emitDesktopNotification({
           id: notificationId,
           title: conversationLabel,
