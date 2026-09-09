@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { WebSocketEvents } from "../lib/socket";
 import wsManager from "../lib/socket";
 import {
@@ -70,6 +71,7 @@ const backendToItem = (n: BackendNotification): NotificationItem => {
 };
 
 export const useNotifications = (isAuthenticated: boolean) => {
+  const navigate = useNavigate();
   const { upsertNotification, markAsRead, markAllAsRead } =
     useNotificationStore();
   const unreadCount = useNotificationUnreadCount();
@@ -133,6 +135,13 @@ export const useNotifications = (isAuthenticated: boolean) => {
         tag: `notification:${item.id}`,
         title: item.title || "Thông báo mới",
         body: item.body || "Bạn có thông báo mới.",
+        onClick: () => {
+          if (item.targetType === "friend_request" || item.targetType === "user_profile") {
+            navigate("/friends");
+          } else if (item.conversationId) {
+            navigate(`/chat/${encodeURIComponent(item.conversationId)}`);
+          }
+        },
       });
     };
 
@@ -145,7 +154,7 @@ export const useNotifications = (isAuthenticated: boolean) => {
         handleNotificationCreated,
       );
     };
-  }, [isAuthenticated, upsertNotification]);
+  }, [isAuthenticated, navigate, upsertNotification]);
 
   const handleMarkRead = useCallback(
     async (id: string) => {
