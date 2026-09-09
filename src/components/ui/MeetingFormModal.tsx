@@ -140,9 +140,23 @@ const formatDuration = (start: string, end: string): string => {
 };
 
 /** Map kết quả tìm user toàn công ty → shape option của picker (giống friendOptions). */
-const searchUserToOption = (u: ChatSearchUser) => ({
+type PersonOption = {
+  id: string;
+  /** Canonical name persisted in calendar payloads; never replace with alias. */
+  name: string;
+  /** Per-viewer label. Alias wins whenever this user is a friend. */
+  displayName: string;
+  avatar: string;
+  employeeCode: string;
+  department: string;
+  title: string;
+  isSelf: boolean;
+};
+
+const searchUserToOption = (u: ChatSearchUser): PersonOption => ({
   id: u.id,
   name: u.displayName,
+  displayName: u.displayName,
   avatar: u.avatarUrl ?? "",
   employeeCode: u.employeeCode ?? "",
   department: u.departmentName ?? "",
@@ -217,6 +231,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
 
   // Bạn bè dùng cho @-mention — lấy từ friendshipStore (cache server, có avatar/HR fields)
   const friends = useFriendshipStore((s) => s.friends);
+  const friendByUserId = useFriendshipStore((s) => s.friendByUserId);
   const isFriendsLoading = useFriendshipStore((s) => s.isFriendsLoading);
   const fetchFriends = useFriendshipStore((s) => s.fetchFriends);
   const currentUser = useAuthStore((s) => s.user);
@@ -244,9 +259,10 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       return display || f.username || f.email || "";
     };
     return friends
-      .map((f) => ({
+      .map((f): PersonOption => ({
         id: f.id,
         name: pickName(f),
+        displayName: f.alias?.trim() || pickName(f),
         avatar: f.avatar || "",
         employeeCode: f.employeeCode || f.employee_code || "",
         department: f.departmentName || f.orgUnit || "",
@@ -276,13 +292,14 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
     return {
       id: currentUser.id,
       name,
+      displayName: friendByUserId[currentUser.id]?.alias?.trim() || name,
       avatar: currentUser.avatar || "",
       employeeCode: currentUser.employeeCode || currentUser.employee_code || "",
       department: currentUser.departmentName || currentUser.orgUnit || "",
       title: currentUser.title || "",
       isSelf: true as const,
     };
-  }, [currentUser]);
+  }, [currentUser, friendByUserId]);
   // Avatar người tạo khi Sửa: event chỉ mang tên + authUserId, không mang ảnh →
   // tra qua batch loader (cùng nguồn với EventDetailModal / avatar stack), nếu
   // không thì để Avatar tự fallback initials. Trước đây hard-code "" nên hàng
@@ -312,11 +329,14 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
   // Người tạo ≠ chủ trì: tạo mới → chính bạn; sửa → owner của event (không đổi được).
   const creator = isEditMode
     ? {
-        name: initialData?.createdByName || "Không rõ",
+        name:
+          (creatorUserId && friendByUserId[creatorUserId]?.alias?.trim()) ||
+          initialData?.createdByName ||
+          "Không rõ",
         avatar: creatorAvatar,
         isSelf: currentUser?.id != null && creatorUserId === currentUser.id,
       }
-    : { name: selfOption?.name ?? "", avatar: selfOption?.avatar ?? "", isSelf: true };
+    : { name: selfOption?.displayName ?? "", avatar: selfOption?.avatar ?? "", isSelf: true };
 
   // Picker mở khi ô nhập đang được dùng (focus) hoặc đang gõ @ — không cần nút
   // "Chọn người" riêng, nó trùng chức năng với chính ô nhập ngay bên dưới.
@@ -411,6 +431,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
     const matchesSelf = (opt: NonNullable<typeof selfOption>) =>
       !q ||
       opt.name.toLowerCase().includes(q) ||
+      opt.displayName.toLowerCase().includes(q) ||
       opt.employeeCode.toLowerCase().includes(q) ||
       opt.department.toLowerCase().includes(q);
     const friendsFiltered = !q
@@ -418,6 +439,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       : friendOptions.filter(
           (f) =>
             f.name.toLowerCase().includes(q) ||
+            f.displayName.toLowerCase().includes(q) ||
             f.employeeCode.toLowerCase().includes(q) ||
             f.department.toLowerCase().includes(q),
         );
@@ -432,6 +454,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
     const matchesSelf = (opt: NonNullable<typeof selfOption>) =>
       !q ||
       opt.name.toLowerCase().includes(q) ||
+      opt.displayName.toLowerCase().includes(q) ||
       opt.employeeCode.toLowerCase().includes(q) ||
       opt.department.toLowerCase().includes(q);
     const friendsFiltered = !q
@@ -439,6 +462,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       : friendOptions.filter(
           (f) =>
             f.name.toLowerCase().includes(q) ||
+            f.displayName.toLowerCase().includes(q) ||
             f.employeeCode.toLowerCase().includes(q) ||
             f.department.toLowerCase().includes(q),
         );
@@ -487,7 +511,10 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       setStartTime(initialData.startTime);
       setEndTime(initialData.endTime);
       setChairman(initialData.chairman);
-      setChairmanInput(initialData.chairman);
+      setChairmanInput(
+        (initialData.chairmanUserId && friendByUserId[initialData.chairmanUserId]?.alias?.trim()) ||
+          initialData.chairman,
+      );
       setChairmanMeta(
         initialData.chairmanEmployeeCode || initialData.chairmanUserId
           ? {
@@ -526,7 +553,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
       setAttachments([]);
       setErrors({});
     }
-  }, [isOpen, defaultDate, defaultStartTime, defaultEndTime, initialData, resetMeetingDate]);
+  }, [isOpen, defaultDate, defaultStartTime, defaultEndTime, initialData, resetMeetingDate, friendByUserId]);
 
   // Kiểm tra xung đột lịch theo tên người tham gia
   const checkConflict = React.useCallback(
@@ -887,7 +914,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             setChairman(f.name);
-                            setChairmanInput(f.name);
+                            setChairmanInput(f.displayName);
                             setChairmanMeta({
                               employeeCode: f.employeeCode || undefined,
                               userId: f.id,
@@ -901,7 +928,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                         >
                           <Avatar
                             src={f.avatar ? resolvePublicResourceUrl(f.avatar) : undefined}
-                            alt={f.name}
+                            alt={f.displayName}
                             size="sm"
                             className="shrink-0"
                           />
@@ -913,7 +940,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                                   selected ? "text-[#1565C0]" : "text-text-primary",
                                 )}
                               >
-                                {f.name}
+                                {f.displayName}
                               </span>
                               {f.isSelf && (
                                 <span className="shrink-0 rounded-full bg-[#1976D2]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#1565C0]">
@@ -990,7 +1017,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                 title={p.hasConflict ? "Người này có lịch trùng giờ họp" : undefined}
               >
                 {p.hasConflict && <ExclamationTriangleIcon className="h-3 w-3" />}
-                {p.name}
+                {(p.userId && friendByUserId[p.userId]?.alias?.trim()) || p.name}
                 <button
                   type="button"
                   onClick={() => removeParticipant(p.name)}
@@ -1076,6 +1103,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                     <ul className="space-y-0.5">
                       {groupMembers.map((m) => {
                         const name = (m.displayName ?? m.username ?? "").trim();
+                        const displayName = friendByUserId[m.id]?.alias?.trim() || name;
                         const checked = participants.some(
                           (p) => p.userId === m.id || p.name.toLowerCase() === name.toLowerCase(),
                         );
@@ -1105,12 +1133,12 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                               </span>
                               <Avatar
                                 src={m.avatar ? resolvePublicResourceUrl(m.avatar) : undefined}
-                                alt={name}
+                                alt={displayName}
                                 size="sm"
                                 className="shrink-0"
                               />
                               <span className={clsx("truncate text-sm font-medium", checked ? "text-teal-700 dark:text-teal-300" : "text-text-primary")}>
-                                {name}
+                                {displayName}
                               </span>
                             </button>
                           </li>
@@ -1181,7 +1209,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                           </span>
                           <Avatar
                             src={f.avatar ? resolvePublicResourceUrl(f.avatar) : undefined}
-                            alt={f.name}
+                            alt={f.displayName}
                             size="sm"
                             className="shrink-0"
                           />
@@ -1195,7 +1223,7 @@ export const MeetingFormModal: React.FC<MeetingFormModalProps> = ({
                                     : "text-text-primary",
                                 )}
                               >
-                                {f.name}
+                                {f.displayName}
                               </span>
                               {f.isSelf && (
                                 <span className="shrink-0 rounded-full bg-[#1976D2]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#1565C0]">
