@@ -55,7 +55,7 @@ export const eventTitleOf = (
   body: string | null | undefined,
 ): string | null => {
   const fromPayload = payload?.["eventTitle"];
-  if (typeof fromPayload === "string" && fromPayload.trim()) {
+  if (typeof fromPayload === "string" && fromPayload.trim() && !/^\d+$/.test(fromPayload.trim())) {
     return fromPayload.trim();
   }
   return parseNotificationBody(body).event;
