@@ -197,7 +197,8 @@ export const emitDesktopNotification = ({
   ...input
 }: DesktopNotificationInput): boolean => {
   const preferences = useSettingsStore.getState().notifications;
-  if (!preferences.enabled || isDocumentVisibleAndFocused()) return false;
+  const isDesktopApp = typeof window !== "undefined" && Boolean(window.chatDesktop);
+  if (!preferences.enabled || (!isDesktopApp && isDocumentVisibleAndFocused())) return false;
 
   return emitBrowserNotification({
     ...input,
