@@ -33,6 +33,21 @@ describe("shift-code presentation boundaries", () => {
     );
   });
 
+  it("keeps colors and emphasis when a message also contains mention-all", () => {
+    const { container } = render(
+      <MessageContentRenderer
+        content={'<p><strong>Important</strong> <span style="color: rgb(229, 57, 53)">red</span> @all</p>'}
+        contentFormat="rich_text"
+        mentions={[{ userId: "all", displayName: "all" }]}
+        isOwn={false}
+      />,
+    );
+
+    expect(screen.getByText("Important").tagName).toBe("STRONG");
+    expect(container.querySelector('span[style*="color"]')?.textContent).toBe("red");
+    expect(container.querySelector("[data-rendered-mention-all]")?.textContent).toBe("@all");
+  });
+
   it("keeps shift codes plain while preserving markdown formatting", () => {
     const { container } = render(
       <MarkdownContent content="**HC2** vh1 CT" isOwn={false} />,

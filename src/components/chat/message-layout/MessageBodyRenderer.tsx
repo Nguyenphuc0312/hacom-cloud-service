@@ -374,17 +374,16 @@ const renderTextContent = (
   onToggleTextExpand?: () => void,
 ) => {
   const hasMentions = Boolean(message.mentions?.length);
-  if (
-    !hasMentions &&
-    shouldTreatMessageContentAsRichText({
-      contentFormat: message.contentFormat,
-      content: message.content,
-    })
-  ) {
+  const isRichText = shouldTreatMessageContentAsRichText({
+    contentFormat: message.contentFormat,
+    content: message.content,
+  });
+  if (isRichText) {
     return (
       <MessageContentRenderer
         content={message.content}
         contentFormat={message.contentFormat}
+        mentions={message.mentions}
         isOwn={isOwn}
       />
     );

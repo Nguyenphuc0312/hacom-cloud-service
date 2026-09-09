@@ -1,4 +1,5 @@
 import React from "react";
+import type { Mention } from "../../types";
 import clsx from "clsx";
 import {
   sanitizeMessageHtml,
@@ -8,13 +9,45 @@ import {
 interface MessageContentRendererProps {
   content: string;
   contentFormat?: "plain_text" | "rich_text" | "markdown";
+  mentions?: Mention[];
   isOwn: boolean;
   className?: string;
 }
 
+const decorateAllMentions = (html: string, mentions?: Mention[]): string => {
+  if (
+    typeof DOMParser === "undefined" ||
+    !mentions?.some((mention) => mention.userId === "all" || mention.userId === "@all")
+  ) {
+    return html;
+  }
+
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const walker = doc.createTreeWalker(doc.body, 4);
+  const textNodes: Text[] = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
+
+  for (const node of textNodes) {
+    const value = node.data;
+    const match = /@all\b/i.exec(value);
+    if (!match || !node.parentNode) continue;
+
+    const fragment = doc.createDocumentFragment();
+    fragment.append(value.slice(0, match.index));
+    const pill = doc.createElement("span");
+    pill.setAttribute("data-rendered-mention-all", "");
+    pill.textContent = match[0];
+    fragment.append(pill, value.slice(match.index + match[0].length));
+    node.parentNode.replaceChild(fragment, node);
+  }
+
+  return doc.body.innerHTML;
+};
+
 export const MessageContentRenderer: React.FC<MessageContentRendererProps> = ({
   content,
   contentFormat,
+  mentions,
   isOwn,
   className,
 }) => {
@@ -24,7 +57,7 @@ export const MessageContentRenderer: React.FC<MessageContentRendererProps> = ({
   });
 
   if (isRich) {
-    const safeHtml = sanitizeMessageHtml(content);
+    const safeHtml = decorateAllMentions(sanitizeMessageHtml(content), mentions);
     return (
       <div
         className={clsx(
@@ -49,6 +82,7 @@ export const MessageContentRenderer: React.FC<MessageContentRendererProps> = ({
           "[&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-1",
           "[&_li]:my-0.5",
           "[&_p]:m-0 [&_p+p]:mt-1 [&_p:empty]:min-h-[21px]",
+          "[&_[data-rendered-mention-all]]:rounded [&_[data-rendered-mention-all]]:bg-amber-500/15 [&_[data-rendered-mention-all]]:px-1 [&_[data-rendered-mention-all]]:py-0.5 [&_[data-rendered-mention-all]]:font-medium [&_[data-rendered-mention-all]]:text-amber-700 dark:[&_[data-rendered-mention-all]]:text-amber-300",
           "[&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_pre]:my-1",
           "[&_code]:rounded [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_code]:whitespace-pre-wrap [&_code]:[overflow-wrap:anywhere] [&_code]:text-inherit",
           "[&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto",
