@@ -160,11 +160,15 @@ export const normalizeMentions = (value: unknown): Message["mentions"] => {
       asStringValue(record.employeeCode) ?? asStringValue(record.employee_code);
     const avatarUrl =
       asStringValue(record.avatarUrl) ?? asStringValue(record.avatar_url);
+    const offset = asNumberValue(record.offset);
+    const length = asNumberValue(record.length);
     result.push({
       userId,
       displayName,
       ...(employeeCode ? { employeeCode } : {}),
       ...(avatarUrl ? { avatarUrl } : {}),
+      ...(offset !== undefined ? { offset } : {}),
+      ...(length !== undefined ? { length } : {}),
     });
   }
   return result;
