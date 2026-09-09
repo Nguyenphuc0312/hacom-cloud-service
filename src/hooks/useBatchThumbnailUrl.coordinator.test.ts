@@ -2,6 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const batchThumbnailUrls = vi.fn();
 const reportImagePerformance = vi.fn();
+const authState = vi.hoisted(() => ({ accountId: "viewer-1" }));
+
+vi.mock("../stores/authStore", () => {
+  const getState = () => ({
+    user: authState.accountId ? { id: authState.accountId } : null,
+  });
+  const useAuthStore = Object.assign(
+    (selector: (state: ReturnType<typeof getState>) => unknown) => selector(getState()),
+    { getState },
+  );
+
+  return { useAuthStore };
+});
 
 vi.mock("../services/api", () => ({
   fileApi: { batchThumbnailUrls: (...args: unknown[]) => batchThumbnailUrls(...args) },
@@ -33,6 +46,7 @@ const readyItem = (fileId: string) => ({
 
 describe("thumbnail batch coordinator", () => {
   beforeEach(() => {
+    authState.accountId = "viewer-1";
     batchThumbnailUrls.mockReset();
     reportImagePerformance.mockReset();
     __thumbnailCacheTestUtils.clearThumbnailCache();
@@ -110,5 +124,20 @@ describe("thumbnail batch coordinator", () => {
     const result = await fetchThumbnailUrlsShared("conversation-1", ["ready-file", "missing-file"]);
     expect(result["ready-file"]?.url).toContain("ready-file");
     expect(result["missing-file"]).toBeUndefined();
+  });
+
+  it("never reuses a thumbnail URL across conversation or account scopes", async () => {
+    batchThumbnailUrls.mockImplementation(async ({ fileIds }: { fileIds: string[] }) => ({
+      items: fileIds.map(readyItem),
+    }));
+
+    authState.accountId = "viewer-a";
+    await fetchThumbnailUrlsShared("conversation-1", ["same-file"]);
+    await fetchThumbnailUrlsShared("conversation-2", ["same-file"]);
+
+    authState.accountId = "viewer-b";
+    await fetchThumbnailUrlsShared("conversation-1", ["same-file"]);
+
+    expect(batchThumbnailUrls).toHaveBeenCalledTimes(3);
   });
 });

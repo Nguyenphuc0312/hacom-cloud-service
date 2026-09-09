@@ -13,12 +13,15 @@ const unwrapMock = vi.fn();
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) =>
-      (typeof options?.defaultValue === "string" && options.defaultValue) || key,
+      (typeof options?.defaultValue === "string" && options.defaultValue) ||
+      key,
   }),
 }));
 
 vi.mock("../stores", () => ({
-  useAuthStore: (selector: (state: { user: Record<string, unknown> }) => unknown) =>
+  useAuthStore: (
+    selector: (state: { user: Record<string, unknown> }) => unknown,
+  ) =>
     selector({
       user: {
         id: "user-1",
@@ -29,7 +32,9 @@ vi.mock("../stores", () => ({
       },
     }),
   useGroupStore: (
-    selector: (state: { setSlowModeCooldown: ReturnType<typeof vi.fn> }) => unknown,
+    selector: (state: {
+      setSlowModeCooldown: ReturnType<typeof vi.fn>;
+    }) => unknown,
   ) => selector({ setSlowModeCooldown: vi.fn() }),
 }));
 
@@ -92,6 +97,41 @@ describe("useSendMessage", () => {
     // cùng nhóm metadata hiển thị với width/height/duration/thumbnailUrl.
     expect(payload.attachments?.[0]?.url).toBe(
       "https://signed.example/private/key",
+    );
+  });
+
+  it("uses the caller-provided clientMessageId for an attachment batch", async () => {
+    const { result } = renderHook(() =>
+      useSendMessage({ conversationId: "conv-1" }),
+    );
+
+    await act(async () => {
+      result.current.sendMessage(
+        "",
+        undefined,
+        {
+          id: "file-1",
+          type: "file",
+          fileName: "report.pdf",
+          mimeType: "application/pdf",
+          fileSize: 12,
+        },
+        MessageType.FILE,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { clientMessageId: "attachment-batch-1" },
+      );
+    });
+
+    expect(sendMessageTriggerMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: "conv-1",
+        clientMessageId: "attachment-batch-1",
+        localId: "temp-attachment-batch-1",
+      }),
     );
   });
 

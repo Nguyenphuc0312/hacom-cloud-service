@@ -853,11 +853,27 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       return;
     }
 
+    const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
+    if (
+      hasQueueDrafts &&
+      (!hasReadyDrafts || hasUploadingDrafts || hasFailedDrafts)
+    ) {
+      setLiveRegionMessage(
+        hasFailedDrafts
+          ? t("chat:attachmentTray.someFailedStatus", {
+              defaultValue: "Some uploads failed",
+            })
+          : t("chat:attachmentTray.waitForUploads", {
+              defaultValue: "Please wait for uploads to finish before sending",
+            }),
+      );
+      return;
+    }
+
     primarySendLockedRef.current = true;
     setIsPrimarySendLocked(true);
 
     // Multi-file queue path: send text (attachments handled by ChatWindow)
-    const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
     logMessageDebug("MessageInput", "submit_intent", {
       conversationId,
       hasQueueDrafts,
@@ -911,7 +927,9 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     conversationId,
     disabled,
     handleSendText,
+    hasFailedDrafts,
     hasReadyDrafts,
+    hasUploadingDrafts,
     optimisticAnnouncement,
     onChange,
     onSend,
@@ -1237,7 +1255,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     !isSubmitBusy &&
     messageValidation.canSendInlineMessage &&
     !hasUploadingDrafts &&
-    (hasQueueDrafts ? hasReadyDrafts || hasText : hasText);
+    (hasQueueDrafts ? hasReadyDrafts && !hasFailedDrafts : hasText);
   const disableAttachmentActions = attachmentsDisabled || isSubmitBusy;
   const isLocationFlowBusy =
     locationFlowState !== "idle" && locationFlowState !== "sent";

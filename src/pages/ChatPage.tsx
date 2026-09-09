@@ -55,6 +55,7 @@ import { getOtherParticipant } from "../utils/messageHelpers";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import {
   listenForContactProfileView,
+  listenForFileSourceInvalidated,
   listenForMentionProfileView,
   readChatRouteIntent,
 } from "../features/chat/events/chatUiEvents";
@@ -609,6 +610,8 @@ export const ChatPage: React.FC = () => {
   const [isAddFriendModalOpen, setIsAddFriendModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<ImageClickPayload | null>(null);
   const filePreview = useFilePreview();
+  const closeFilePreview = filePreview.close;
+  const previewConversationId = filePreview.current?.conversationId ?? null;
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const [pendingDeleteMessage, setPendingDeleteMessage] = useState<{
     messageId: string;
@@ -1455,6 +1458,14 @@ export const ChatPage: React.FC = () => {
       setMentionProfile({ userId, displayName, avatarUrl });
     });
   }, []);
+
+  useEffect(() => {
+    return listenForFileSourceInvalidated(({ conversationId }) => {
+      if (previewConversationId === conversationId) {
+        closeFilePreview();
+      }
+    });
+  }, [closeFilePreview, previewConversationId]);
 
   const handledRouteIntentRef = useRef<string | null>(null);
   useEffect(() => {

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  dispatchFileSourceInvalidated,
   dispatchOpenConversation,
+  listenForFileSourceInvalidated,
   listenForOpenConversation,
   dispatchStartDirectMessage,
   listenForStartDirectMessage,
@@ -36,6 +38,22 @@ describe("chatUiEvents — open conversation / start DM (global search nav)", ()
     const off = listenForStartDirectMessage(handler);
     dispatchStartDirectMessage({ userId: "u1" });
     expect(handler).toHaveBeenCalledWith({ userId: "u1" });
+    off();
+  });
+
+  it("delivers scoped file-source invalidation to active views", () => {
+    const handler = vi.fn();
+    const off = listenForFileSourceInvalidated(handler);
+
+    dispatchFileSourceInvalidated({
+      conversationId: "c1",
+      reason: "membership-lost",
+    });
+
+    expect(handler).toHaveBeenCalledWith({
+      conversationId: "c1",
+      reason: "membership-lost",
+    });
     off();
   });
 

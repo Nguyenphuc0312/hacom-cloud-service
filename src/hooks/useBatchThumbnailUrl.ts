@@ -17,6 +17,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fileApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import { resolvePublicResourceUrl } from "../config";
+import { useAuthStore } from "../stores/authStore";
+import { registerStoreResetter } from "../stores/storeResetRegistry";
 import { ExpiringLruCache } from "../utils/expiringLruCache";
 import { logger } from "../utils/logger";
 import { blobPreviewCache } from "../lib/blobPreviewCache";
@@ -81,12 +83,38 @@ const MAX_BATCH_IDS = 20;
 const BATCH_WINDOW_MS = 16;
 const MAX_BATCH_REQUESTS_PER_CONVERSATION = 2;
 
-// Cache value = the resolved display item. The cache entry's expiry encodes
-// "refetch after" time, so ExpiringLruCache.get() returning undefined means
-// "this fileId needs a (re)fetch".
-const THUMBNAIL_CACHE = new ExpiringLruCache<ThumbnailUrlItem>({
+interface ScopedThumbnailCacheEntry {
+  item: ThumbnailUrlItem;
+  cacheEpoch: number;
+  scopeEpoch: number;
+  fileEpoch: number;
+}
+
+interface ThumbnailCacheScope {
+  key: string;
+  conversationId: string;
+  cacheEpoch: number;
+  scopeEpoch: number;
+}
+
+interface ThumbnailFetchOptions {
+  force?: boolean;
+  /** Internal escape hatch for callers that already subscribe to auth state. */
+  accountId?: string;
+}
+
+type ThumbnailCacheInvalidation = "reset" | "conversation";
+type ThumbnailCacheListener = (reason: ThumbnailCacheInvalidation) => void;
+
+// Cache entries are scoped by account + conversation + file. Epochs make a
+// late response harmless after logout, identity change, or resource revocation.
+const THUMBNAIL_CACHE = new ExpiringLruCache<ScopedThumbnailCacheEntry>({
   maxEntries: MAX_THUMBNAIL_CACHE_ENTRIES,
 });
+let thumbnailCacheEpoch = 0;
+const scopeEpochs = new Map<string, number>();
+const fileEpochs = new Map<string, number>();
+let activeAccountScope: string | null = null;
 
 // Dedupe concurrent network calls for identical batches.
 const inFlightBatchRequests = new Map<
@@ -105,12 +133,124 @@ interface ConversationBatchQueue {
   pending: QueuedBatchRequest[];
   timer: ReturnType<typeof setTimeout> | null;
   active: number;
+  scope: ThumbnailCacheScope;
 }
 
 const conversationBatchQueues = new Map<string, ConversationBatchQueue>();
+const thumbnailCacheListeners = new Map<string, Set<ThumbnailCacheListener>>();
 
 const isTimelineBatchingEnabled = (): boolean =>
   import.meta.env.VITE_WEB_IMAGE_TIMELINE_BATCHING_ENABLED !== "false";
+
+const normalizeAccountId = (accountId: string | undefined): string =>
+  accountId?.trim() || "anonymous";
+
+/** Opaque local namespace; it never becomes a request parameter or telemetry field. */
+export const buildThumbnailCacheScopeKey = (
+  accountId: string | undefined,
+  conversationId: string | undefined,
+): string => {
+  if (!conversationId) return "";
+  return ["thumbnail-source-v2", normalizeAccountId(accountId), conversationId]
+    .map(encodeURIComponent)
+    .join(":");
+};
+
+const getActiveAccountId = (): string | undefined => useAuthStore.getState().user?.id;
+
+const getScopeEpoch = (scopeKey: string): number => scopeEpochs.get(scopeKey) ?? 0;
+
+const getFileEpoch = (fileId: string): number => fileEpochs.get(fileId) ?? 0;
+
+const getScope = (
+  conversationId: string | undefined,
+  accountId: string | undefined,
+): ThumbnailCacheScope | null => {
+  const key = buildThumbnailCacheScopeKey(accountId, conversationId);
+  if (!key || !conversationId) return null;
+  return {
+    key,
+    conversationId,
+    cacheEpoch: thumbnailCacheEpoch,
+    scopeEpoch: getScopeEpoch(key),
+  };
+};
+
+const getCacheEntryKey = (scopeKey: string, fileId: string): string =>
+  `${scopeKey}:${encodeURIComponent(fileId)}`;
+
+const getRequestScopeKey = (scope: ThumbnailCacheScope): string =>
+  `${scope.key}:${scope.cacheEpoch}:${scope.scopeEpoch}`;
+
+const isScopeCurrent = (scope: ThumbnailCacheScope): boolean =>
+  thumbnailCacheEpoch === scope.cacheEpoch &&
+  getScopeEpoch(scope.key) === scope.scopeEpoch;
+
+const isEntryCurrent = (
+  entry: ScopedThumbnailCacheEntry,
+  scope: ThumbnailCacheScope,
+  fileId: string,
+): boolean =>
+  entry.cacheEpoch === scope.cacheEpoch &&
+  entry.scopeEpoch === scope.scopeEpoch &&
+  entry.fileEpoch === getFileEpoch(fileId) &&
+  isScopeCurrent(scope);
+
+const subscribeThumbnailCache = (
+  scopeKey: string,
+  listener: ThumbnailCacheListener,
+): (() => void) => {
+  if (!scopeKey) return () => undefined;
+  const listeners = thumbnailCacheListeners.get(scopeKey) ?? new Set<ThumbnailCacheListener>();
+  listeners.add(listener);
+  thumbnailCacheListeners.set(scopeKey, listeners);
+  return () => {
+    const current = thumbnailCacheListeners.get(scopeKey);
+    if (!current) return;
+    current.delete(listener);
+    if (current.size === 0) thumbnailCacheListeners.delete(scopeKey);
+  };
+};
+
+const emitThumbnailCacheInvalidation = (
+  scopeKey: string,
+  reason: ThumbnailCacheInvalidation,
+): void => {
+  const listeners = thumbnailCacheListeners.get(scopeKey);
+  if (!listeners) return;
+  for (const listener of [...listeners]) {
+    try {
+      listener(reason);
+    } catch {
+      // One mounted tile must not prevent the rest of the scope from clearing.
+    }
+  }
+};
+
+const emitAllThumbnailCacheInvalidations = (reason: ThumbnailCacheInvalidation): void => {
+  for (const scopeKey of [...thumbnailCacheListeners.keys()]) {
+    emitThumbnailCacheInvalidation(scopeKey, reason);
+  }
+};
+
+/** Drops all signed thumbnail sources, including the result of any old request. */
+export const clearThumbnailUrlCache = (): void => {
+  thumbnailCacheEpoch += 1;
+  THUMBNAIL_CACHE.clear();
+  scopeEpochs.clear();
+  fileEpochs.clear();
+  emitAllThumbnailCacheInvalidations("reset");
+};
+
+registerStoreResetter("batch-thumbnail-url-cache", clearThumbnailUrlCache);
+
+const ensureAccountScope = (accountId: string | undefined): void => {
+  const nextScope = normalizeAccountId(accountId);
+  if (activeAccountScope !== null && activeAccountScope !== nextScope) {
+    clearThumbnailUrlCache();
+  }
+  activeAccountScope = nextScope;
+};
 
 // --- Realtime preview signals (WebSocket-driven) ---------------------------
 // When the worker finishes a thumbnail it publishes `attachment:preview_ready`
@@ -178,7 +318,7 @@ const emitPreviewSignal = (fileId: string): void => {
  */
 export const markPreviewReady = (fileId: string): void => {
   if (!fileId) return;
-  THUMBNAIL_CACHE.delete(fileId);
+  fileEpochs.set(fileId, getFileEpoch(fileId) + 1);
   blobPreviewCache.delete(fileId); // revoke local blob, server URL now available
   emitPreviewSignal(fileId);
 };
@@ -190,7 +330,7 @@ export const markPreviewReady = (fileId: string): void => {
  */
 export const markPreviewFailed = (fileId: string): void => {
   if (!fileId) return;
-  THUMBNAIL_CACHE.delete(fileId);
+  fileEpochs.set(fileId, getFileEpoch(fileId) + 1);
   emitPreviewSignal(fileId);
 };
 
@@ -286,15 +426,18 @@ const resolveItem = (raw: {
 };
 
 const readCachedUrls = (
+  scope: ThumbnailCacheScope,
   fileIds: string[],
 ): { cached: Record<string, ThumbnailUrlItem>; missing: string[] } => {
   const cached: Record<string, ThumbnailUrlItem> = {};
   const missing: string[] = [];
   for (const id of fileIds) {
-    const hit = THUMBNAIL_CACHE.get(id);
-    if (hit) {
-      cached[id] = hit;
+    const cacheKey = getCacheEntryKey(scope.key, id);
+    const hit = THUMBNAIL_CACHE.get(cacheKey);
+    if (hit && isEntryCurrent(hit, scope, id)) {
+      cached[id] = hit.item;
     } else {
+      if (hit) THUMBNAIL_CACHE.delete(cacheKey);
       missing.push(id);
     }
   }
@@ -302,7 +445,7 @@ const readCachedUrls = (
 };
 
 const executeBatchFetch = async (
-  conversationId: string,
+  scope: ThumbnailCacheScope,
   fileIds: string[],
   telemetry: {
     queueWaitMs?: number;
@@ -313,22 +456,40 @@ const executeBatchFetch = async (
   const startedAtMs = performance.now();
   let outcome: 'success' | 'error' = 'error';
   try {
-  const response = await fileApi.batchThumbnailUrls({ conversationId, fileIds });
-  const payload = unwrapApiSuccess(response);
-  const resolved: Record<string, ThumbnailUrlItem> = {};
-  for (const raw of payload.items) {
-    const item = resolveItem(raw);
-    THUMBNAIL_CACHE.set(item.fileId, item, computeRefetchAtMs(item));
-    resolved[item.fileId] = item;
-  }
-  outcome = 'success';
-  markImagePerformanceMilestone(conversationId, "T4", {
-    batchSize: fileIds.length,
-    outcome: "success",
-  });
-  return resolved;
+    const response = await fileApi.batchThumbnailUrls({
+      conversationId: scope.conversationId,
+      fileIds,
+    });
+    const payload = unwrapApiSuccess(response);
+    const resolved: Record<string, ThumbnailUrlItem> = {};
+
+    // A request started before logout/recall/account change cannot repopulate a
+    // cache or return a source after its captured scope has been invalidated.
+    if (!isScopeCurrent(scope)) return resolved;
+
+    for (const raw of payload.items) {
+      const item = resolveItem(raw);
+      if (!isScopeCurrent(scope)) return {};
+      THUMBNAIL_CACHE.set(
+        getCacheEntryKey(scope.key, item.fileId),
+        {
+          item,
+          cacheEpoch: scope.cacheEpoch,
+          scopeEpoch: scope.scopeEpoch,
+          fileEpoch: getFileEpoch(item.fileId),
+        },
+        computeRefetchAtMs(item),
+      );
+      resolved[item.fileId] = item;
+    }
+    outcome = 'success';
+    markImagePerformanceMilestone(scope.conversationId, "T4", {
+      batchSize: fileIds.length,
+      outcome: "success",
+    });
+    return resolved;
   } finally {
-    reportImagePerformance(conversationId, {
+    reportImagePerformance(scope.conversationId, {
       kind: 'batch_url_request',
       batchSize: fileIds.length,
       durationMs: Math.round(performance.now() - startedAtMs),
@@ -338,8 +499,8 @@ const executeBatchFetch = async (
   }
 };
 
-const flushConversationQueue = (conversationId: string): void => {
-  const queue = conversationBatchQueues.get(conversationId);
+const flushConversationQueue = (queueKey: string): void => {
+  const queue = conversationBatchQueues.get(queueKey);
   if (!queue) return;
   if (queue.timer) {
     clearTimeout(queue.timer);
@@ -370,7 +531,7 @@ const flushConversationQueue = (conversationId: string): void => {
     0,
   );
 
-  void executeBatchFetch(conversationId, [...selectedIds], {
+  void executeBatchFetch(queue.scope, [...selectedIds], {
     queueWaitMs,
     subscriberCount: selected.length,
     deduplicatedIds: Math.max(0, requestedIds - selectedIds.size),
@@ -389,53 +550,62 @@ const flushConversationQueue = (conversationId: string): void => {
       for (const request of selected) request.reject(error);
     })
     .finally(() => {
-      const current = conversationBatchQueues.get(conversationId);
-      if (!current) return;
+      const current = conversationBatchQueues.get(queueKey);
+      if (current !== queue) return;
       current.active -= 1;
       if (current.pending.length > 0) {
-        current.timer = setTimeout(() => flushConversationQueue(conversationId), 0);
+        current.timer = setTimeout(() => flushConversationQueue(queueKey), 0);
       } else if (current.active === 0) {
-        conversationBatchQueues.delete(conversationId);
+        conversationBatchQueues.delete(queueKey);
       }
     });
 };
 
 const enqueueBatchFetch = (
-  conversationId: string,
+  scope: ThumbnailCacheScope,
   fileIds: string[],
 ): Promise<Record<string, ThumbnailUrlItem>> => {
-  if (!isTimelineBatchingEnabled()) return executeBatchFetch(conversationId, fileIds);
+  if (!isTimelineBatchingEnabled()) return executeBatchFetch(scope, fileIds);
+  const queueKey = getRequestScopeKey(scope);
   return new Promise((resolve, reject) => {
-    const queue = conversationBatchQueues.get(conversationId) ?? {
+    const queue = conversationBatchQueues.get(queueKey) ?? {
       pending: [],
       timer: null,
       active: 0,
+      scope,
     };
     queue.pending.push({ fileIds, queuedAtMs: Date.now(), resolve, reject });
-    conversationBatchQueues.set(conversationId, queue);
+    conversationBatchQueues.set(queueKey, queue);
     if (!queue.timer) {
-      queue.timer = setTimeout(() => flushConversationQueue(conversationId), BATCH_WINDOW_MS);
+      queue.timer = setTimeout(() => flushConversationQueue(queueKey), BATCH_WINDOW_MS);
     }
   });
 };
 
 const dedupedBatchFetch = (
-  conversationId: string,
+  scope: ThumbnailCacheScope,
   fileIds: string[],
 ): Promise<Record<string, ThumbnailUrlItem>> => {
-  const key = `${conversationId}::${[...fileIds].sort().join('|')}`;
+  const key = `${getRequestScopeKey(scope)}::${[...fileIds].sort().join('|')}`;
   const existing = inFlightBatchRequests.get(key);
   if (existing) {
-    reportImagePerformance(conversationId, {
+    reportImagePerformance(scope.conversationId, {
       kind: "inflight_dedupe",
       deduplicatedIds: fileIds.length,
       outcome: "success",
     });
     return existing;
   }
-  const request = enqueueBatchFetch(conversationId, fileIds)
-    .finally(() => inFlightBatchRequests.delete(key));
+  const request = enqueueBatchFetch(scope, fileIds);
   inFlightBatchRequests.set(key, request);
+  void request.then(
+    () => {
+      if (inFlightBatchRequests.get(key) === request) inFlightBatchRequests.delete(key);
+    },
+    () => {
+      if (inFlightBatchRequests.get(key) === request) inFlightBatchRequests.delete(key);
+    },
+  );
   return request;
 };
 
@@ -457,46 +627,98 @@ const dedupedBatchFetch = (
 export const fetchThumbnailUrlsShared = async (
   conversationId: string,
   fileIds: string[],
-  options: { force?: boolean } = {},
+  options: ThumbnailFetchOptions = {},
 ): Promise<Record<string, ThumbnailUrlItem>> => {
   const ids = Array.from(new Set(fileIds.filter(Boolean)));
   if (!conversationId || ids.length === 0) return {};
 
-  const { cached, missing } = readCachedUrls(ids);
+  const accountId = options.accountId ?? getActiveAccountId();
+  ensureAccountScope(accountId);
+  const scope = getScope(conversationId, accountId);
+  if (!scope) return {};
+
+  const { cached, missing } = readCachedUrls(scope, ids);
   const idsToFetch = options.force ? ids : missing;
   if (idsToFetch.length === 0) return cached;
 
-  const resolved = await dedupedBatchFetch(conversationId, idsToFetch);
+  const resolved = await dedupedBatchFetch(scope, idsToFetch);
+  if (!isScopeCurrent(scope)) return {};
   return { ...cached, ...resolved };
 };
 
 /** Canonical name for the shared batch fetch (alias of fetchThumbnailUrlsShared). */
 export const getBatchThumbnailUrls = fetchThumbnailUrlsShared;
 
-/** Synchronous fresh-only read from the shared thumbnail cache. */
+/** Synchronous fresh-only read for a specific account/conversation source scope. */
 export const readThumbnailCache = (
+  conversationId: string,
   fileId: string,
-): ThumbnailUrlItem | undefined =>
-  fileId ? THUMBNAIL_CACHE.get(fileId) : undefined;
+  options: Pick<ThumbnailFetchOptions, "accountId"> = {},
+): ThumbnailUrlItem | undefined => {
+  if (!fileId) return undefined;
+  const accountId = options.accountId ?? getActiveAccountId();
+  ensureAccountScope(accountId);
+  const scope = getScope(conversationId, accountId);
+  if (!scope) return undefined;
+  return readCachedUrls(scope, [fileId]).cached[fileId];
+};
 
-/** Seed the shared cache from items already resolved elsewhere. */
-export const primeThumbnailCache = (items: ThumbnailUrlItem[]): void => {
+/** Seed the shared cache only inside the caller's account/conversation scope. */
+export const primeThumbnailCache = (
+  conversationId: string,
+  items: ThumbnailUrlItem[],
+  options: Pick<ThumbnailFetchOptions, "accountId"> = {},
+): void => {
+  const accountId = options.accountId ?? getActiveAccountId();
+  ensureAccountScope(accountId);
+  const scope = getScope(conversationId, accountId);
+  if (!scope) return;
   for (const item of items) {
     if (!item?.fileId) continue;
-    THUMBNAIL_CACHE.set(item.fileId, item, computeRefetchAtMs(item));
+    THUMBNAIL_CACHE.set(
+      getCacheEntryKey(scope.key, item.fileId),
+      {
+        item,
+        cacheEpoch: scope.cacheEpoch,
+        scopeEpoch: scope.scopeEpoch,
+        fileEpoch: getFileEpoch(item.fileId),
+      },
+      computeRefetchAtMs(item),
+    );
   }
 };
 
-/** Drop a single fileId from the shared cache (e.g. broken signed URL). */
+/** Drop a file from every account/conversation cache namespace. */
 export const evictThumbnailCache = (fileId: string): void => {
-  if (fileId) THUMBNAIL_CACHE.delete(fileId);
+  if (!fileId) return;
+  fileEpochs.set(fileId, getFileEpoch(fileId) + 1);
 };
+
+/**
+ * Invalidate one conversation's thumbnail namespace after recall/delete/access
+ * loss. Existing entries and late results fail the captured scope epoch check.
+ */
+export const invalidateThumbnailUrlCacheForConversation = (
+  conversationId: string,
+  options: Pick<ThumbnailFetchOptions, "accountId"> = {},
+): void => {
+  const accountId = options.accountId ?? getActiveAccountId();
+  ensureAccountScope(accountId);
+  const scope = getScope(conversationId, accountId);
+  if (!scope) return;
+  scopeEpochs.set(scope.key, scope.scopeEpoch + 1);
+  emitThumbnailCacheInvalidation(scope.key, "conversation");
+};
+
+/** @deprecated Use invalidateThumbnailUrlCacheForConversation. */
+export const evictThumbnailCacheForConversation = invalidateThumbnailUrlCacheForConversation;
 
 export const __thumbnailCacheTestUtils = {
   maxThumbnailEntries: MAX_THUMBNAIL_CACHE_ENTRIES,
   maxPreviewSignalKeys: MAX_PREVIEW_SIGNAL_KEYS,
   previewSignalKeyCount: () => previewSignalListeners.size,
-  clearThumbnailCache: () => THUMBNAIL_CACHE.clear(),
+  clearThumbnailCache: clearThumbnailUrlCache,
+  clearThumbnailCacheListeners: () => thumbnailCacheListeners.clear(),
   clearBatchQueues: () => {
     for (const queue of conversationBatchQueues.values()) {
       if (queue.timer) clearTimeout(queue.timer);
@@ -513,6 +735,7 @@ export const useBatchThumbnailUrl = (
   options: { autoFetch?: boolean } = {},
 ): UseBatchThumbnailUrlResult => {
   const { autoFetch = true } = options;
+  const accountId = useAuthStore((state) => state.user?.id);
 
   // Stable key derived from unique + sorted ids. join('|') in the dep array
   // keeps this from recomputing unless the actual id set changes.
@@ -521,10 +744,22 @@ export const useBatchThumbnailUrl = (
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [fileIds.join('|')],
   );
+  const scopeKey = useMemo(
+    () => buildThumbnailCacheScopeKey(accountId, conversationId),
+    [accountId, conversationId],
+  );
+  const currentScopeRef = useRef(scopeKey);
+  currentScopeRef.current = scopeKey;
 
-  const [urls, setUrls] = useState<Record<string, ThumbnailUrlItem>>(() => {
-    if (!stableKey) return {};
-    return readCachedUrls(stableKey.split('|')).cached;
+  const [urlState, setUrlState] = useState<{
+    scopeKey: string;
+    urls: Record<string, ThumbnailUrlItem>;
+  }>(() => {
+    const scope = getScope(conversationId, accountId);
+    return {
+      scopeKey: scope?.key ?? "",
+      urls: scope && stableKey ? readCachedUrls(scope, stableKey.split("|")).cached : {},
+    };
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -537,20 +772,27 @@ export const useBatchThumbnailUrl = (
     };
   }, []);
 
+  useEffect(() => {
+    ensureAccountScope(accountId);
+  }, [accountId]);
+
   const runFetch = useCallback(
     async (force: boolean) => {
       if (!conversationId || !stableKey) return;
+      ensureAccountScope(accountId);
+      const scope = getScope(conversationId, accountId);
+      if (!scope) return;
       const ids = stableKey.split('|');
-
-      const { cached, missing } = readCachedUrls(ids);
+      const { cached, missing } = readCachedUrls(scope, ids);
       const idsToFetch = force ? ids : missing;
 
-      // Always surface whatever is already cached.
-      if (mountedRef.current && Object.keys(cached).length > 0) {
-        setUrls((prev) => ({ ...prev, ...cached }));
+      if (
+        mountedRef.current &&
+        currentScopeRef.current === scope.key &&
+        isScopeCurrent(scope)
+      ) {
+        setUrlState({ scopeKey: scope.key, urls: cached });
       }
-
-      // Everything fresh → no network call.
       if (idsToFetch.length === 0) return;
 
       if (mountedRef.current) {
@@ -559,25 +801,47 @@ export const useBatchThumbnailUrl = (
       }
 
       try {
-        const resolved = await dedupedBatchFetch(conversationId, idsToFetch);
-        if (mountedRef.current) {
-          setUrls((prev) => ({ ...prev, ...cached, ...resolved }));
+        const resolved = await dedupedBatchFetch(scope, idsToFetch);
+        if (
+          mountedRef.current &&
+          currentScopeRef.current === scope.key &&
+          isScopeCurrent(scope)
+        ) {
+          setUrlState({ scopeKey: scope.key, urls: { ...cached, ...resolved } });
         }
-      } catch (err) {
-        if (mountedRef.current) {
-          setError(
-            err instanceof Error ? err.message : "Failed to fetch thumbnail URLs",
-          );
+      } catch {
+        if (
+          mountedRef.current &&
+          currentScopeRef.current === scope.key &&
+          isScopeCurrent(scope)
+        ) {
+          setError("Không thể tải ảnh xem trước.");
         }
       } finally {
-        if (mountedRef.current) setIsLoading(false);
+        if (
+          mountedRef.current &&
+          currentScopeRef.current === scope.key &&
+          isScopeCurrent(scope)
+        ) {
+          setIsLoading(false);
+        }
       }
     },
-    [conversationId, stableKey],
+    [accountId, conversationId, stableKey],
   );
 
-  // Depends only on stable primitives — never on `urls`, the fileIds array, or
-  // a fetch callback recreated each render.
+  useEffect(() => {
+    if (!scopeKey) return;
+    return subscribeThumbnailCache(scopeKey, (reason) => {
+      if (!mountedRef.current || currentScopeRef.current !== scopeKey) return;
+      setUrlState({ scopeKey, urls: {} });
+      setError(null);
+      setIsLoading(false);
+      if (reason === "conversation") void runFetch(false);
+    });
+  }, [runFetch, scopeKey]);
+
+  // Depends only on stable primitives — never on URL state or the caller array.
   useEffect(() => {
     if (!autoFetch) return;
     void runFetch(false);
@@ -591,16 +855,16 @@ export const useBatchThumbnailUrl = (
   );
 
   // Realtime: when a preview_ready/failed signal fires for any managed fileId,
-  // refetch immediately (the cache entry was already evicted by markPreview*).
+  // refetch immediately (the cache entry was already invalidated by markPreview*).
   useEffect(() => {
     if (!stableKey) return;
     const ids = stableKey.split("|");
-    const unsubscribe = subscribePreviewSignal(ids, () => {
+    return subscribePreviewSignal(ids, () => {
       void runFetch(false);
     });
-    return unsubscribe;
   }, [stableKey, runFetch]);
 
+  const urls = urlState.scopeKey === scopeKey ? urlState.urls : {};
   return { urls, isLoading, error, refresh };
 };
 
