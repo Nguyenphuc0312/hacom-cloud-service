@@ -13,6 +13,36 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  staging-contract-preflight:
+    # The Chat staging runner and its restricted kubeconfig are currently
+    # owned by this repository. Do not infer backend workload names from the
+    # web deployment; inventory the existing staging contract first.
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop' }}
+    runs-on: [self-hosted, linux, x64, chat-staging, deploy-only]
+    environment: staging
+    permissions:
+      contents: read
+    steps:
+      - name: Verify the restricted Chat staging target
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export KUBECONFIG="$HOME/.kube/hacom-chat-staging-config"
+          test -f "$KUBECONFIG"
+          kubectl config current-context
+          kubectl get namespace hacom-chat
+          kubectl auth can-i get deployments -n hacom-chat | grep -qx yes
+          kubectl auth can-i get services -n hacom-chat | grep -qx yes
+      - name: Inventory existing Chat staging workloads
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export KUBECONFIG="$HOME/.kube/hacom-chat-staging-config"
+          kubectl get deployments -n hacom-chat \
+            -o='custom-columns=NAME:.metadata.name,READY:.status.readyReplicas,IMAGES:.spec.template.spec.containers[*].image'
+          kubectl get services -n hacom-chat \
+            -o='custom-columns=NAME:.metadata.name,TYPE:.spec.type,PORTS:.spec.ports[*].port'
+
   verify:
     runs-on: ubuntu-24.04
     environment: staging
