@@ -27,6 +27,8 @@ export interface IncomingMessageNotificationContext {
   hasMention: boolean;
   /** True when the SPA route is the Messages module (/chat...). */
   isInMessageModule: boolean;
+  /** Packaged desktop deliberately shows native toasts while focused. */
+  forceDesktopNative?: boolean;
   /** document.visibilityState === "visible" && document.hasFocus() */
   visibleAndFocused: boolean;
 }
@@ -72,7 +74,7 @@ export const decideIncomingMessageNotification = (
   }
 
   return {
-    emitBrowserNotification: !context.visibleAndFocused,
+    emitBrowserNotification: Boolean(context.forceDesktopNative) || !context.visibleAndFocused,
     showInAppToast: !context.isInMessageModule,
     upsertNotificationStore: true,
     bailReason: null,
