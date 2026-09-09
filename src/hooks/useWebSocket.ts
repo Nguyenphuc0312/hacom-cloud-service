@@ -2240,6 +2240,29 @@ export const useWebSocket = (
       const status = detail.status;
 
       useFriendshipStore.getState().applyRealtimeDetail(detail);
+
+      const currentUserId = useAuthStore.getState().user?.id ?? null;
+      const requester = detail.relation?.requester;
+      if (
+        eventType === WebSocketEvents.FRIENDSHIP_REQUEST_CREATED &&
+        status === "pending" &&
+        detail.targetUserId === currentUserId &&
+        requester &&
+        requester.id !== currentUserId
+      ) {
+        const requesterName =
+          aliasByUserId()[requester.id] ||
+          requester.displayName ||
+          requester.username ||
+          "Một người dùng";
+        emitDesktopNotification({
+          id: detail.eventId || `friend-request:${detail.relation?.relationId || requester.id}`,
+          tag: `friend-request:${requester.id}`,
+          title: "Lời mời kết bạn",
+          body: `${requesterName} đã gửi cho bạn một lời mời kết bạn.`,
+          onClick: () => window.location.assign("/friends"),
+        });
+      }
       notifySidebarState("friendship:updated", {
         source: "socket",
         eventType: detail.eventType,

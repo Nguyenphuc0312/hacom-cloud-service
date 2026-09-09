@@ -132,7 +132,10 @@ export const useNotifications = (isAuthenticated: boolean) => {
 
       emitDesktopNotification({
         id: item.id,
-        tag: `notification:${item.id}`,
+        tag:
+          payload.type === "FRIEND_REQUEST_RECEIVED" && item.actorId
+            ? "friend-request:" + item.actorId
+            : "notification:" + item.id,
         title: item.title || "Thông báo mới",
         body: item.body || "Bạn có thông báo mới.",
         onClick: () => {
