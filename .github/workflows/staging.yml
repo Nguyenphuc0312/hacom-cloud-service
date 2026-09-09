@@ -65,6 +65,31 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve file viewer rollout flags
+        id: rollout_flags
+        shell: bash
+        env:
+          VITE_FILE_VIEWER_ENABLED: ${{ vars.VITE_FILE_VIEWER_ENABLED }}
+          VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED: ${{ vars.VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED }}
+        run: |
+          set -Eeuo pipefail
+          resolve_flag() {
+            local name="$1"
+            local value
+            value="$(printf '%s' "${2:-}" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+            [[ -n "${value}" ]] || value="false"
+            case "${value}" in
+              true|false) printf '%s' "${value}" ;;
+              *)
+                echo "::error title=Invalid boolean flag::${name} must be 'true' or 'false', got '${value}'" >&2
+                return 1
+                ;;
+            esac
+          }
+          file_viewer="$(resolve_flag VITE_FILE_VIEWER_ENABLED "${VITE_FILE_VIEWER_ENABLED:-}")"
+          lifecycle_telemetry="$(resolve_flag VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED "${VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED:-}")"
+          printf 'file_viewer=%s\n' "${file_viewer}" >> "${GITHUB_OUTPUT}"
+          printf 'lifecycle_telemetry=%s\n' "${lifecycle_telemetry}" >> "${GITHUB_OUTPUT}"
       - uses: docker/build-push-action@v7
         id: build
         with:
@@ -73,6 +98,9 @@ jobs:
           target: production
           push: true
           tags: ghcr.io/hacom-holding-dx/chat-web-client:${{ github.sha }}
+          build-args: |
+            VITE_FILE_VIEWER_ENABLED=${{ steps.rollout_flags.outputs.file_viewer }}
+            VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED=${{ steps.rollout_flags.outputs.lifecycle_telemetry }}
       - id: image
         run: echo "image=ghcr.io/hacom-holding-dx/chat-web-client@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 

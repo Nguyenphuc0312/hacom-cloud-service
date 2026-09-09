@@ -33,15 +33,14 @@ import {
 } from "../../utils/downloadFile";
 import { asString } from "../../utils/payloadGuards";
 import { useLocalFile } from "../../hooks/useLocalFile";
+import { useAttachmentDownloadUrl } from "../../hooks/useAttachmentDownloadUrl";
 import { useAuthStore } from "../../stores/authStore";
 import { SafeImage } from "../common/SafeImage";
 import {
   FileTypeIcon,
   TextPreview,
   CsvPreview,
-  PdfPreview,
-  ExcelPreview,
-  WordPreview,
+  PdfJsViewer,
   DocumentPreview,
   ArchivePreview,
 } from "../preview";
@@ -144,8 +143,12 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           handleClose();
         }
       }
-      if (e.key === "ArrowLeft" && hasPrev) onPrev();
-      if (e.key === "ArrowRight" && hasNext) onNext();
+      const target = e.target as HTMLElement | null;
+      const isEditing = Boolean(
+        target?.closest("input, textarea, select, [contenteditable='true'], [contenteditable=''], [role='textbox']"),
+      );
+      if (!isEditing && e.key === "ArrowLeft" && hasPrev) onPrev();
+      if (!isEditing && e.key === "ArrowRight" && hasNext) onNext();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -210,11 +213,14 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     saveLocal,
     canDownloadToLocal,
     downloadToLocal,
-    markDownloaded,
   } = useLocalFile(att, {
     currentUserId,
     conversationId: current?.conversationId ?? "",
   });
+  const { resolveUrl: resolveDownloadUrl } = useAttachmentDownloadUrl(
+    current?.conversationId,
+    att,
+  );
 
   const previewType: PreviewType = useMemo(() => {
     if (!current) return "unknown";
@@ -239,24 +245,15 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     fileSize,
   );
 
-  const lowerName = fileName.toLowerCase();
-  const lowerMimeType = mimeType.toLowerCase();
-  const isDocx = lowerName.endsWith(".docx");
-  const isXlsx =
-    lowerName.endsWith(".xlsx") ||
-    lowerName.endsWith(".xls") ||
-    lowerMimeType.includes("spreadsheetml") ||
-    lowerMimeType.includes("ms-excel");
   const isOfficeDoc =
     previewType === "document" ||
     previewType === "spreadsheet" ||
     previewType === "presentation";
-  const isZoomable =
-    previewType === "image" ||
-    previewType === "pdf" ||
-    (isOfficeDoc && (isDocx || isXlsx));
-  // Private signed URLs stay inside this app; Office files use local preview renderers.
+  const isZoomable = previewType === "image" || previewType === "pdf";
   const showsPreviewToolbar = isZoomable;
+  const hasDownloadSource = Boolean(
+    att?.id || att?.objectKey || att?.url || att?.downloadUrl,
+  );
 
   const canPreview = att?.canPreview !== false;
   const canDownload = att?.canDownload !== false;
@@ -264,7 +261,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   if (!isOpen || !current) return null;
 
   const handleDownload = async () => {
-    if (!canDownload || !secureUrl || isDownloading) return;
+    if (!canDownload || !hasDownloadSource || isDownloading) return;
 
     const controller = new AbortController();
     activeDownloadRef.current = controller;
@@ -278,8 +275,17 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     setDownloadFailed(false);
     setDownloadProgress(null);
     try {
+      // Always resolve a fresh *download* descriptor here. secureUrl belongs to
+      // the in-app viewer and must never be reused as the original-download URL.
+      const downloadUrl = await resolveDownloadUrl(true, controller.signal);
+      if (!downloadUrl) {
+        if (!controller.signal.aborted) throw new Error("Download URL unavailable");
+        return;
+      }
+      if (controller.signal.aborted) return;
+
       if (canDownloadToLocal) {
-        const saved = await downloadToLocal(secureUrl, {
+        const saved = await downloadToLocal(downloadUrl, {
           signal: controller.signal,
           onProgress: updateProgress,
         });
@@ -287,7 +293,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           throw new Error("Native download failed");
         }
       } else if (canOpenLocally) {
-        const blob = await fetchResourceBlob(secureUrl, {
+        const blob = await fetchResourceBlob(downloadUrl, {
           expectedBytes: fileSize,
           totalBytesHint: fileSize,
           signal: controller.signal,
@@ -297,14 +303,14 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         const saved = await saveLocal(blob);
         if (!saved) downloadBlobWithName(blob, fileName);
       } else {
-        await downloadResourceWithName(secureUrl, fileName, {
+        await downloadResourceWithName(downloadUrl, fileName, {
           expectedBytes: fileSize,
           totalBytesHint: fileSize,
           signal: controller.signal,
           onProgress: updateProgress,
         });
-        if (controller.signal.aborted) return;
-        markDownloaded();
+        // Browsers decide the final save location; do not claim this is a
+        // verified locally saved copy like the native desktop flow does.
       }
     } catch {
       if (!controller.signal.aborted) setDownloadFailed(true);
@@ -334,6 +340,19 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       : "Tải về";
 
   const renderContent = () => {
+    if (isOfficeDoc) {
+      return (
+        <DocumentPreview
+          fileName={fileName}
+          fileSize={fileSize}
+          mimeType={mimeType}
+          previewType={previewType}
+          canDownload={canDownload && hasDownloadSource}
+          onDownload={() => void handleDownload()}
+        />
+      );
+    }
+
     if (!canPreview) {
       return (
         <div style={{ color: "#495057", textAlign: "center" }}>
@@ -408,39 +427,13 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
     if (previewType === "pdf") {
       return (
-        <PdfPreview
+        <PdfJsViewer
+          embedded
           url={secureUrl}
           fileName={fileName}
           fileSize={fileSize}
           scale={scale}
           onPageCount={setPageCount}
-        />
-      );
-    }
-
-    if (isOfficeDoc) {
-      if (isDocx) {
-        return (
-          <WordPreview
-            url={secureUrl}
-            fileName={fileName}
-            scale={scale}
-            onPageCount={setPageCount}
-          />
-        );
-      }
-      if (isXlsx) {
-        return (
-          <ExcelPreview url={secureUrl} fileName={fileName} scale={scale} />
-        );
-      }
-      return (
-        <DocumentPreview
-          url={secureUrl}
-          fileName={fileName}
-          fileSize={fileSize}
-          mimeType={mimeType}
-          previewType={previewType}
         />
       );
     }
@@ -618,7 +611,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           <div className={styles.toolbarRow}>
             <div className={styles.toolbarLeft}>
               <FileTypeIcon type={iconType} fileName={fileName} size={16} />
-              {isOfficeDoc && isDocx && <span>Trang 1/{pageCount}</span>}
+              {previewType === "pdf" && <span>{pageCount} trang</span>}
             </div>
             <div className={styles.toolbarRight} ref={zoomMenuRef}>
               <button
@@ -710,7 +703,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                   ? cancelActiveDownload
                   : () => void handleDownload()
               }
-              disabled={!secureUrl || (!canDownload && !isDownloading)}
+              disabled={!hasDownloadSource || (!canDownload && !isDownloading)}
               aria-busy={isDownloading}
               aria-label={downloadActionLabel}
               title={downloadActionLabel}

@@ -64,6 +64,7 @@ import { MediaThumbnail } from "../common/MediaThumbnail";
 import { SafeImage } from "../common/SafeImage";
 import { useLocalFile } from "../../hooks/useLocalFile";
 import { useAuthStore } from "../../stores/authStore";
+import { isInAppFileViewerEnabled } from "../../features/chat/config/fileViewerRollout";
 
 // ── Status types for edge cases ──────────────────────────────────────
 
@@ -264,7 +265,12 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
 
   const isImage = previewType === "image";
   const isVideo = previewType === "video";
+  // This build-time switch controls only the reversible in-app viewer. The
+  // thumbnail and explicit download action remain available regardless of it.
+  const isInAppViewerEnabled = isInAppFileViewerEnabled();
   const showThumbnail = (isImage || isVideo) && isPreviewable;
+  const canUseInAppPreview =
+    isInAppViewerEnabled && isPreviewable && Boolean(onPreview);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const isVisible = useInViewport(rootRef, { rootMargin: "240px 0px" });
   const thumbnailWidth = attachment.width
@@ -287,7 +293,6 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
     saveLocal,
     canDownloadToLocal,
     downloadToLocal,
-    markDownloaded,
   } = useLocalFile(attachment, {
     currentUserId,
     conversationId,
@@ -319,7 +324,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
     canOpenLocally && canAutoOpenDownloadedFile(attachment.fileName);
   const canExplicitlyOpenFile =
     canOpenLocally && canExplicitlyOpenDownloadedFile(attachment.fileName);
-  const willPreview = !canOpenLocally && isPreviewable && Boolean(onPreview);
+  const willPreview = !canOpenLocally && canUseInAppPreview;
   const progressPercent = downloadState.totalBytes
     ? Math.min(
         100,
@@ -384,6 +389,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
     resolveUrl: resolveThumbnailUrl,
   } = useAttachmentDownloadUrl(conversationId, attachment, {
     autoResolve: false,
+    intent: "preview",
   });
   const thumbnailUrl = directThumbnailUrl || resolvedThumbnailUrl;
   const shouldResolveThumbnail =
@@ -540,7 +546,6 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             downloadOptions,
           );
           throwIfDownloadAborted(controller.signal);
-          markDownloaded();
         }
 
         throwIfDownloadAborted(controller.signal);
@@ -573,7 +578,6 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
       canOpenLocally,
       downloadIdentity,
       downloadToLocal,
-      markDownloaded,
       openSavedFile,
       resolveUrl,
       saveLocal,
@@ -590,10 +594,10 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   }, [reveal]);
 
   const handlePreview = useCallback(() => {
-    if (onPreview && isPreviewable) {
+    if (canUseInAppPreview && onPreview) {
       onPreview(attachment, previewType);
     }
-  }, [onPreview, isPreviewable, attachment, previewType]);
+  }, [canUseInAppPreview, onPreview, attachment, previewType]);
 
   const handleOpen = useCallback(async () => {
     if (!canExplicitlyOpenFile || localStatus !== "downloaded") return;
@@ -743,18 +747,18 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
               src={thumbnailUrl}
               alt={attachment.fileName || t("chat:image.previewAlt")}
               className={clsx(
-                "absolute inset-0 h-full w-full cursor-pointer object-cover transition-opacity",
+                "absolute inset-0 h-full w-full object-cover transition-opacity",
                 thumbLoaded ? "opacity-100" : "opacity-0",
-                "hover:brightness-90",
+                canUseInAppPreview && "cursor-pointer hover:brightness-90",
               )}
               onLoad={() => setThumbLoaded(true)}
               onError={() => setThumbError(true)}
-              onClick={handlePreview}
+              onClick={canUseInAppPreview ? handlePreview : undefined}
               fallback={null}
             />
           )}
 
-          {thumbLoaded && isPreviewable && (
+          {thumbLoaded && canUseInAppPreview && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-text-primary/0 transition-colors group-hover/file:bg-text-primary/20">
               <button
                 type="button"
@@ -854,21 +858,31 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
         {/* Video placeholder */}
         <div
           className={clsx(
-            "relative flex h-36 w-full max-w-[280px] cursor-pointer items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+            "relative flex h-36 w-full max-w-[280px] items-center justify-center rounded-lg",
+            canUseInAppPreview &&
+              "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
             isOwn ? "bg-surface/20" : "bg-surface-overlay",
           )}
-          onClick={handlePreview}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              handlePreview();
-            }
-          }}
-          aria-label={t("chat:filePreview.playVideo", {
-            defaultValue: "Play video",
-          })}
+          onClick={canUseInAppPreview ? handlePreview : undefined}
+          role={canUseInAppPreview ? "button" : undefined}
+          tabIndex={canUseInAppPreview ? 0 : undefined}
+          onKeyDown={
+            canUseInAppPreview
+              ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handlePreview();
+                  }
+                }
+              : undefined
+          }
+          aria-label={
+            canUseInAppPreview
+              ? t("chat:filePreview.playVideo", {
+                  defaultValue: "Play video",
+                })
+              : undefined
+          }
         >
           <MediaThumbnail
             attachment={attachment}

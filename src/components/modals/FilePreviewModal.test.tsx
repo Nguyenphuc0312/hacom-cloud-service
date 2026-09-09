@@ -1,30 +1,42 @@
 import React from "react";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PreviewTarget } from "../../hooks/useFilePreview";
-import {
-  FilePreviewModal,
-  type FilePreviewModalProps,
-} from "./FilePreviewModal";
+import { FilePreviewModal, type FilePreviewModalProps } from "./FilePreviewModal";
+
+const resolverState = vi.hoisted(() => ({
+  resolveUrl: vi.fn(),
+}));
+
+vi.mock("../../hooks/useAttachmentDownloadUrl", () => ({
+  useAttachmentDownloadUrl: () => ({ resolveUrl: resolverState.resolveUrl }),
+}));
 
 vi.mock("../preview", () => ({
-  FileTypeIcon: ({ fileName }: { fileName?: string }) => (
-    <span>{fileName}</span>
-  ),
+  FileTypeIcon: ({ fileName }: { fileName?: string }) => <span>{fileName}</span>,
   TextPreview: () => <div data-testid="text-preview" />,
   CsvPreview: () => <div data-testid="csv-preview" />,
-  PdfPreview: () => <div data-testid="pdf-preview" />,
-  ExcelPreview: ({ url }: { url: string }) => (
-    <div data-testid="excel-preview" data-url={url} />
+  PdfJsViewer: ({ url, fileName }: { url: string; fileName: string }) => (
+    <div data-testid="pdf-viewer" data-url={url} data-file-name={fileName} />
   ),
-  WordPreview: () => <div data-testid="word-preview" />,
-  DocumentPreview: () => <div data-testid="document-preview" />,
+  DocumentPreview: ({
+    fileName,
+    canDownload,
+    onDownload,
+  }: {
+    fileName: string;
+    canDownload?: boolean;
+    onDownload?: () => void;
+  }) => (
+    <section data-testid="document-preview" data-can-download={String(Boolean(canDownload))}>
+      <span>{fileName}</span>
+      {onDownload && (
+        <button type="button" onClick={onDownload} disabled={!canDownload}>
+          Tải bản gốc
+        </button>
+      )}
+    </section>
+  ),
   ArchivePreview: () => <div data-testid="archive-preview" />,
 }));
 
@@ -60,15 +72,13 @@ vi.mock("../../hooks/useLocalFile", () => ({
 }));
 
 vi.mock("../../stores/authStore", () => ({
-  useAuthStore: (
-    selector: (state: { user: { id: string } }) => unknown,
-  ): unknown => selector({ user: { id: "user-1" } }),
+  useAuthStore: (selector: (state: { user: { id: string } }) => unknown): unknown =>
+    selector({ user: { id: "user-1" } }),
 }));
 
-const XLSX_MIME =
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-const signedUrl =
-  "https://chat.hacomholdings.com.vn/files/bcc.xlsx?signature=valid";
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const viewUrl = "https://chat.hacomholdings.com.vn/files/bcc.xlsx?signature=view";
+const downloadUrl = "https://chat.hacomholdings.com.vn/files/bcc.xlsx?signature=download";
 
 const target = (
   fileName = "bcc-2026.xlsx",
@@ -94,7 +104,7 @@ const props = (
   current: target(),
   currentIndex: 0,
   totalItems: 1,
-  secureUrl: signedUrl,
+  secureUrl: viewUrl,
   isLoadingUrl: false,
   urlError: null,
   hasPrev: false,
@@ -105,8 +115,17 @@ const props = (
   ...overrides,
 });
 
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
+  resolverState.resolveUrl.mockResolvedValue(downloadUrl);
   downloadState.canOpenLocally = false;
   downloadState.canDownloadToLocal = false;
   downloadState.saveLocal.mockResolvedValue(true);
@@ -117,96 +136,56 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-describe("FilePreviewModal spreadsheet preview", () => {
-  it("keeps a signed spreadsheet URL inside the app renderer", () => {
-    render(<FilePreviewModal {...props()} />);
+describe("FilePreviewModal Phase 3 routing", () => {
+  it("uses the safe Office fallback without a view URL or Office/zoom renderer", () => {
+    render(<FilePreviewModal {...props({ secureUrl: null })} />);
 
-    expect(screen.getByTestId("excel-preview").getAttribute("data-url")).toBe(
-      signedUrl,
+    expect(screen.getByTestId("document-preview").getAttribute("data-can-download")).toBe(
+      "true",
     );
-    expect(
-      screen.getByRole("button", { name: "Ch\u1ecdn m\u1ee9c thu ph\u00f3ng" }),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: "Xem to\u00e0n m\u00e0n h\u00ecnh" }),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: "T\u1ea3i v\u1ec1" }),
-    ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "\u0110\u00f3ng" })).toBeTruthy();
-    expect(screen.queryByTestId("office-preview")).toBeNull();
+    expect(screen.getByRole("button", { name: "Tải bản gốc" })).toBeTruthy();
+    expect(screen.queryByTestId("pdf-viewer")).toBeNull();
+    expect(screen.queryByLabelText("Chọn mức thu phóng")).toBeNull();
+    expect(screen.queryByLabelText("Xem toàn màn hình")).toBeNull();
   });
 
-  it("detects a spreadsheet from MIME without a filename extension", () => {
+  it("routes PDFs to the lazy in-app PdfJsViewer with the view-only source", () => {
     render(
-      <FilePreviewModal {...props({ current: target("report", XLSX_MIME) })} />,
-    );
-
-    expect(screen.getByTestId("excel-preview")).toBeTruthy();
-  });
-
-  it("continues to use the internal renderer when navigating to another URL", () => {
-    const { rerender } = render(<FilePreviewModal {...props()} />);
-    const nextUrl =
-      "https://chat.hacomholdings.com.vn/files/new.xlsx?signature=new";
-
-    rerender(
       <FilePreviewModal
         {...props({
-          currentIndex: 1,
-          secureUrl: nextUrl,
-          current: target("new.xlsx"),
+          current: target("report.pdf", "application/pdf", "pdf"),
+          secureUrl: viewUrl,
         })}
       />,
     );
 
-    expect(screen.getByTestId("excel-preview").getAttribute("data-url")).toBe(
-      nextUrl,
-    );
-    expect(screen.queryByTestId("office-preview")).toBeNull();
-  });
-
-  it("does not change the Word renderer", () => {
-    render(
-      <FilePreviewModal
-        {...props({
-          current: target(
-            "policy.docx",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "document",
-          ),
-        })}
-      />,
-    );
-
-    expect(screen.getByTestId("word-preview")).toBeTruthy();
-  });
-
-  it("does not render a preview when the server explicitly blocks it", () => {
-    const blocked = target();
-    blocked.attachment = { ...blocked.attachment, canPreview: false };
-
-    render(<FilePreviewModal {...props({ current: blocked })} />);
-
-    expect(
-      screen.getByText(
-        "T\u1ec7p ch\u01b0a s\u1eb5n s\u00e0ng \u0111\u1ec3 xem tr\u01b0\u1edbc.",
-      ),
-    ).toBeTruthy();
-    expect(screen.queryByTestId("excel-preview")).toBeNull();
+    expect(screen.getByTestId("pdf-viewer").getAttribute("data-url")).toBe(viewUrl);
+    expect(screen.getByTestId("pdf-viewer").getAttribute("data-file-name")).toBe("report.pdf");
+    expect(screen.getByLabelText("Chọn mức thu phóng")).toBeTruthy();
   });
 });
 
-describe("FilePreviewModal download flow", () => {
-  it("uses the browser download path when running on web", async () => {
-    render(<FilePreviewModal {...props()} />);
+describe("FilePreviewModal original download flow", () => {
+  it("resolves a distinct original-download URL instead of reusing the viewer source", async () => {
+    render(
+      <FilePreviewModal
+        {...props({
+          current: target("report.pdf", "application/pdf", "pdf"),
+          secureUrl: viewUrl,
+        })}
+      />,
+    );
 
-    fireEvent.click(screen.getByRole("button", { name: "T\u1ea3i v\u1ec1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tải về" }));
 
     await waitFor(() => {
+      expect(resolverState.resolveUrl).toHaveBeenCalledWith(
+        true,
+        expect.any(AbortSignal),
+      );
       expect(downloadState.downloadResourceWithName).toHaveBeenCalledWith(
-        signedUrl,
-        "bcc-2026.xlsx",
+        downloadUrl,
+        "report.pdf",
         expect.objectContaining({
           expectedBytes: 4_282_174,
           totalBytesHint: 4_282_174,
@@ -214,95 +193,113 @@ describe("FilePreviewModal download flow", () => {
         }),
       );
     });
-    expect(downloadState.markDownloaded).toHaveBeenCalledTimes(1);
-    expect(downloadState.fetchResourceBlob).not.toHaveBeenCalled();
+    expect(downloadState.downloadResourceWithName).not.toHaveBeenCalledWith(
+      viewUrl,
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(downloadState.markDownloaded).not.toHaveBeenCalled();
   });
 
-  it("streams directly to the configured desktop folder without a Blob", async () => {
+  it("uses the same original resolver when the Office fallback action is chosen", async () => {
+    render(<FilePreviewModal {...props({ secureUrl: null })} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Tải bản gốc" }));
+
+    await waitFor(() => {
+      expect(resolverState.resolveUrl).toHaveBeenCalledWith(
+        true,
+        expect.any(AbortSignal),
+      );
+      expect(downloadState.downloadResourceWithName).toHaveBeenCalledWith(
+        downloadUrl,
+        "bcc-2026.xlsx",
+        expect.any(Object),
+      );
+    });
+  });
+
+  it("streams the original URL to the configured desktop folder without a Blob", async () => {
     downloadState.canDownloadToLocal = true;
     render(<FilePreviewModal {...props()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "T\u1ea3i v\u1ec1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tải về" }));
 
     await waitFor(() => {
       expect(downloadState.downloadToLocal).toHaveBeenCalledWith(
-        signedUrl,
+        downloadUrl,
         expect.objectContaining({ onProgress: expect.any(Function) }),
       );
     });
     expect(downloadState.fetchResourceBlob).not.toHaveBeenCalled();
     expect(downloadState.saveLocal).not.toHaveBeenCalled();
     expect(downloadState.downloadResourceWithName).not.toHaveBeenCalled();
-    expect(downloadState.markDownloaded).not.toHaveBeenCalled();
   });
 
-  it("saves only through the legacy managed desktop path when streaming is absent", async () => {
+  it("uses the legacy managed desktop path only when direct native streaming is unavailable", async () => {
     downloadState.canOpenLocally = true;
     render(<FilePreviewModal {...props()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "T\u1ea3i v\u1ec1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tải về" }));
 
     await waitFor(() => {
+      expect(downloadState.fetchResourceBlob).toHaveBeenCalledWith(
+        downloadUrl,
+        expect.objectContaining({
+          expectedBytes: 4_282_174,
+          totalBytesHint: 4_282_174,
+          onProgress: expect.any(Function),
+        }),
+      );
       expect(downloadState.saveLocal).toHaveBeenCalledTimes(1);
     });
-    expect(downloadState.fetchResourceBlob).toHaveBeenCalledWith(
-      signedUrl,
-      expect.objectContaining({
-        expectedBytes: 4_282_174,
-        totalBytesHint: 4_282_174,
-        onProgress: expect.any(Function),
-      }),
-    );
     expect(downloadState.downloadResourceWithName).not.toHaveBeenCalled();
-    expect(downloadState.markDownloaded).not.toHaveBeenCalled();
   });
 
-  it("cancels an in-flight direct desktop transfer from the same action button", async () => {
+  it("cancels an in-flight native transfer from the same action button", async () => {
+    const transfer = deferred<boolean>();
     downloadState.canDownloadToLocal = true;
-    let resolveDownload: ((result: boolean) => void) | undefined;
-    let downloadSignal: AbortSignal | undefined;
-    downloadState.downloadToLocal.mockImplementationOnce(
-      (_url: string, options?: { signal?: AbortSignal }) =>
-        new Promise<boolean>((resolve) => {
-          downloadSignal = options?.signal;
-          resolveDownload = resolve;
-        }),
+    downloadState.downloadToLocal.mockImplementation(
+      (_url: string, options: { signal: AbortSignal }) => {
+        options.signal.addEventListener("abort", () => transfer.resolve(false), { once: true });
+        return transfer.promise;
+      },
     );
+    render(<FilePreviewModal {...props()} />);
 
-    const view = render(<FilePreviewModal {...props()} />);
-    fireEvent.click(screen.getByRole("button", { name: "T\u1ea3i v\u1ec1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tải về" }));
+    await waitFor(() => expect(downloadState.downloadToLocal).toHaveBeenCalledTimes(1));
 
-    await waitFor(() => {
-      expect(downloadState.downloadToLocal).toHaveBeenCalledTimes(1);
-    });
-    const blocked = target();
-    blocked.attachment = { ...blocked.attachment, canDownload: false };
-    view.rerender(<FilePreviewModal {...props({ current: blocked })} />);
-    const cancelButton = screen.getByRole("button", {
-      name: "Đang tải — hủy tải",
-    });
-    expect((cancelButton as HTMLButtonElement).disabled).toBe(false);
-    fireEvent.click(cancelButton);
-    expect(downloadSignal?.aborted).toBe(true);
+    const [, options] = downloadState.downloadToLocal.mock.calls[0] as [
+      string,
+      { signal: AbortSignal },
+    ];
+    fireEvent.click(screen.getByRole("button", { name: "Đang tải — hủy tải" }));
 
-    resolveDownload?.(false);
-    await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "T\u1ea3i v\u1ec1" }),
-      ).toBeTruthy();
-    });
+    expect(options.signal.aborted).toBe(true);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Tải về" })).toBeTruthy(),
+    );
   });
 
-  it("does not offer download when the server explicitly blocks it", () => {
+  it("does not start a transfer when no original descriptor is available", async () => {
+    resolverState.resolveUrl.mockResolvedValueOnce(undefined);
+    render(<FilePreviewModal {...props()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Tải về" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Thử tải lại" })).toBeTruthy(),
+    );
+    expect(downloadState.downloadResourceWithName).not.toHaveBeenCalled();
+  });
+
+  it("disables both Office fallback and footer download when the server blocks download", () => {
     const blocked = target();
     blocked.attachment = { ...blocked.attachment, canDownload: false };
+    render(<FilePreviewModal {...props({ current: blocked, secureUrl: null })} />);
 
-    render(<FilePreviewModal {...props({ current: blocked })} />);
-
-    const button = screen.getByRole("button", { name: "T\u1ea3i v\u1ec1" });
-    expect((button as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(button);
-    expect(downloadState.downloadResourceWithName).not.toHaveBeenCalled();
-    expect(downloadState.downloadToLocal).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Tải bản gốc" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Tải về" }).hasAttribute("disabled")).toBe(true);
   });
 });

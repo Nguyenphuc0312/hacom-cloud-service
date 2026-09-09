@@ -15,12 +15,14 @@ import { useReminderStore } from "../stores/reminderStore";
 import { useFriendshipStore } from "../stores/friendshipStore";
 import { useChatSidebarStore } from "../features/chat/state/chatSidebarStore";
 import { AuthenticatedRouteFallback } from "./AuthenticatedRouteFallback";
+import { useActivityAnalytics } from '../hooks/useActivityAnalytics';
 
 /**
  * Persistent authenticated app chrome. Route content changes through Outlet;
  * the navigation rail stays mounted across authenticated modules.
  */
 export const AuthenticatedLayout: React.FC = () => {
+  useActivityAnalytics();
   const navigate = useNavigate();
   const location = useLocation();
   const currentUser = useAuthStore((state) => state.user);

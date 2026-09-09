@@ -20,15 +20,16 @@ chạy, có thì dùng đường Zalo-thật, không có thì fallback web.
 | | Web (trình duyệt) | Desktop (Electron) |
 |---|---|---|
 | Bấm card | Mở preview trong app | **Mở bằng Word/Excel thật** |
-| "Đã có trên máy" | localStorage (đã bấm tải máy này) | `fs.existsSync()` — chính xác |
+| Trạng thái tải | Chỉ “đã yêu cầu tải”/browser handoff; không biết file local | `fs.existsSync()` — chính xác |
 | Nút 📁 mở thư mục | ❌ không thể | ✅ `showItemInFolder` |
 
 ---
 
 ## Phase 1 — Nền: trạng thái file cục bộ
 
-- [x] `chat-web-client/src/utils/downloadedFiles.ts` — nhớ file đã tải
-      (localStorage, key theo `attachmentId`, trần 500 bản ghi, có pub/sub).
+- [x] `chat-web-client/src/utils/downloadedFiles.ts` — trạng thái browser handoff
+      cục bộ (localStorage, key theo `attachmentId`, trần 500 bản ghi, có pub/sub);
+      không phải bằng chứng file còn tồn tại trên máy.
 - [x] `chat-window-desktop/src/main.js` — 4 IPC: `file:save` / `file:open` /
       `file:reveal` / `file:exists`, kèm `resolveAttachmentPath` chống path
       traversal (renderer nạp web từ internet → đường dẫn là dữ liệu không tin cậy).
@@ -46,7 +47,8 @@ Xác nhận & bổ sung cho phần trên:
 - **Hover: đổi hẳn thành `🕐 Nhấn để xem trước`** (dòng size biến mất) → xác nhận
   click card = mở preview.
 - Web Zalo **không có** "Đã có trên máy", **không có** nút 📁 → đúng như phân tích:
-  đó là đặc quyền desktop. Web ta vẫn giữ localStorage nhưng nhãn phải khiêm tốn.
+  đó là đặc quyền desktop. Web chỉ được nói “đã yêu cầu tải”/browser handoff, không
+  được suy ra file còn trên máy từ localStorage.
 - Nút tải: icon ⬇ trong **khung viền vuông bo góc**, tách riêng bên phải.
 
 **Trình xem (khác thiết kế hiện tại của ta — modal nổi giữa nền mờ):**
@@ -64,8 +66,8 @@ Xác nhận & bổ sung cho phần trên:
       và `.csv`→spreadsheet: không có tên file thì `.txt` sẽ hiện glyph "W" sai.
 - [x] `FileMessageCard.tsx`:
   - [x] **Click cả card = mở** (bỏ nút mắt 👁 — user đã chốt).
-  - [x] Dòng trạng thái: `35.46 KB · 🕐 Tải về để xem lâu dài` ↔ `✅ Đã có trên máy`;
-        hover đổi thành `Nhấn để xem trước` như Zalo Web.
+  - [x] Dòng trạng thái web: `35.46 KB · 🕐 Tải về để xem lâu dài` ↔ `Đã yêu cầu tải`;
+        không gọi là file có trên máy. Hover đổi thành `Nhấn để xem trước` như Zalo Web.
   - [x] Nút 📁 mở thư mục chứa — **chỉ hiện trên desktop** + đã tải.
   - [x] Bấm tải → `markFileDownloaded()`; desktop lưu thêm bản vào đĩa để lần sau
         mở thẳng bằng Word/Excel.
@@ -101,6 +103,24 @@ Word docx-preview, Text/CSV/Archive.
 
 ## Ghi chú giới hạn (phải nói với user, không giấu)
 
-Trên **web**, "Đã có trên máy" chỉ có nghĩa *"đã bấm tải ở trình duyệt này"*.
-Xoá site data / đổi máy / xoá file thủ công → mất dấu, và web không có cách nào
-biết. Chỉ bản **desktop** mới phản ánh đúng file trên đĩa.
+Trên **web**, không được hiển thị hay suy ra “Đã có trên máy”. Browser chỉ biết
+một yêu cầu tải/handoff đã được khởi tạo; người dùng có thể hủy, đổi nơi lưu, hoặc
+trình duyệt có thể từ chối mà web không quan sát được. Chỉ bản **desktop** mới
+phản ánh đúng file trên đĩa và mới được hiện “Đã có trên máy” hoặc nút 📁.
+
+
+## Phase 5 — Build-time rollout & telemetry guard (P5)
+
+- [x] Cờ Vite build-time VITE_FILE_VIEWER_ENABLED, mặc định false; chỉ literal
+      true mới bật thao tác viewer nội bộ tại card file chat.
+- [x] Không gate upload/download, thumbnail ảnh/video, hoặc đường native
+      desktop save/open/reveal.
+- [x] VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED phát browser CustomEvent allowlist
+      cục bộ; không có tên file, path, URL ký, token, ID, hay raw error.
+- [x] Docker và workflow staging/production truyền hai build args, whitelist
+      true/false, và default fail-closed.
+- [ ] Browser staging runtime: NOT_RUN.
+- [ ] Browser E2E: NOT_RUN.
+- [ ] Windows/Electron chọn thư mục, Office mở file, reveal folder: NOT_RUN.
+
+Runbook chi tiết: docs/file-viewer-p5-rollout.md.

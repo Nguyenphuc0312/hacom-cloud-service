@@ -91,6 +91,7 @@ import {
 } from "../features/chat/domain/messageMerge";
 import { findMessageIdentityIndex } from "../features/chat/domain/messageIdentityMatching";
 import { dispatchNotificationClick } from "../features/chat/events/chatUiEvents";
+import { invalidateConversationFileResources } from "../features/chat/realtime/fileResourceInvalidation";
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import { invalidateUserProfile } from "../services/userProfileCache";
@@ -1652,6 +1653,11 @@ export const useWebSocket = (
             deletedAt: asString(payload.deletedAt) ?? undefined,
           }),
         );
+        invalidateConversationFileResources(
+          dispatch,
+          conversationId,
+          "message-deleted",
+        );
         void scheduleConversationSnapshotRefresh(conversationId, {
           reason: "socket:message:deleted",
         });
@@ -1671,6 +1677,11 @@ export const useWebSocket = (
             recalledBy: asString(payload.recalledBy) ?? undefined,
             recalledAt: asString(payload.recalledAt) ?? undefined,
           }),
+        );
+        invalidateConversationFileResources(
+          dispatch,
+          conversationId,
+          "message-recalled",
         );
         void scheduleConversationSnapshotRefresh(conversationId, {
           reason: "socket:message:recalled",
@@ -1692,6 +1703,11 @@ export const useWebSocket = (
             deletedAt: asString(payload.deletedAt) ?? undefined,
           }),
         );
+        invalidateConversationFileResources(
+          dispatch,
+          conversationId,
+          "message-deleted",
+        );
         void scheduleConversationSnapshotRefresh(conversationId, {
           reason: "socket:message:deleted_global",
         });
@@ -1709,6 +1725,11 @@ export const useWebSocket = (
             messageId,
             mode: "FOR_ME",
           }),
+        );
+        invalidateConversationFileResources(
+          dispatch,
+          conversationId,
+          "message-deleted",
         );
         void scheduleConversationSnapshotRefresh(conversationId, {
           reason: "socket:message:deleted_for_me",
@@ -2117,6 +2138,13 @@ export const useWebSocket = (
         return;
       }
 
+      // This event is user-scoped by the server, so a non-active state means
+      // the current account has lost access to this conversation's sources.
+      invalidateConversationFileResources(
+        dispatch,
+        conversationId,
+        "membership-lost",
+      );
       removeConversationSyncTracking(
         conversationSyncStateRef.current,
         conversationId,
