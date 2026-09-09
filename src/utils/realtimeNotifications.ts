@@ -71,6 +71,11 @@ export const isDocumentVisibleAndFocused = (): boolean => {
   return document.visibilityState === "visible" && document.hasFocus();
 };
 
+/** Desktop must receive native toasts even while its own window is focused. */
+export const shouldEmitDesktopNotification = (): boolean =>
+  (typeof window !== "undefined" && Boolean(window.chatDesktop)) ||
+  !isDocumentVisibleAndFocused();
+
 export const syncDocumentTitleBadge = (totalUnreadCount: number): void => {
   if (!canUseDom()) {
     return;
