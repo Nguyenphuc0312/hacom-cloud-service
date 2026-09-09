@@ -18,7 +18,7 @@ describe("shift-code presentation boundaries", () => {
   it("keeps shift codes plain while preserving rich-text formatting", () => {
     const { container } = render(
       <MessageContentRenderer
-        content="<p>Ca <strong>HC2</strong>, vh1 và CT.</p>"
+        content="<p>Ca <strong>HC2</strong>, vh1 và CT.</p><p></p>"
         contentFormat="rich_text"
         isOwn={false}
       />,
@@ -27,6 +27,10 @@ describe("shift-code presentation boundaries", () => {
     expect(screen.getByText("HC2").tagName).toBe("STRONG");
     expect(container.textContent).toContain("Ca HC2, vh1 và CT.");
     expect(container.querySelector("button[data-shift-code]")).toBeNull();
+    expect(container.querySelector("p:empty")).toBeTruthy();
+    expect(container.querySelector(".message-rich-content")?.className).toContain(
+      "[&_p:empty]:min-h-[21px]",
+    );
   });
 
   it("keeps shift codes plain while preserving markdown formatting", () => {
