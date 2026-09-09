@@ -366,6 +366,7 @@
     "download": "Tải tệp",
     "downloadNamed": "Tải {{name}}",
     "downloadOnlyNamed": "Chỉ tải {{name}}",
+    "saveAsNamed": "Lưu {{name}} vào vị trí khác",
     "savedOnDevice": "Đã có trên máy",
     "alreadyDownloaded": "Đã yêu cầu tải",
     "downloadToKeep": "Tải về để xem lâu dài",

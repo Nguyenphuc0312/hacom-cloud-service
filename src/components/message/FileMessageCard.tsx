@@ -25,7 +25,6 @@ import { useTranslation } from "react-i18next";
 import {
   ArrowDownTrayIcon,
   ArrowPathIcon,
-  ArrowTopRightOnSquareIcon,
   CheckCircleIcon,
   EyeIcon,
   FolderOpenIcon,
@@ -293,6 +292,9 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
     saveLocal,
     canDownloadToLocal,
     downloadToLocal,
+    canSaveAs,
+    saveAs,
+    markDownloaded,
   } = useLocalFile(attachment, {
     currentUserId,
     conversationId,
@@ -465,6 +467,16 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
       });
 
       try {
+        // Once a desktop file exists, Download means "Save As", not another
+        // network transfer. The native bridge moves its managed copy and keeps
+        // the local mapping used by Open and Show in folder up to date.
+        if (localStatus === "downloaded" && canSaveAs) {
+          const saved = await saveAs();
+          if (!saved) throw new Error("Save As failed");
+          setDownloadState(initialDownloadState(downloadIdentity));
+          return;
+        }
+
         const downloadOptions = {
           signal: controller.signal,
           totalBytesHint: attachment.fileSize,
@@ -546,6 +558,9 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             downloadOptions,
           );
           throwIfDownloadAborted(controller.signal);
+          // Browser cannot inspect its Downloads folder. This is only a
+          // handoff marker, never proof that the file exists on disk.
+          markDownloaded();
         }
 
         throwIfDownloadAborted(controller.signal);
@@ -574,6 +589,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
       attachment.fileSize,
       canDownload,
       canDownloadToLocal,
+      canSaveAs,
       canOpenFromCard,
       canOpenLocally,
       downloadIdentity,
@@ -581,6 +597,9 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
       openSavedFile,
       resolveUrl,
       saveLocal,
+      saveAs,
+      localStatus,
+      markDownloaded,
     ],
   );
   const handleCancelDownload = useCallback(() => {
@@ -1070,6 +1089,11 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           defaultValue: "Thử tải lại {{name}}",
           name: displayFileName,
         })
+      : isDownloaded && canSaveAs
+        ? t("chat:file.saveAsNamed", {
+            defaultValue: "Lưu {{name}} vào vị trí khác",
+            name: displayFileName,
+          })
       : isDownloaded
         ? t("chat:file.redownloadNamed", {
             defaultValue: "Tải lại {{name}}",
@@ -1142,7 +1166,8 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
                 className="min-w-0 truncate tabular-nums"
                 title={statusLabel}
               >
-                {(willPreview || canOpenFromCard) &&
+                {!canOpenLocally &&
+                (willPreview || canOpenFromCard) &&
                 !hasDownloadError &&
                 !hasOpenError &&
                 !isDownloadBusy &&
@@ -1174,26 +1199,26 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           {liveStatusLabel}
         </span>
       )}
-      <div className="ml-3 flex min-w-[5.75rem] shrink-0 items-center justify-end gap-1">
+      <div className="ml-3 flex min-w-9 shrink-0 items-center justify-end gap-1">
         {canOpenLocally && isDownloaded && !isDownloadBusy && (
           <>
-            {canExplicitlyOpenFile && (
+            {!canOpenFromCard && canExplicitlyOpenFile && (
               <button
                 type="button"
                 onClick={() => void handleOpen()}
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-border text-text-secondary transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary active:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+                className="flex h-9 w-9 items-center justify-center rounded-md border border-border text-text-secondary transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary active:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
                 aria-label={t("chat:file.openFile", {
                   defaultValue: "Mở {{name}}",
                   name: displayFileName,
                 })}
               >
-                <ArrowTopRightOnSquareIcon className="h-[18px] w-[18px]" />
+                <span className="text-base leading-none">↗</span>
               </button>
             )}
             <button
               type="button"
               onClick={() => void handleReveal()}
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-border text-text-secondary transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary active:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+              className="flex h-9 w-9 items-center justify-center rounded-md border border-border text-text-secondary transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary active:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
               aria-label={t("chat:file.showInFolderNamed", {
                 defaultValue: "Mở thư mục chứa {{name}}",
                 name: displayFileName,
@@ -1211,7 +1236,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           }
           disabled={isCheckingLocalFile || (!canDownload && !isDownloadBusy)}
           className={clsx(
-            "flex h-11 w-11 items-center justify-center rounded-full border border-border text-text-secondary transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary active:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:opacity-50",
+            "flex h-9 w-9 items-center justify-center rounded-md border border-border text-text-secondary transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary active:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:opacity-50",
             isCheckingLocalFile
               ? "cursor-progress"
               : "disabled:cursor-not-allowed",

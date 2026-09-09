@@ -46,6 +46,9 @@ export interface UseLocalFileResult {
     url: string,
     options?: LocalFileDownloadOptions,
   ) => Promise<boolean>;
+  /** Desktop: move the saved file to a location selected in the native Save As dialog. */
+  canSaveAs: boolean;
+  saveAs: () => Promise<boolean>;
   /** Đánh dấu đã tải mà không ghi đĩa (dùng cho luồng tải của trình duyệt). */
   markDownloaded: () => void;
 }
@@ -141,6 +144,8 @@ export const useLocalFile = (
   );
   const canOpenLocally = desktop !== null && localName !== "";
   const canDownloadToLocal = streamingDesktop !== null && localName !== "";
+  const canSaveAs =
+    desktop !== null && typeof desktop.saveAs === "function" && localName !== "";
   const webStatus = React.useSyncExternalStore<LocalFileStatus>(
     subscribeDownloadedFiles,
     () => (isFileDownloaded(key) ? "downloaded" : "not-downloaded"),
@@ -351,6 +356,22 @@ export const useLocalFile = (
     }
   }, [desktop, localName, refreshDesktopStatus]);
 
+  const saveAs = React.useCallback(async (): Promise<boolean> => {
+    if (!desktop?.saveAs || !localName) return false;
+    try {
+      const result = await desktop.saveAs(
+        localName,
+        (fileName ?? "").trim() || "download",
+        undefined,
+        expectedSize,
+      );
+      if (result.ok) void refreshDesktopStatus(localName);
+      return result.ok;
+    } catch {
+      return false;
+    }
+  }, [desktop, expectedSize, fileName, localName, refreshDesktopStatus]);
+
   const reveal = React.useCallback(async (): Promise<DesktopFileResult> => {
     if (!desktop || !localName) {
       return { ok: false, reason: "unsupported" };
@@ -376,6 +397,8 @@ export const useLocalFile = (
     saveLocal,
     canDownloadToLocal,
     downloadToLocal,
+    canSaveAs,
+    saveAs,
     markDownloaded,
   };
 };
