@@ -74,9 +74,11 @@ export const MessageToastCard: React.FC<MessageToastCardProps> = ({
   messageId,
 }) => {
   const [hovered, setHovered] = React.useState(false);
-  const avatarName = isGroup ? conversationName : senderName;
-  const titleText = isGroup ? conversationName : senderName;
-  const bodyText = isGroup ? `${senderName}: ${preview}` : preview;
+  // Sender first makes a stream of group notifications immediately scannable;
+  // the group remains the secondary context without hiding who wrote.
+  const avatarName = senderName;
+  const titleText = senderName;
+  const bodyText = isGroup ? `${conversationName} · ${preview}` : preview;
 
   const handleCardClick = () => {
     toastLib.dismiss(toastId);
