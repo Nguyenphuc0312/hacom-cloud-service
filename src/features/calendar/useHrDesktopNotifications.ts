@@ -10,7 +10,7 @@ import { refreshHrUnreadCount } from "./useHrUnreadCount";
 
 // HR currently has no websocket event for calendar notifications; poll quickly and
 // refresh instantly on returning to the app. The in-flight guard prevents overlap.
-export const HR_NOTIFICATION_POLL_MS = 5_000;
+export const HR_NOTIFICATION_POLL_MS = 750;
 
 const payloadText = (item: HrAppNotification, key: string): string => {
   const value = item.payload?.[key];
