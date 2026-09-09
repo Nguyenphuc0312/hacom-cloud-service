@@ -48,6 +48,13 @@ export interface DesktopFilesApi {
     data: ArrayBuffer | Uint8Array,
     displayName?: string,
   ) => Promise<DesktopFileResult>;
+  /** Save an already downloaded file to a user-selected location. */
+  saveAs?: (
+    sourceFileName: string,
+    suggestedFileName: string,
+    data?: ArrayBuffer | Uint8Array,
+    expectedBytes?: number,
+  ) => Promise<DesktopFileResult>;
   open: (fileName: string) => Promise<DesktopFileResult>;
   reveal: (fileName: string) => Promise<DesktopFileResult>;
   exists: (fileName: string) => Promise<DesktopFileExists>;

@@ -366,6 +366,7 @@
     "download": "Download file",
     "downloadNamed": "Download {{name}}",
     "downloadOnlyNamed": "Download {{name}} only",
+    "saveAsNamed": "Save {{name}} to another location",
     "savedOnDevice": "Saved on this device",
     "alreadyDownloaded": "Download requested",
     "downloadToKeep": "Download to keep",
