@@ -920,6 +920,20 @@ export const useWebSocket = (
         conversation?.name ||
         input.senderName ||
         "Conversation";
+      const senderLabel =
+        input.senderName?.trim() ||
+        t("chat:notification.senderFallback", {
+          defaultValue: "Người dùng",
+        });
+      const isGroupConversation =
+        conversation?.type !== RoomType.DIRECT &&
+        conversation?.type !== RoomType.PRIVATE &&
+        conversationLabel !== senderLabel;
+      // Lead with the person who needs recognition. The group remains visible
+      // as context instead of replacing the sender in notification titles.
+      const notificationTitle = isGroupConversation
+        ? `${senderLabel} · ${conversationLabel}`
+        : senderLabel;
       const notificationKind =
         input.kind === "system"
           ? "system"
@@ -941,7 +955,7 @@ export const useWebSocket = (
           input.eventId ||
           `message:${input.conversationId}:${input.messageId}:${notificationKind}`,
         kind: notificationKind,
-        title: conversationLabel,
+        title: notificationTitle,
         body:
           aliasedContent ||
           (notificationKind === "system"
@@ -1009,8 +1023,8 @@ export const useWebSocket = (
           id: notificationId,
           tag: `conversation:${input.conversationId}`,
           title: hasMention
-            ? `${conversationLabel} · Mention`
-            : conversationLabel,
+            ? `${notificationTitle} · Mention`
+            : notificationTitle,
           body: preview,
           silent: !notificationSettings.sound,
           onClick: () => {
@@ -1058,11 +1072,11 @@ export const useWebSocket = (
         previewLength: preview.length,
       });
 
-      const isGroup = conversation?.type !== RoomType.DIRECT;
+      const isGroup = isGroupConversation;
 
       // Singleton toast: new message replaces old one instead of stacking.
       showSingletonMessageToast({
-        senderName: input.senderName || conversationLabel,
+        senderName: senderLabel,
         conversationName:
           conversation?.displayName || conversation?.name || undefined,
         isGroup,
