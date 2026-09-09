@@ -1,10 +1,8 @@
 import { useEffect, useRef } from "react";
 import { hrNotificationApi, type HrAppNotification } from "../api/hrNotificationApi";
 import { useFriendshipStore } from "../../stores/friendshipStore";
-import { useSettingsStore } from "../../settings/settingsStore";
 import {
-  emitBrowserNotification,
-  isDocumentVisibleAndFocused,
+  emitDesktopNotification,
 } from "../../utils/realtimeNotifications";
 import { eventTitleOf } from "./utils/parseNotificationBody";
 import { refreshHrUnreadCount } from "./useHrUnreadCount";
@@ -43,15 +41,13 @@ export const useHrDesktopNotifications = (): void => {
         for (const item of items) {
           if (knownIds.has(item.id)) continue;
           knownIds.add(item.id);
-          if (item.readAt || isDocumentVisibleAndFocused()) continue;
-          const preferences = useSettingsStore.getState().notifications;
-          if (!preferences.enabled) continue;
-          emitBrowserNotification({
+          if (item.readAt) continue;
+          emitDesktopNotification({
             id: item.id,
             tag: `calendar:${item.id}`,
             title: eventTitleOf(item.payload, item.body) || item.title || "Lịch họp",
-            body: notificationBody(item, preferences.messagePreview),
-            silent: !preferences.sound,
+            body: notificationBody(item, true),
+            privateBody: notificationBody(item, false),
           });
         }
       } catch {

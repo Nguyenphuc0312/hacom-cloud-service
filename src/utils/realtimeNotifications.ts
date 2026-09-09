@@ -1,4 +1,5 @@
 import { notifyDebug } from "./logger";
+import { useSettingsStore } from "../settings/settingsStore";
 
 type NavigatorBadgeApi = Navigator & {
   setAppBadge?: (contents?: number) => Promise<void>;
@@ -33,6 +34,14 @@ interface BrowserNotificationInput {
   tag?: string;
   silent?: boolean;
   onClick?: () => void;
+}
+
+export interface DesktopNotificationInput extends Omit<
+  BrowserNotificationInput,
+  "silent"
+> {
+  /** Used when the user has disabled notification previews. */
+  privateBody?: string;
 }
 
 const TITLE_BADGE_PATTERN = /^\(\d+\)\s+/;
@@ -174,6 +183,27 @@ export const emitBrowserNotification = ({
 
   notifyDebug("[emit] shown", { title, tag: cooldownKey });
   return true;
+};
+
+/**
+ * The sole application-level OS notification entry point.
+ *
+ * Browser builds show a normal Notification; Electron's preload already
+ * proxies that same API to the native Windows toast. New web features should
+ * call this instead of `new Notification(...)` or a desktop-specific bridge.
+ */
+export const emitDesktopNotification = ({
+  privateBody = "Bạn có thông báo mới.",
+  ...input
+}: DesktopNotificationInput): boolean => {
+  const preferences = useSettingsStore.getState().notifications;
+  if (!preferences.enabled || isDocumentVisibleAndFocused()) return false;
+
+  return emitBrowserNotification({
+    ...input,
+    body: preferences.messagePreview ? input.body : privateBody,
+    silent: !preferences.sound,
+  });
 };
 
 export const clearBrowserNotificationCooldowns = (): void => {

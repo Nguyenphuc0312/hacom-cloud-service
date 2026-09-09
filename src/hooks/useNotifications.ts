@@ -15,10 +15,8 @@ import {
 import { aliasByUserId } from "../utils/mentionAliasText";
 import { logger } from "../utils/logger";
 import {
-  emitBrowserNotification,
-  isDocumentVisibleAndFocused,
+  emitDesktopNotification,
 } from "../utils/realtimeNotifications";
-import { useSettingsStore } from "../settings/settingsStore";
 
 const CHAT_REALTIME_NOTIFICATION_TYPES = new Set<string>([
   "MENTIONED_IN_MESSAGE",
@@ -125,23 +123,16 @@ export const useNotifications = (isAuthenticated: boolean) => {
       // future server-side notifications such as AI workflows.
       if (
         CHAT_REALTIME_NOTIFICATION_TYPES.has(payload.type) ||
-        item.isRead ||
-        isDocumentVisibleAndFocused()
+        item.isRead
       ) {
         return;
       }
 
-      const preferences = useSettingsStore.getState().notifications;
-      if (!preferences.enabled) return;
-
-      emitBrowserNotification({
+      emitDesktopNotification({
         id: item.id,
         tag: `notification:${item.id}`,
         title: item.title || "Thông báo mới",
-        body: preferences.messagePreview
-          ? item.body || "Bạn có thông báo mới."
-          : "Bạn có thông báo mới.",
-        silent: !preferences.sound,
+        body: item.body || "Bạn có thông báo mới.",
       });
     };
 
