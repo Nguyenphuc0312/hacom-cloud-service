@@ -53,7 +53,7 @@ import {
 import { markPreviewReady, markPreviewFailed } from "./useBatchThumbnailUrl";
 import {
   broadcastUnreadSnapshot,
-  emitBrowserNotification,
+  emitDesktopNotification,
   isDocumentVisibleAndFocused,
   subscribeUnreadSnapshotBroadcast,
   syncAppBadge,
@@ -1035,14 +1035,13 @@ export const useWebSocket = (
           visibleAndFocused,
           hasMention,
         });
-        emitBrowserNotification({
+        emitDesktopNotification({
           id: notificationId,
           tag: `conversation:${input.conversationId}`,
           title: hasMention
             ? `${notificationTitle} · Mention`
             : notificationTitle,
           body: preview,
-          silent: !notificationSettings.sound,
           onClick: () => {
             dispatchNotificationClick({
               conversationId: input.conversationId,
@@ -1148,11 +1147,10 @@ export const useWebSocket = (
       });
 
       if (!isDocumentVisibleAndFocused()) {
-        emitBrowserNotification({
+        emitDesktopNotification({
           id: notificationId,
           title: conversationLabel,
           body: message,
-          silent: !notificationSettings.sound,
         });
       }
     },
@@ -1191,11 +1189,10 @@ export const useWebSocket = (
       });
 
       if (!isDocumentVisibleAndFocused()) {
-        emitBrowserNotification({
+        emitDesktopNotification({
           id: notificationId,
           title: conversationLabel,
           body,
-          silent: !notificationSettings.sound,
         });
       }
     },
