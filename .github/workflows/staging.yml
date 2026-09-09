@@ -28,11 +28,26 @@ jobs:
         run: |
           set -Eeuo pipefail
           export KUBECONFIG="$HOME/.kube/hacom-chat-staging-config"
-          test -f "$KUBECONFIG"
-          kubectl config current-context
-          kubectl get namespace hacom-chat
-          kubectl auth can-i get deployments -n hacom-chat | grep -qx yes
-          kubectl auth can-i get services -n hacom-chat | grep -qx yes
+          if [[ ! -f "$KUBECONFIG" ]]; then
+            echo "::error title=Staging kubeconfig unavailable::The restricted Chat staging kubeconfig is absent on this runner. Provision the canonical hacom-chat staging credential; do not use a production kubeconfig."
+            exit 1
+          fi
+          if ! kubectl config current-context >/dev/null; then
+            echo "::error title=Staging kubeconfig invalid::The restricted Chat staging kubeconfig cannot select a context."
+            exit 1
+          fi
+          if ! kubectl get namespace hacom-chat >/dev/null; then
+            echo "::error title=Chat staging namespace unavailable::The configured staging credential cannot read namespace hacom-chat."
+            exit 1
+          fi
+          if ! kubectl auth can-i get deployments -n hacom-chat | grep -qx yes; then
+            echo "::error title=Staging deployment read denied::Grant the canonical staging deployer read access to deployments in hacom-chat."
+            exit 1
+          fi
+          if ! kubectl auth can-i get services -n hacom-chat | grep -qx yes; then
+            echo "::error title=Staging service read denied::Grant the canonical staging deployer read access to services in hacom-chat."
+            exit 1
+          fi
       - name: Inventory existing Chat staging workloads
         shell: bash
         run: |
