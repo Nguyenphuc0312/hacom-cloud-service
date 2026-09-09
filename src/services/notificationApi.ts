@@ -8,7 +8,10 @@ export type BackendNotificationType =
   | "GROUP_ROLE_CHANGED"
   | "GROUP_INVITE_RECEIVED"
   | "GROUP_JOIN_APPROVED"
-  | "MENTIONED_IN_MESSAGE";
+  | "MENTIONED_IN_MESSAGE"
+  // New server-side notification types (for example AI workflows) must still
+  // reach the shared desktop notification path before this client is updated.
+  | (string & {});
 
 export type NotificationTargetType =
   | "friend_request"

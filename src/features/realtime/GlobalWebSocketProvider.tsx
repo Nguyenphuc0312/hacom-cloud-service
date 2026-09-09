@@ -1,5 +1,8 @@
 import React, { createContext, useContext } from "react";
 import { useWebSocket } from "../../hooks/useWebSocket";
+import { useNotifications } from "../../hooks/useNotifications";
+import { useAuthStore } from "../../stores";
+import { useHrDesktopNotifications } from "../calendar/useHrDesktopNotifications";
 import type { ConnectionState } from "../../hooks/useWebSocket";
 
 interface WebSocketContextValue {
@@ -24,6 +27,9 @@ export const GlobalWebSocketProvider: React.FC<{
   children: React.ReactNode;
 }> = ({ children }) => {
   const ws = useWebSocket();
+  const isAuthenticated = useAuthStore((state) => Boolean(state.user));
+  useNotifications(isAuthenticated);
+  useHrDesktopNotifications();
 
   return (
     <WebSocketContext.Provider value={ws}>
