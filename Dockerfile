@@ -78,6 +78,7 @@ RUN npm run build
 RUN test -f /workspace/chat-shared-types/dist/index.d.ts
 
 WORKDIR /workspace/chat-web-client
+RUN npm install --no-save --ignore-scripts ../chat-shared-types
 RUN npm run build \
   && printf '{"buildSha":"%s"}\n' "${VITE_APP_BUILD_SHA}" > dist/build-info.json \
   && node scripts/verify-dist-assets.mjs
