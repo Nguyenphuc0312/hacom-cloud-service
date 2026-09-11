@@ -42,6 +42,19 @@ describe("useResolvedDisplayName", () => {
     expect(result.current).toBe("Trần Vũ Đại");
   });
 
+  it("uses the unique friend name when the mention ID differs from the friendship ID", () => {
+    useFriendshipStore.setState({
+      friendByUserId: {
+        friendId: { ...friend("friendId", "Nguyễn Minh Quang"), displayName: "VPTCT-Nguyễn Minh Quang" },
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useResolvedDisplayName("message-mention-id", "VPTCT-Nguyễn Minh Quang"),
+    );
+    expect(result.current).toBe("Nguyễn Minh Quang");
+  });
+
   it("falls back to the caller's name when the user is unknown", () => {
     const { result } = renderHook(() => useResolvedDisplayName("u3", "Người lạ"));
     expect(result.current).toBe("Người lạ");
