@@ -40,6 +40,16 @@ describe("conversationAdapter — lastMessage.mentions", () => {
     ]);
   });
 
+  it("giữ range để sidebar đổi được alias khi content và tên metadata lệch nhau", () => {
+    const conversation = withLastMessage([
+      { user_id: "u2", display_name: "Nguyễn Minh Quang", offset: 0, length: 24 },
+    ]);
+
+    expect(conversation?.lastMessage?.mentions).toEqual([
+      { userId: "u2", displayName: "Nguyễn Minh Quang", offset: 0, length: 24 },
+    ]);
+  });
+
   // Tin cũ (trước migration 071) không có field này — preview hiện tên thật,
   // đúng bằng mức trước đây, không được vỡ.
   it("thiếu mentions thì bỏ hẳn field, không dựng mảng rỗng", () => {

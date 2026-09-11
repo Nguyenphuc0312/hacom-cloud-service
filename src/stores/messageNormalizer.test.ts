@@ -155,6 +155,16 @@ describe("normalizeMentions", () => {
   it("bỏ qua entry không có userId", () => {
     expect(normalizeMentions([{ displayName: "X" }, "", null])).toEqual([]);
   });
+
+  it("giữ range để renderer định vị mention không cần đoán theo tên", () => {
+    expect(
+      normalizeMentions([
+        { user_id: "u1", display_name: "Nguyễn Minh Quang", offset: 0, length: 24 },
+      ]),
+    ).toEqual([
+      { userId: "u1", displayName: "Nguyễn Minh Quang", offset: 0, length: 24 },
+    ]);
+  });
 });
 
 describe("normalizeLocationPayload", () => {

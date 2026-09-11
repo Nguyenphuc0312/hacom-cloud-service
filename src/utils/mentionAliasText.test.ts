@@ -91,4 +91,12 @@ describe("parseMentionDetails", () => {
     expect(parseMentionDetails(undefined)).toEqual([]);
     expect(parseMentionDetails({ userId: "u1" })).toEqual([]);
   });
+
+  it("normalizes snake-case ranges for alias rendering", () => {
+    expect(parseMentionDetails([
+      { user_id: "u1", display_name: "Other", offset: 0, length: 7 },
+    ])).toEqual([
+      { userId: "u1", displayName: "Other", offset: 0, length: 7 },
+    ]);
+  });
 });
