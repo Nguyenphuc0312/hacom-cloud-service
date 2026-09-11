@@ -1,5 +1,5 @@
 {
-  "title": "My Documents",
+  "title": "My Cloud",
   "subtitle": "Personal content",
   "common": {
     "soon": "Soon",
@@ -7,22 +7,22 @@
     "cancel": "Cancel"
   },
   "workspace": {
-    "title": "My Documents",
+    "title": "My Cloud",
     "description": "Content here is visible only to you and synced through your Hacom account.",
     "introTitle": "Your private conversation",
     "onlyYou": "Only you can see this",
     "sidebarPreview": "Save content for yourself",
-    "phaseAction": "This action is planned for the next My Documents phase.",
+    "phaseAction": "This action is planned for the next My Cloud phase.",
     "saving": "Saving content {{size}}",
     "private": "Private",
     "refresh": "Refresh"
   },
   "search": {
-    "placeholder": "Search My Documents",
-    "aria": "Search My Documents"
+    "placeholder": "Search My Cloud",
+    "aria": "Search My Cloud"
   },
   "navigation": {
-    "aria": "Filter My Documents content",
+    "aria": "Filter My Cloud content",
     "all": "All",
     "text": "Text",
     "image": "Images",

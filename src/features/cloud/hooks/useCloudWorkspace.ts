@@ -255,7 +255,7 @@ export const useCloudWorkspace = (
               cloudApi.listItems(userId, { ...listOptions, signal, q: apiQuery }),
               // Trash/quota were introduced after the first Cloud rollout.
               // A gateway serving an older contract must not blank the active
-              // My Documents timeline; treat only missing-method responses as
+              // Personal Cloud timeline; treat only missing-method responses as
               // optional while still surfacing auth/network failures.
               cloudApi
                 .listTrash(userId, { signal, q: apiQuery })

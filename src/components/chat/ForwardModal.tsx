@@ -572,7 +572,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[15px] font-semibold text-text-primary">
-                      My Documents
+                      Cloud của tôi
                     </span>
                     <span className="block truncate text-xs text-text-muted">
                       Lưu vào Hacom Cloud

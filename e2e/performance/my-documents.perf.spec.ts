@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("My Documents route responds within the local smoke budget", async ({ request }) => {
+test("Cloud của tôi route responds within the local smoke budget", async ({ request }) => {
   const startedAt = performance.now();
   const response = await request.get("/chat/my-documents");
   const durationMs = performance.now() - startedAt;

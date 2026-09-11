@@ -1,5 +1,5 @@
 {
-  "title": "My Documents",
+  "title": "Cloud của tôi",
   "subtitle": "Kho nội dung cá nhân",
   "common": {
     "soon": "Sắp có",
@@ -7,22 +7,22 @@
     "cancel": "Hủy"
   },
   "workspace": {
-    "title": "My Documents",
+    "title": "Cloud của tôi",
     "description": "Nội dung tại đây chỉ hiển thị với bạn và được đồng bộ qua tài khoản Hacom.",
     "introTitle": "Không gian riêng của bạn",
     "onlyYou": "Chỉ mình bạn có thể xem",
     "sidebarPreview": "Lưu nội dung cho chính bạn",
-    "phaseAction": "Thao tác này thuộc giai đoạn tiếp theo của My Documents.",
+    "phaseAction": "Thao tác này thuộc giai đoạn tiếp theo của Cloud của tôi.",
     "saving": "Đang lưu nội dung {{size}}",
     "private": "Riêng tư",
     "refresh": "Làm mới"
   },
   "search": {
-    "placeholder": "Tìm trong My Documents",
-    "aria": "Tìm kiếm trong My Documents"
+    "placeholder": "Tìm trong Cloud của tôi",
+    "aria": "Tìm kiếm trong Cloud của tôi"
   },
   "navigation": {
-    "aria": "Lọc nội dung My Documents",
+    "aria": "Lọc nội dung Cloud của tôi",
     "all": "Tất cả",
     "text": "Tin nhắn",
     "image": "Ảnh",

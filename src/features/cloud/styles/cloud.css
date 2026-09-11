@@ -1162,7 +1162,7 @@ button.cloud-delete-choice--danger:hover {
 }
 
 /*
- * My Documents surface
+ * Personal Cloud surface
  * The Cloud API is presented as a private conversation, not a drive dashboard.
  */
 .cloud-documents {
@@ -1846,7 +1846,7 @@ button.cloud-delete-choice--danger:hover {
   }
 }
 
-/* My Documents uses drag-to-select rather than checkbox selection. The shared
+/* Personal Cloud uses drag-to-select rather than checkbox selection. The shared
    timeline still mounts its selection controls, so hide only those controls
    inside the Cloud conversation while keeping selection state and toolbar. */
 .cloud-selection-mode input[type="checkbox"] {

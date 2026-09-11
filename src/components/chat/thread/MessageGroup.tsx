@@ -120,7 +120,7 @@ interface MessageGroupProps {
   ) => void | Promise<void>;
   /** Optional transport-specific retry handler (for example Cloud uploads). */
   onRetry?: (message: Message) => void | Promise<void>;
-  /** My Documents uses a deliberately small, Cloud-specific action menu. */
+  /** Cloud của tôi uses a deliberately small, Cloud-specific action menu. */
   cloudMessageActionsOnly?: boolean;
   /** Render a trashed Cloud item as a normal bubble with restore control. */
   cloudTrashMode?: boolean;

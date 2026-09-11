@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Cloud route boundary", () => {
-  test("keeps My Documents behind the existing Chat authentication guard", async ({
+  test("keeps Cloud của tôi behind the existing Chat authentication guard", async ({
     page,
   }) => {
     await page.goto("/chat/my-documents");

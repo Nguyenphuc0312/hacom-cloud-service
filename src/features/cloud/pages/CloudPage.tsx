@@ -156,7 +156,7 @@ export default function CloudPage() {
   const [isUploadingPendingAttachments, setIsUploadingPendingAttachments] =
     useState(false);
   const cloudUserId = resolveCloudUserId(authUser?.id);
-  // Search is performed against the already loaded My Documents timeline,
+  // Search is performed against the already loaded personal Cloud timeline,
   // matching Hacom Chat's local panel behavior. Do not refetch the Cloud
   // bundle for every keystroke (that caused the red Cloud error banner).
   const workspace = useCloudWorkspace(cloudUserId);
@@ -166,7 +166,7 @@ export default function CloudPage() {
     return () => window.clearInterval(intervalId);
   }, []);
 
-  // My Documents uses the same pin contract as ordinary Hacom Chat
+  // Personal Cloud uses the same pin contract as ordinary Hacom Chat
   // conversations.  Keeping this hook here makes pin state, optimistic
   // updates and the pinned-message panel behave identically in both views.
   const {

@@ -138,7 +138,7 @@ export const CloudConversationEntry: React.FC<CloudConversationEntryProps> = ({
 
       setIsSavingDrop(true);
       void saveChatMessagesToCloud(messages, currentUserId)
-        .then(() => toast.success("Đã lưu tin nhắn vào My Documents"))
+        .then(() => toast.success("Đã lưu tin nhắn vào Cloud của tôi"))
         .catch((error: unknown) =>
           toast.error(
             error instanceof Error
@@ -203,7 +203,7 @@ export const CloudConversationEntry: React.FC<CloudConversationEntryProps> = ({
               title={preview}
             >
               {isDropTarget
-                ? "Thả để lưu vào My Documents"
+                ? "Thả để lưu vào Cloud của tôi"
                 : isSavingDrop
                   ? "Đang lưu vào Hacom Cloud..."
                   : preview}

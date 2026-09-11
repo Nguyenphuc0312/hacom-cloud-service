@@ -18,7 +18,7 @@ const canOperateOnCloudMessage = (message: Message): boolean =>
   message.type !== MessageType.SYSTEM && !message.isDeleted;
 
 /**
- * My Documents owns its message menu policy. Chat actions are used only as
+ * Cloud của tôi owns its message menu policy. Chat actions are used only as
  * capability hints (copyable, downloadable, pinnable and selectable), while
  * ordering and destructive semantics stay Cloud-specific.
  */

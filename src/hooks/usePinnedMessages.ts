@@ -57,7 +57,7 @@ interface UsePinnedMessagesReturn {
 
 interface UsePinnedMessagesOptions {
   /**
-   * Cloud/My Documents can run against an independent API that may not expose
+   * Cloud của tôi can run against an independent API that may not expose
    * the chat pin endpoints yet. Keep the same UI contract and persist locally
    * until that endpoint is available, without changing ordinary chat behavior.
    */

@@ -101,7 +101,7 @@ describe("CloudConversationInfoPanel", () => {
       />,
     );
 
-    expect(screen.getByText("My Documents")).not.toBeNull();
+    expect(screen.getByText("Cloud của tôi")).not.toBeNull();
     expect(screen.getByText("Ảnh", { exact: true })).not.toBeNull();
     expect(screen.getByText("Video", { exact: true })).not.toBeNull();
     expect(screen.queryByText(/^Trống$|^Free$/)).toBeNull();
@@ -134,7 +134,7 @@ describe("CloudConversationInfoPanel", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  /* quota request UI is intentionally not part of the My Documents drawer */
+  /* quota request UI is intentionally not part of the personal Cloud drawer */
   it.skip("shows the quota request action only when Cloud marks the quota as near limit", () => {
     const onRequestQuota = vi.fn();
 

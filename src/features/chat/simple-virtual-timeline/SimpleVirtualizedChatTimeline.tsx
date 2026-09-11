@@ -54,7 +54,7 @@ export interface SimpleVirtualizedChatTimelineProps {
   ) => void | Promise<void>;
   /** Override the default chat retry for transport-specific messages. */
   onRetry?: (message: Message) => void | Promise<void>;
-  /** Restrict each message menu to the My Documents Cloud actions. */
+  /** Restrict each message menu to the personal Cloud actions. */
   cloudMessageActionsOnly?: boolean;
   /** Render trashed Cloud items with the normal chat bubble and restore action. */
   cloudTrashMode?: boolean;

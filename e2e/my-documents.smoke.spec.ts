@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("My Documents release smoke", () => {
-  test("serves the My Documents route and Cloud readiness proxy", async ({ page, request }) => {
+test.describe("Cloud của tôi release smoke", () => {
+  test("serves the personal Cloud route and readiness proxy", async ({ page, request }) => {
     const health = await request.get("/cloud-api/health/ready");
     expect(health.status()).toBe(200);
 

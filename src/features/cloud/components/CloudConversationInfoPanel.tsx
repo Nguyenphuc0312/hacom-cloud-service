@@ -45,7 +45,7 @@ export const CloudConversationInfoPanel: React.FC<
     ? {
         title: "Thông tin Hacom Cloud",
         close: "Đóng",
-        workspace: "My Documents",
+        workspace: "Cloud của tôi",
         all: "Tất cả",
         trash: "Thùng rác",
         description:
@@ -59,7 +59,7 @@ export const CloudConversationInfoPanel: React.FC<
     : {
         title: "Hacom Cloud info",
         close: "Close",
-        workspace: "My Documents",
+        workspace: "My Cloud",
         all: "All",
         trash: "Trash",
         description:
