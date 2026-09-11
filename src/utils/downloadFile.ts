@@ -30,26 +30,45 @@ export interface ResourceDownloadOptions {
   onProgress?: (progress: ResourceDownloadProgress) => void;
 }
 
-// Renderer-level UX guard: only auto-open known passive formats. Unknown and
-// executable/script formats are downloaded but never dispatched to the OS.
-// The desktop main process must independently enforce the same policy.
+// Card activation is intentionally narrow: common Office/PDF/image files can
+// download and open in one user gesture. Other data files first save to disk,
+// then the user explicitly chooses "Mở" so Windows uses its assigned app.
 const AUTO_OPEN_EXTENSIONS = new Set(
-  "pdf txt csv rtf md log doc docx dot dotx xls xlsx xlt xltx ppt pptx pps ppsx pot potx odt ods odp jpg jpeg png gif webp bmp heic heif mp3 wav m4a ogg mp4 mov webm avi mkv zip rar 7z tar gz gzip".split(
+  "pdf doc docx dot dotx xls xlsx xlt xltx ppt pptx pps ppsx pot potx odt ods odp jpg jpeg png gif webp bmp heic heif".split(
     " ",
   ),
 );
 
-export const canAutoOpenDownloadedFile = (
-  fileName?: string | null,
-): boolean => {
+// This denylist is mirrored in Electron. Explicit Open is never a route to
+// launch executables, scripts, installers, shortcuts, or macro-enabled Office files.
+const BLOCKED_EXPLICIT_OPEN_EXTENSIONS = new Set(
+  "ade adp app appimage appinstaller appx appxbundle apk asp aspx bat bash cab chm cmd com command cpl desktop dmg docm dotm dll exe gadget hta htc html htm img inf ins iso jar jse js library-ms lnk mde mdt mht mhtml msc msi msp msu msix msixbundle pif pkg pl ps1 ps1xml ps2 ps2xml psc1 psc2 psd1 psm1 py pyc pyo reg scf scr sct scpt scptd sldm search-ms sh shb shs svg svgz sys url vb vbe vbs vhd vhdx vxd workflow wsc wsf wsh xhtml xlam xll xlsb xlsm xltm ppam potm ppsm pptm".split(
+    " ",
+  ),
+);
+
+const normalizedExtension = (fileName?: string | null): string | null => {
   // Windows ignores trailing spaces and dots when dispatching a file. Normalize
   // them before checking the final extension to avoid names such as report.exe.
   const normalized = (fileName ?? "").trim().replace(/[.\s]+$/g, "");
   const dot = normalized.lastIndexOf(".");
-  if (dot <= 0 || dot === normalized.length - 1) return false;
-  return AUTO_OPEN_EXTENSIONS.has(
-    normalized.slice(dot + 1).toLowerCase(),
-  );
+  if (dot <= 0 || dot === normalized.length - 1) return null;
+  return normalized.slice(dot + 1).toLowerCase();
+};
+
+export const canAutoOpenDownloadedFile = (
+  fileName?: string | null,
+): boolean => {
+  const extension = normalizedExtension(fileName);
+  return extension !== null && AUTO_OPEN_EXTENSIONS.has(extension);
+};
+
+/** A deliberate Open click may use the OS-associated app for a data file. */
+export const canExplicitlyOpenDownloadedFile = (
+  fileName?: string | null,
+): boolean => {
+  const extension = normalizedExtension(fileName);
+  return extension !== null && !BLOCKED_EXPLICIT_OPEN_EXTENSIONS.has(extension);
 };
 
 /** Optional Electron/Tauri/native host bridge for revealing a downloaded file. */

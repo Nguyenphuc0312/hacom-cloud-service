@@ -31,8 +31,13 @@ import { fileApi, messageApi } from "../../../services/api";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
 import { downloadResourceWithName } from "../../../utils/downloadFile";
 import { resolvePublicResourceUrl } from "../../../config";
-import { fetchThumbnailUrlsShared } from "../../../hooks/useBatchThumbnailUrl";
+import {
+  buildThumbnailCacheScopeKey,
+  fetchThumbnailUrlsShared,
+} from "../../../hooks/useBatchThumbnailUrl";
+import { listenForFileSourceInvalidated } from "../../../features/chat/events/chatUiEvents";
 import { ImagePreviewModal } from "../../modals/ImagePreviewModal";
+import type { GalleryImage } from "../../modals/ImagePreviewModal";
 import { VideoPlayerModal } from "./VideoPlayerModal";
 import { SharedContentModal } from "./SharedContentModal";
 import type { SharedContentTab } from "./SharedContentModal";
@@ -42,11 +47,15 @@ import { useResolvedName } from "../../../stores/enrichedProfileStore";
 import { useAuthStore, useChatStore } from "../../../stores";
 import {
   isFileDownloaded,
-  markFileDownloaded,
   subscribeDownloadedFiles,
 } from "../../../utils/downloadedFiles";
 import { buildResourceDeleteMenuItems } from "./resourceMenuPolicy";
 import { saveResourceMessageToCloud } from "./resourceCloudActions";
+import {
+  canDownloadResource,
+  canPreviewResource,
+  getResourceCapabilityMetadata,
+} from "./resourceCapabilities";
 
 interface SharedResourcesPreviewProps {
   conversationId: string;
@@ -126,6 +135,7 @@ const buildResourceForwardMessage = (
         height: "height" in item ? media.height ?? undefined : undefined,
         duration: "durationMs" in item ? media.durationMs ?? undefined : undefined,
         thumbnailUrl: "thumbnailUrl" in item ? media.thumbnailUrl ?? undefined : undefined,
+        ...getResourceCapabilityMetadata(item),
       },
     ],
   } as unknown as Message;
@@ -138,6 +148,12 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
   onJumpToMessage,
 }) => {
   const currentUserId = useAuthStore((state) => state.user?.id ?? "");
+  const resourceScopeKey = useMemo(
+    () => buildThumbnailCacheScopeKey(currentUserId, conversationId),
+    [currentUserId, conversationId],
+  );
+  const resourceScopeRef = useRef(resourceScopeKey);
+  resourceScopeRef.current = resourceScopeKey;
   const conversationType = useChatStore(
     (state) => state.conversationById[conversationId]?.type,
   );
@@ -161,7 +177,7 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     () => new Set(),
   );
   const [lightbox, setLightbox] = useState<{
-    images: Array<{ url: string; alt?: string }>;
+    images: GalleryImage[];
     index: number;
   } | null>(null);
   const [video, setVideo] = useState<{ url: string; fileName?: string } | null>(
@@ -184,9 +200,10 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
   }, []);
 
   const [urlCache, setUrlCache] = useState<{
-    forConversationId: string;
+    scopeKey: string;
+    revision: number;
     urls: Record<string, string>;
-  }>({ forConversationId: conversationId, urls: {} });
+  }>({ scopeKey: resourceScopeKey, revision: 0, urls: {} });
 
   const { data, isLoading, isError } = useGetConversationSidebarSummaryQuery(
     conversationId,
@@ -230,13 +247,15 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
 
   // Memoize thumbnailUrls to ensure stable reference
   const thumbnailUrls = useMemo(() => {
-    return urlCache.forConversationId === conversationId ? urlCache.urls : {};
-  }, [urlCache.forConversationId, conversationId, urlCache.urls]);
+    return urlCache.scopeKey === resourceScopeKey ? urlCache.urls : {};
+  }, [resourceScopeKey, urlCache.scopeKey, urlCache.urls]);
 
   // Create stable thumbnail file IDs key for deduplication
   const thumbnailFileIdsKey = useMemo(() => {
-    if (mediaPreview.length === 0) return null;
-    return mediaPreview.map((item) => item.fileId).sort().join("|");
+    const fileIds = mediaPreview
+      .filter(canPreviewResource)
+      .map((item) => item.fileId);
+    return fileIds.length > 0 ? fileIds.sort().join("|") : null;
   }, [mediaPreview]);
 
   // Tracks the conversation for which we've already run the initial tab
@@ -271,10 +290,32 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     autoSelectedForRef.current = null;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveTab("media");
-    setUrlCache({ forConversationId: conversationId, urls: {} });
     setForwardMessage(null);
     setHiddenMessageIds(new Set());
   }, [conversationId]);
+
+  useEffect(() => {
+    setUrlCache((previous) =>
+      previous.scopeKey === resourceScopeKey
+        ? previous
+        : { scopeKey: resourceScopeKey, revision: 0, urls: {} },
+    );
+  }, [resourceScopeKey]);
+
+  useEffect(() =>
+    listenForFileSourceInvalidated(({ conversationId: invalidatedConversationId }) => {
+      if (invalidatedConversationId !== conversationId) return;
+      setUrlCache((previous) => {
+        if (previous.scopeKey !== resourceScopeKey) return previous;
+        return {
+          scopeKey: resourceScopeKey,
+          revision: previous.revision + 1,
+          urls: {},
+        };
+      });
+    }),
+    [conversationId, resourceScopeKey],
+  );
 
   const handleForwardResource = useCallback(
     (item: ForwardableResource) => {
@@ -298,7 +339,10 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     if (activeTab !== "media" || !thumbnailFileIdsKey) return;
 
     const needingFallback = mediaPreview.filter(
-      (item) => !item.thumbnailUrl && !thumbnailUrls[item.fileId],
+      (item) =>
+        canPreviewResource(item) &&
+        !item.thumbnailUrl &&
+        !thumbnailUrls[item.fileId],
     );
     if (needingFallback.length === 0) return;
 
@@ -306,9 +350,10 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
     void fetchThumbnailUrlsShared(
       conversationId,
       needingFallback.map((i) => i.fileId),
+      { accountId: currentUserId || undefined },
     )
       .then((resolved) => {
-        if (cancelled) return;
+        if (cancelled || resourceScopeRef.current !== resourceScopeKey) return;
         const newUrls: Record<string, string> = {};
         for (const [fileId, item] of Object.entries(resolved)) {
           // item.url is already resolved against FILE_BASE_URL by the shared layer.
@@ -316,13 +361,14 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
         }
         if (Object.keys(newUrls).length === 0) return;
 
-        setUrlCache((prev) => ({
-          forConversationId: conversationId,
-          urls:
-            prev.forConversationId === conversationId
-              ? { ...prev.urls, ...newUrls }
-              : newUrls,
-        }));
+        setUrlCache((previous) =>
+          previous.scopeKey === resourceScopeKey
+            ? {
+                ...previous,
+                urls: { ...previous.urls, ...newUrls },
+              }
+            : previous,
+        );
       })
       .catch(() => {
         // Error handling - don't spam retries
@@ -332,7 +378,7 @@ export const SharedResourcesPreview: React.FC<SharedResourcesPreviewProps> = ({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, thumbnailFileIdsKey, conversationId]);
+  }, [activeTab, thumbnailFileIdsKey, conversationId, resourceScopeKey, urlCache.revision]);
 
   if (isLoading && variant === "card") {
     return (
@@ -701,7 +747,7 @@ const DrawerMediaTab: React.FC<{
   items: ConversationResourcesMediaItem[];
   total: number;
   thumbnailUrls: Record<string, string>;
-  onImageOpen: (index: number, images: Array<{ url: string; alt?: string }>) => void;
+  onImageOpen: (index: number, images: GalleryImage[]) => void;
   onVideoOpen: (url: string, fileName?: string) => void;
   onForward: (item: ConversationResourcesMediaItem) => void;
   onJumpToMessage?: (messageId: string) => void;
@@ -729,15 +775,21 @@ const DrawerMediaTab: React.FC<{
   const overlayItem = showOverlay ? items[DRAWER_MEDIA_PREVIEW - 1] ?? null : null;
   const remainingCount = total - (DRAWER_MEDIA_PREVIEW - 1);
 
-  // Pre-resolve all URLs so the lightbox can navigate between them — include all items so
-  // indices stay stable even when some thumbnails haven't resolved yet.
+  // Explicitly blocked media never enters the gallery or receives a source URL.
   const gallery = useMemo(
     () =>
-      visibleItems.map((item) => {
-        const raw = item.thumbnailUrl ?? thumbnailUrls[item.fileId] ?? null;
-        const url = raw ? (resolvePublicResourceUrl(raw, { context: "image" }) ?? "") : "";
-        return { url, alt: item.fileName, fileId: item.fileId };
-      }),
+      visibleItems
+        .filter(canPreviewResource)
+        .map((item) => {
+          const raw = item.thumbnailUrl ?? thumbnailUrls[item.fileId] ?? null;
+          const url = raw ? (resolvePublicResourceUrl(raw, { context: "image" }) ?? "") : "";
+          return {
+            url,
+            alt: item.fileName,
+            fileId: item.fileId,
+            ...getResourceCapabilityMetadata(item),
+          };
+        }),
     [visibleItems, thumbnailUrls],
   );
 
@@ -745,7 +797,11 @@ const DrawerMediaTab: React.FC<{
     (clickedFileId: string, clickedUrl: string) => {
       let idx = gallery.findIndex((img) => img.fileId === clickedFileId);
       if (idx < 0) idx = gallery.findIndex((img) => img.url === clickedUrl);
-      const galleryForModal = gallery.map(({ url, alt }) => ({ url, alt }));
+      const galleryForModal: GalleryImage[] = gallery.map((image) => ({
+        url: image.url,
+        alt: image.alt,
+        ...getResourceCapabilityMetadata(image),
+      }));
       onImageOpen(idx >= 0 ? idx : 0, galleryForModal);
     },
     [gallery, onImageOpen],
@@ -785,7 +841,9 @@ const DrawerMediaTab: React.FC<{
           aria-label={`Xem thêm ${remainingCount} ảnh`}
           className="relative aspect-square overflow-hidden rounded-md bg-surface-overlay"
         >
-          {overlayItem && (overlayItem.thumbnailUrl ?? thumbnailUrls[overlayItem.fileId]) ? (
+          {overlayItem &&
+            canPreviewResource(overlayItem) &&
+            (overlayItem.thumbnailUrl ?? thumbnailUrls[overlayItem.fileId]) ? (
             <MediaThumbnail
               attachment={overlayItem}
               src={overlayItem.thumbnailUrl ?? thumbnailUrls[overlayItem.fileId]}
@@ -831,9 +889,14 @@ const DrawerMediaThumb: React.FC<{
 }) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
-  const rawSrc = item.thumbnailUrl ?? fallbackUrl ?? null;
+  const canPreview = canPreviewResource(item);
+  const canDownload = canDownloadResource(item);
+  const rawSrc = canPreview ? item.thumbnailUrl ?? fallbackUrl ?? null : null;
   const src = rawSrc ? (resolvePublicResourceUrl(rawSrc, { context: "image" }) ?? null) : null;
-  const canOpen = true;
+  const thumbnailAttachment = canPreview
+    ? item
+    : { ...item, thumbnailUrl: null, url: null, downloadUrl: null };
+  const canOpen = canPreview;
   const [menuOpen, setMenuOpen] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
 
@@ -845,6 +908,7 @@ const DrawerMediaThumb: React.FC<{
   }, [menuOpen]);
 
   const getDownloadUrl = async (): Promise<string | null> => {
+    if (!canDownload) return null;
     const res = await fileApi.getDownloadUrl({
       conversationId,
       attachmentId: item.fileId,
@@ -853,18 +917,26 @@ const DrawerMediaThumb: React.FC<{
     return payload.url || null;
   };
 
+  const getPreviewUrl = async (): Promise<string | null> => {
+    if (!canPreview) return null;
+    const res = await fileApi.getDownloadUrl({
+      conversationId,
+      attachmentId: item.fileId,
+      mode: "view",
+    });
+    const payload = unwrapApiSuccess(res);
+    return payload.url || null;
+  };
+
   const handleClick = async () => {
+    if (!canPreview) return;
     // Videos must be played from their resolved source — the thumbnail (src) is
     // only a still image, so routing it to the image lightbox shows a frozen
     // frame that can't be played.
     if (isVideo) {
       try {
-        const res = await fileApi.getDownloadUrl({
-          conversationId,
-          attachmentId: item.fileId,
-        });
-        const payload = unwrapApiSuccess(res);
-        if (payload.url) onVideoOpen(payload.url, item.fileName);
+        const url = await getPreviewUrl();
+        if (url) onVideoOpen(url, item.fileName);
       } catch {
         // Keep the stable fallback tile; user can retry by clicking again.
       }
@@ -874,7 +946,7 @@ const DrawerMediaThumb: React.FC<{
   };
 
   const handleCopy = async () => {
-    if (isBusy) return;
+    if (!canDownload || isBusy) return;
     setIsBusy(true);
     try {
       const url = await getDownloadUrl();
@@ -890,13 +962,12 @@ const DrawerMediaThumb: React.FC<{
   };
 
   const handleDownload = async () => {
-    if (isBusy) return;
+    if (!canDownload || isBusy) return;
     setIsBusy(true);
     try {
       const url = await getDownloadUrl();
       if (url) {
         await downloadResourceWithName(url, item.fileName);
-        markFileDownloaded(item.fileId);
       }
     } catch {
       toast.error("Không thể lưu về máy");
@@ -954,6 +1025,7 @@ const DrawerMediaThumb: React.FC<{
         type="button"
         disabled={!canOpen}
         onClick={() => void handleClick()}
+        title={!canOpen ? "Tệp chưa sẵn sàng để xem trước" : undefined}
         className={clsx(
           "absolute inset-0 overflow-hidden rounded-md bg-surface-overlay",
           canOpen && "cursor-pointer hover:ring-2 hover:ring-primary/50",
@@ -961,7 +1033,7 @@ const DrawerMediaThumb: React.FC<{
         aria-label={item.fileName}
       >
         <MediaThumbnail
-          attachment={item}
+          attachment={thumbnailAttachment}
           src={src}
           variant="grid"
           imageClassName="transition-transform duration-200 group-hover:scale-105"
@@ -1008,7 +1080,7 @@ const DrawerMediaThumb: React.FC<{
             menuAlign === "right" ? "right-0" : "left-0",
           )}
         >
-          <MediaMenuButton onClick={() => void handleCopy()} disabled={isBusy}>
+          <MediaMenuButton onClick={() => void handleCopy()} disabled={isBusy || !canDownload}>
             Copy
           </MediaMenuButton>
           <MediaMenuButton
@@ -1028,7 +1100,7 @@ const DrawerMediaThumb: React.FC<{
           >
             Xem tin nhắn gốc
           </MediaMenuButton>
-          <MediaMenuButton onClick={() => void handleDownload()} disabled={isBusy}>
+          <MediaMenuButton onClick={() => void handleDownload()} disabled={isBusy || !canDownload}>
             Lưu về máy
           </MediaMenuButton>
           <div className="my-2 border-t border-border" />
@@ -1141,6 +1213,7 @@ const DrawerFileRow: React.FC<{
   const [isDownloading, setIsDownloading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const canDownload = canDownloadResource(item);
   const isDownloaded = React.useSyncExternalStore(
     subscribeDownloadedFiles,
     () => isFileDownloaded(item.fileId),
@@ -1155,6 +1228,7 @@ const DrawerFileRow: React.FC<{
   }, [menuOpen]);
 
   const getFileDownloadUrl = async (): Promise<string | null> => {
+    if (!canDownload) return null;
     const res = await fileApi.getDownloadUrl({
       conversationId,
       attachmentId: item.fileId,
@@ -1164,13 +1238,12 @@ const DrawerFileRow: React.FC<{
   };
 
   const handleDownload = async () => {
-    if (isDownloading || isBusy) return;
+    if (!canDownload || isDownloading || isBusy) return;
     setIsDownloading(true);
     try {
       const url = await getFileDownloadUrl();
       if (url) {
         await downloadResourceWithName(url, item.fileName);
-        markFileDownloaded(item.fileId);
       }
     } catch {
       // silent — user can retry
@@ -1180,7 +1253,7 @@ const DrawerFileRow: React.FC<{
   };
 
   const handleCopy = async () => {
-    if (isBusy) return;
+    if (!canDownload || isBusy) return;
     setIsBusy(true);
     try {
       const url = await getFileDownloadUrl();
@@ -1245,8 +1318,8 @@ const DrawerFileRow: React.FC<{
         <button
           type="button"
           onClick={() => void handleDownload()}
-          disabled={isDownloading}
-          title={item.fileName}
+          disabled={!canDownload || isDownloading}
+          title={!canDownload ? "Tệp chưa sẵn sàng để tải" : item.fileName}
           className="flex min-h-[64px] w-full items-center gap-3 px-1 py-2 text-left disabled:opacity-60"
         >
           <div className="flex h-11 w-11 shrink-0 items-center justify-center">
@@ -1283,7 +1356,7 @@ const DrawerFileRow: React.FC<{
               event.stopPropagation();
               void handleDownload();
             }}
-            disabled={isDownloading}
+            disabled={!canDownload || isDownloading}
             title="Tải xuống"
             aria-label="Tải xuống"
             className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-l-md text-text-primary hover:bg-surface-hover disabled:opacity-60"
@@ -1322,7 +1395,7 @@ const DrawerFileRow: React.FC<{
             onClick={(event) => event.stopPropagation()}
             className="absolute right-0 top-11 z-40 w-[280px] overflow-hidden rounded-lg border border-border bg-surface py-2 text-[14px] shadow-elev2"
           >
-            <MediaMenuButton onClick={() => void handleCopy()} disabled={isBusy}>
+            <MediaMenuButton onClick={() => void handleCopy()} disabled={isBusy || !canDownload}>
               Copy
             </MediaMenuButton>
             <MediaMenuButton
@@ -1342,7 +1415,7 @@ const DrawerFileRow: React.FC<{
             >
               Xem tin nhắn gốc
             </MediaMenuButton>
-            <MediaMenuButton onClick={() => void handleDownload()} disabled={isBusy || isDownloading}>
+            <MediaMenuButton onClick={() => void handleDownload()} disabled={isBusy || isDownloading || !canDownload}>
               Lưu về máy
             </MediaMenuButton>
             <div className="my-2 border-t border-border" />
@@ -1366,8 +1439,8 @@ const DrawerFileRow: React.FC<{
     <button
       type="button"
       onClick={() => void handleDownload()}
-      disabled={isDownloading}
-      title={item.fileName}
+      disabled={!canDownload || isDownloading}
+      title={!canDownload ? "Tệp chưa sẵn sàng để tải" : item.fileName}
       className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-surface-hover disabled:opacity-60"
     >
       <div className="shrink-0">

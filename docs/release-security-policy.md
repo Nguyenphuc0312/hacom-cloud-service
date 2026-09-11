@@ -40,6 +40,24 @@ Message rendering policy:
 - `blob:` URLs require explicit context opt-in.
 - External links opened in a new tab must use `rel="noopener noreferrer"`.
 
+## File Viewer Rollout And Telemetry
+
+The in-app chat file viewer is controlled by the public build-time flags
+VITE_FILE_VIEWER_ENABLED and VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED. Both are
+fail-closed: only the exact value true enables a behavior. They do not gate
+upload, explicit download, or native desktop file operations.
+
+When telemetry is enabled, the browser emits only a local
+chat:file-viewer-lifecycle CustomEvent with an allowlisted phase, preview kind,
+source category, and outcome category. It must never include a file name, path,
+object key, URL, signed URL, token, attachment/conversation/account identifier,
+or raw error. The event has no network collector in P5 and must not be treated
+as an audit log.
+
+Any future server-side lifecycle telemetry requires a separate authenticated,
+rate-limited schema and a review of API, storage, and edge logging paths. Do
+not forward browser payloads into generic logger metadata.
+
 ## Logging
 
 Production logging policy:

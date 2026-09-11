@@ -308,7 +308,8 @@
   "dropZone": {
     "title": "Thả tệp vào đây",
     "subtitle": "Thả để đính kèm tệp vào cuộc trò chuyện",
-    "limits": "Tối đa 10 tệp · Ảnh 37.5 MB · Tài liệu 150 MB · Video 300 MB"
+    "limits": "Tối đa {{count}} tệp · Ảnh {{imageLimit}} · Video, âm thanh, tài liệu và tệp nén {{standardLimit}} · Tệp khác {{genericLimit}} · Tổng {{totalLimit}}",
+    "folderUnsupported": "Không thể đính kèm thư mục. Hãy chọn các tệp trong thư mục."
   },
   "attachmentTray": {
     "queued": "Đang chờ",
@@ -372,6 +373,7 @@
     "download": "Tải tệp",
     "downloadNamed": "Tải {{name}}",
     "downloadOnlyNamed": "Chỉ tải {{name}}",
+    "saveAsNamed": "Lưu {{name}} vào vị trí khác",
     "savedOnDevice": "Đã có trên máy",
     "alreadyDownloaded": "Đã yêu cầu tải",
     "downloadToKeep": "Tải về để xem lâu dài",
@@ -380,6 +382,7 @@
     "clickToDownloadAndOpen": "Tải và mở",
     "preparingDownload": "Đang chuẩn bị tải…",
     "checkingLocalFile": "Đang kiểm tra file…",
+    "notReadyToDownload": "Tệp chưa sẵn sàng để tải",
     "downloadingSize": "Đang tải {{size}}",
     "downloadingProgress": "Đang tải {{progress}}%",
     "downloadingNamed": "Đang tải {{name}}",

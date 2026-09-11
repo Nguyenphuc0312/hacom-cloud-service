@@ -7,6 +7,7 @@ import { RoomMemberRole } from "../../../../types";
 import type { UserStatus } from "../../../../types";
 import type { GroupCapabilityMatrix } from "./utils/canPerformAction";
 import { useEnrichedProfileStore } from "../../../../stores/enrichedProfileStore";
+import { useFriendshipStore } from "../../../../stores/friendshipStore";
 
 interface GroupMember {
   id: string;
@@ -62,6 +63,7 @@ export const MembersList: React.FC<MembersListProps> = ({
 }) => {
   const { t } = useTranslation("profile");
   const nameByUserId = useEnrichedProfileStore((s) => s.nameByUserId);
+  const friendByUserId = useFriendshipStore((s) => s.friendByUserId);
 
   // Sort members: owner first, then admin, then by name (alias-aware so the
   // ordering matches the "tên gợi nhớ" MemberRow actually shows).
@@ -69,13 +71,13 @@ export const MembersList: React.FC<MembersListProps> = ({
     // Order by the name MemberRow actually renders (alias > displayName >
     // HR name), otherwise the list sorts by a name the user cannot see.
     const nameOf = (m: GroupMember) =>
-      (nameByUserId[m.id] || m.displayName || m.fullNameFromHR || m.username || "").toLowerCase();
+      (friendByUserId[m.id]?.alias?.trim() || nameByUserId[m.id] || m.displayName || m.fullNameFromHR || m.username || "").toLowerCase();
     return [...members].sort((a, b) => {
       const roleDiff = ROLE_PRIORITY[a.role] - ROLE_PRIORITY[b.role];
       if (roleDiff !== 0) return roleDiff;
       return nameOf(a).localeCompare(nameOf(b));
     });
-  }, [members, nameByUserId]);
+  }, [members, nameByUserId, friendByUserId]);
 
   if (isLoading) {
     return <DirectorySkeleton count={5} />;

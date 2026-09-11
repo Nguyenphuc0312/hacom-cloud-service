@@ -2114,6 +2114,10 @@ export interface ConversationResourcesMediaItem {
   height: number | null;
   durationMs: number | null;
   thumbnailUrl: string | null;
+  /** Explicit false blocks inline preview; omitted preserves legacy behavior. */
+  canPreview?: boolean;
+  /** Explicit false blocks downloading; omitted preserves legacy behavior. */
+  canDownload?: boolean;
   senderId: string;
   senderName: string;
   senderAvatarUrl: string | null;
@@ -2128,6 +2132,10 @@ export interface ConversationResourcesFileItem {
   fileName: string;
   mimeType: string;
   sizeBytes: number;
+  /** Explicit false blocks inline preview; omitted preserves legacy behavior. */
+  canPreview?: boolean;
+  /** Explicit false blocks downloading; omitted preserves legacy behavior. */
+  canDownload?: boolean;
   senderId: string;
   senderName: string;
   senderAvatarUrl: string | null;

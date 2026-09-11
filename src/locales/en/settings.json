@@ -8,6 +8,7 @@
   "navigation": {
     "profile": "Profile",
     "notifications": "Notifications",
+    "chat": "Messages",
     "privacy": "Privacy",
     "security": "Security",
     "appearance": "Appearance",
@@ -91,7 +92,23 @@
     "enterNewline": "Enter for new line",
     "enterNewlineDesc": "Press Ctrl+Enter to send",
     "saveSearchHistory": "Save search history",
-    "saveSearchHistoryDesc": "Remember recent searches for quicker access"
+    "saveSearchHistoryDesc": "Remember recent searches for quicker access",
+    "downloadFolder": {
+      "cardTitle": "Downloaded files",
+      "label": "Files are saved to this folder",
+      "description": "Files you download are automatically saved to this folder.",
+      "loading": "Finding the download folder…",
+      "browserPath": "Managed by your browser",
+      "browserDescription": "Browsers do not let the app read or choose your download folder. Use your browser settings, or open the desktop app to set a default folder.",
+      "unsupportedPath": "Not supported by this desktop version",
+      "unsupportedDescription": "Update the desktop app to choose a default download folder.",
+      "readError": "We could not read the current download folder. Try changing the folder.",
+      "chooseError": "We could not change the download folder. Try again.",
+      "change": "Change",
+      "choosing": "Choosing…",
+      "changeHint": "Choose the default download folder",
+      "browserChangeHint": "Available only in the desktop app"
+    }
   },
   "language": {
     "title": "Language",

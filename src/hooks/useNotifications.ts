@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { WebSocketEvents } from "../lib/socket";
 import wsManager from "../lib/socket";
 import {
@@ -14,6 +15,18 @@ import {
 } from "../services/notificationApi";
 import { aliasByUserId } from "../utils/mentionAliasText";
 import { logger } from "../utils/logger";
+import {
+  emitDesktopNotification,
+} from "../utils/realtimeNotifications";
+
+const CHAT_REALTIME_NOTIFICATION_TYPES = new Set<string>([
+  "MENTIONED_IN_MESSAGE",
+  "ADDED_TO_GROUP",
+  "REMOVED_FROM_GROUP",
+  "GROUP_ROLE_CHANGED",
+  "GROUP_INVITE_RECEIVED",
+  "GROUP_JOIN_APPROVED",
+]);
 
 const backendTypeToKind = (
   type: BackendNotificationType,
@@ -58,6 +71,7 @@ const backendToItem = (n: BackendNotification): NotificationItem => {
 };
 
 export const useNotifications = (isAuthenticated: boolean) => {
+  const navigate = useNavigate();
   const { upsertNotification, markAsRead, markAllAsRead } =
     useNotificationStore();
   const unreadCount = useNotificationUnreadCount();
@@ -103,7 +117,35 @@ export const useNotifications = (isAuthenticated: boolean) => {
       if (!data || typeof data !== "object") return;
       const payload = data as BackendNotification;
       if (!payload.id || !payload.type) return;
-      upsertNotification(backendToItem(payload));
+      const item = backendToItem(payload);
+      upsertNotification(item);
+
+      // Chat/group events already have richer conversation-aware notifications
+      // in useWebSocket. Everything else shares this path: friend requests and
+      // future server-side notifications such as AI workflows.
+      if (
+        CHAT_REALTIME_NOTIFICATION_TYPES.has(payload.type) ||
+        item.isRead
+      ) {
+        return;
+      }
+
+      emitDesktopNotification({
+        id: item.id,
+        tag:
+          payload.type === "FRIEND_REQUEST_RECEIVED" && item.actorId
+            ? "friend-request:" + item.actorId
+            : "notification:" + item.id,
+        title: item.title || "Thông báo mới",
+        body: item.body || "Bạn có thông báo mới.",
+        onClick: () => {
+          if (item.targetType === "friend_request" || item.targetType === "user_profile") {
+            navigate("/friends");
+          } else if (item.conversationId) {
+            navigate(`/chat/${encodeURIComponent(item.conversationId)}`);
+          }
+        },
+      });
     };
 
     const socket = wsManager;
@@ -115,7 +157,7 @@ export const useNotifications = (isAuthenticated: boolean) => {
         handleNotificationCreated,
       );
     };
-  }, [isAuthenticated, upsertNotification]);
+  }, [isAuthenticated, navigate, upsertNotification]);
 
   const handleMarkRead = useCallback(
     async (id: string) => {

@@ -13,7 +13,7 @@ import type { Message } from "../../../types";
 import { MessageType } from "../../../types";
 import { getPreviewFromMessage } from "../../../utils/messageContent.utils";
 import { resolveUserDisplayName } from "../../../features/chat/identity/resolveUserDisplayName";
-import { useEnrichedProfileStore } from "../../../stores/enrichedProfileStore";
+import { useResolvedDisplayName } from "../../../stores/useResolvedDisplayName";
 import { enrichUserProfile } from "../../../services/enrichUserProfile";
 import { MediaThumbnail } from "../../common/MediaThumbnail";
 import { useBatchThumbnailUrl } from "../../../hooks";
@@ -126,22 +126,18 @@ export const ComposerReplyBanner: React.FC<ComposerReplyBannerProps> = ({
   // Tên thật (HR) fetch theo senderId; senderName trong message có thể rỗng →
   // ưu tiên tên đã enrich để không hiện UUID/"Unknown user".
   const replySenderId = replyToMessage.senderId;
-  const enrichedSenderName = useEnrichedProfileStore(
-    React.useMemo(
-      () => (s) => (replySenderId ? s.nameByUserId[replySenderId] : undefined),
-      [replySenderId],
-    ),
+  const resolvedSenderName = useResolvedDisplayName(
+    replySenderId,
+    resolveUserDisplayName({
+      displayName: replyToMessage.senderName,
+      username: replyToMessage.senderId,
+    }),
   );
   React.useEffect(() => {
     if (replySenderId) enrichUserProfile(replySenderId);
   }, [replySenderId]);
 
-  const senderDisplayName =
-    enrichedSenderName ??
-    resolveUserDisplayName({
-      displayName: replyToMessage.senderName,
-      username: replyToMessage.senderId,
-    });
+  const senderDisplayName = resolvedSenderName;
 
   const previewText = isImageOrVideo
     ? (replyToMessage.content?.trim() || mediaMeta?.label || "")

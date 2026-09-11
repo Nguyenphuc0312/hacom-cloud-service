@@ -53,8 +53,9 @@ import {
 import { markPreviewReady, markPreviewFailed } from "./useBatchThumbnailUrl";
 import {
   broadcastUnreadSnapshot,
-  emitBrowserNotification,
+  emitDesktopNotification,
   isDocumentVisibleAndFocused,
+  shouldEmitDesktopNotification,
   subscribeUnreadSnapshotBroadcast,
   syncAppBadge,
   syncDocumentTitleBadge,
@@ -91,6 +92,7 @@ import {
 } from "../features/chat/domain/messageMerge";
 import { findMessageIdentityIndex } from "../features/chat/domain/messageIdentityMatching";
 import { dispatchNotificationClick } from "../features/chat/events/chatUiEvents";
+import { invalidateConversationFileResources } from "../features/chat/realtime/fileResourceInvalidation";
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import { invalidateUserProfile } from "../services/userProfileCache";
@@ -316,6 +318,22 @@ export const useWebSocket = (
   const isBootstrappingAuth = useAuthStore((s) => s.isBootstrappingAuth);
   const totalUnreadCount = useChatStore((s) => s.totalUnreadCount);
   const conversations = useChatStore((s) => s.conversations);
+  const friendByUserId = useFriendshipStore((s) => s.friendByUserId);
+
+  // Electron's preload receives socket frames before React can construct its
+  // notification. Give it the viewer's private aliases in memory only, so its
+  // native Windows toast follows the same alias-first rule as the web UI.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.chatDesktop) return;
+    const aliases = Object.fromEntries(
+      Object.entries(friendByUserId)
+        .map(([userId, friend]) => [userId, friend.alias?.trim() ?? ""])
+        .filter(([, alias]) => alias.length > 0),
+    );
+    window.dispatchEvent(
+      new CustomEvent("chat:friend-aliases", { detail: aliases }),
+    );
+  }, [friendByUserId]);
 
   const applyConversationParticipantSummary = useChatStore(
     (s) => s.applyConversationParticipantSummary,
@@ -837,6 +855,7 @@ export const useWebSocket = (
         hasMention,
         isInMessageModule,
         visibleAndFocused,
+        forceDesktopNative: typeof window !== "undefined" && Boolean(window.chatDesktop),
       });
 
       if (decision.bailReason === "self_message") {
@@ -919,6 +938,20 @@ export const useWebSocket = (
         conversation?.name ||
         input.senderName ||
         "Conversation";
+      const senderLabel =
+        input.senderName?.trim() ||
+        t("chat:notification.senderFallback", {
+          defaultValue: "Người dùng",
+        });
+      const isGroupConversation =
+        conversation?.type !== RoomType.DIRECT &&
+        conversation?.type !== RoomType.PRIVATE &&
+        conversationLabel !== senderLabel;
+      // Lead with the person who needs recognition. The group remains visible
+      // as context instead of replacing the sender in notification titles.
+      const notificationTitle = isGroupConversation
+        ? `${senderLabel} · ${conversationLabel}`
+        : senderLabel;
       const notificationKind =
         input.kind === "system"
           ? "system"
@@ -940,7 +973,7 @@ export const useWebSocket = (
           input.eventId ||
           `message:${input.conversationId}:${input.messageId}:${notificationKind}`,
         kind: notificationKind,
-        title: conversationLabel,
+        title: notificationTitle,
         body:
           aliasedContent ||
           (notificationKind === "system"
@@ -1004,14 +1037,13 @@ export const useWebSocket = (
           visibleAndFocused,
           hasMention,
         });
-        emitBrowserNotification({
+        emitDesktopNotification({
           id: notificationId,
           tag: `conversation:${input.conversationId}`,
           title: hasMention
-            ? `${conversationLabel} · Mention`
-            : conversationLabel,
+            ? `${notificationTitle} · Mention`
+            : notificationTitle,
           body: preview,
-          silent: !notificationSettings.sound,
           onClick: () => {
             dispatchNotificationClick({
               conversationId: input.conversationId,
@@ -1057,11 +1089,11 @@ export const useWebSocket = (
         previewLength: preview.length,
       });
 
-      const isGroup = conversation?.type !== RoomType.DIRECT;
+      const isGroup = isGroupConversation;
 
       // Singleton toast: new message replaces old one instead of stacking.
       showSingletonMessageToast({
-        senderName: input.senderName || conversationLabel,
+        senderName: senderLabel,
         conversationName:
           conversation?.displayName || conversation?.name || undefined,
         isGroup,
@@ -1116,12 +1148,14 @@ export const useWebSocket = (
         cooldownMs: 20_000,
       });
 
-      if (!isDocumentVisibleAndFocused()) {
-        emitBrowserNotification({
+      if (shouldEmitDesktopNotification()) {
+        emitDesktopNotification({
           id: notificationId,
           title: conversationLabel,
           body: message,
-          silent: !notificationSettings.sound,
+          onClick: () => {
+            dispatchNotificationClick({ conversationId });
+          },
         });
       }
     },
@@ -1159,12 +1193,14 @@ export const useWebSocket = (
         cooldownMs: 15_000,
       });
 
-      if (!isDocumentVisibleAndFocused()) {
-        emitBrowserNotification({
+      if (shouldEmitDesktopNotification()) {
+        emitDesktopNotification({
           id: notificationId,
           title: conversationLabel,
           body,
-          silent: !notificationSettings.sound,
+          onClick: () => {
+            dispatchNotificationClick({ conversationId });
+          },
         });
       }
     },
@@ -1652,6 +1688,11 @@ export const useWebSocket = (
             deletedAt: asString(payload.deletedAt) ?? undefined,
           }),
         );
+        invalidateConversationFileResources(
+          dispatch,
+          conversationId,
+          "message-deleted",
+        );
         void scheduleConversationSnapshotRefresh(conversationId, {
           reason: "socket:message:deleted",
         });
@@ -1671,6 +1712,11 @@ export const useWebSocket = (
             recalledBy: asString(payload.recalledBy) ?? undefined,
             recalledAt: asString(payload.recalledAt) ?? undefined,
           }),
+        );
+        invalidateConversationFileResources(
+          dispatch,
+          conversationId,
+          "message-recalled",
         );
         void scheduleConversationSnapshotRefresh(conversationId, {
           reason: "socket:message:recalled",
@@ -1692,6 +1738,11 @@ export const useWebSocket = (
             deletedAt: asString(payload.deletedAt) ?? undefined,
           }),
         );
+        invalidateConversationFileResources(
+          dispatch,
+          conversationId,
+          "message-deleted",
+        );
         void scheduleConversationSnapshotRefresh(conversationId, {
           reason: "socket:message:deleted_global",
         });
@@ -1709,6 +1760,11 @@ export const useWebSocket = (
             messageId,
             mode: "FOR_ME",
           }),
+        );
+        invalidateConversationFileResources(
+          dispatch,
+          conversationId,
+          "message-deleted",
         );
         void scheduleConversationSnapshotRefresh(conversationId, {
           reason: "socket:message:deleted_for_me",
@@ -2117,6 +2173,13 @@ export const useWebSocket = (
         return;
       }
 
+      // This event is user-scoped by the server, so a non-active state means
+      // the current account has lost access to this conversation's sources.
+      invalidateConversationFileResources(
+        dispatch,
+        conversationId,
+        "membership-lost",
+      );
       removeConversationSyncTracking(
         conversationSyncStateRef.current,
         conversationId,
@@ -2183,6 +2246,29 @@ export const useWebSocket = (
       const status = detail.status;
 
       useFriendshipStore.getState().applyRealtimeDetail(detail);
+
+      const currentUserId = useAuthStore.getState().user?.id ?? null;
+      const requester = detail.relation?.requester;
+      if (
+        eventType === WebSocketEvents.FRIENDSHIP_REQUEST_CREATED &&
+        status === "pending" &&
+        detail.targetUserId === currentUserId &&
+        requester &&
+        requester.id !== currentUserId
+      ) {
+        const requesterName =
+          aliasByUserId()[requester.id] ||
+          requester.displayName ||
+          requester.username ||
+          "Một người dùng";
+        emitDesktopNotification({
+          id: detail.eventId || `friend-request:${detail.relation?.relationId || requester.id}`,
+          tag: `friend-request:${requester.id}`,
+          title: "Lời mời kết bạn",
+          body: `${requesterName} đã gửi cho bạn một lời mời kết bạn.`,
+          onClick: () => window.location.assign("/friends"),
+        });
+      }
       notifySidebarState("friendship:updated", {
         source: "socket",
         eventType: detail.eventType,

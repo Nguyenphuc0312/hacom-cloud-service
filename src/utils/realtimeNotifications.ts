@@ -1,4 +1,5 @@
 import { notifyDebug } from "./logger";
+import { useSettingsStore } from "../settings/settingsStore";
 
 type NavigatorBadgeApi = Navigator & {
   setAppBadge?: (contents?: number) => Promise<void>;
@@ -35,6 +36,14 @@ interface BrowserNotificationInput {
   onClick?: () => void;
 }
 
+export interface DesktopNotificationInput extends Omit<
+  BrowserNotificationInput,
+  "silent"
+> {
+  /** Used when the user has disabled notification previews. */
+  privateBody?: string;
+}
+
 const TITLE_BADGE_PATTERN = /^\(\d+\)\s+/;
 const BROADCAST_CHANNEL_NAME = "chat-realtime-unread";
 const STORAGE_EVENT_KEY = "chat:realtime:unread";
@@ -61,6 +70,11 @@ export const isDocumentVisibleAndFocused = (): boolean => {
 
   return document.visibilityState === "visible" && document.hasFocus();
 };
+
+/** Desktop must receive native toasts even while its own window is focused. */
+export const shouldEmitDesktopNotification = (): boolean =>
+  (typeof window !== "undefined" && Boolean(window.chatDesktop)) ||
+  !isDocumentVisibleAndFocused();
 
 export const syncDocumentTitleBadge = (totalUnreadCount: number): void => {
   if (!canUseDom()) {
@@ -174,6 +188,28 @@ export const emitBrowserNotification = ({
 
   notifyDebug("[emit] shown", { title, tag: cooldownKey });
   return true;
+};
+
+/**
+ * The sole application-level OS notification entry point.
+ *
+ * Browser builds show a normal Notification; Electron's preload already
+ * proxies that same API to the native Windows toast. New web features should
+ * call this instead of `new Notification(...)` or a desktop-specific bridge.
+ */
+export const emitDesktopNotification = ({
+  privateBody = "Bạn có thông báo mới.",
+  ...input
+}: DesktopNotificationInput): boolean => {
+  const preferences = useSettingsStore.getState().notifications;
+  const isDesktopApp = typeof window !== "undefined" && Boolean(window.chatDesktop);
+  if (!preferences.enabled || (!isDesktopApp && isDocumentVisibleAndFocused())) return false;
+
+  return emitBrowserNotification({
+    ...input,
+    body: preferences.messagePreview ? input.body : privateBody,
+    silent: !preferences.sound,
+  });
 };
 
 export const clearBrowserNotificationCooldowns = (): void => {

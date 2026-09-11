@@ -145,6 +145,38 @@ Responsive/mobile:
 - Focus composer and verify mobile keyboard does not hide input.
 - Verify sidebar drawer/open state and active conversation selection.
 
+## File Viewer P5 Release Checks
+
+Build configuration:
+
+- Confirm the image build received VITE_FILE_VIEWER_ENABLED and
+  VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED as literal true or false values.
+- Confirm an unset or invalid value leaves both switches false.
+- Confirm a runtime Compose/env-file change alone does not claim to change a
+  baked Vite value.
+
+Manual behavior:
+
+- With the viewer false, verify an image/video thumbnail remains visible, the
+  explicit download action works, and a chat file card does not open the
+  in-app viewer.
+- With the viewer true, verify the same chat file opens the in-app viewer and
+  explicit download still works.
+- With telemetry true, inspect chat:file-viewer-lifecycle and verify its
+  serialized payload contains none of a fixture file name, local path, signed
+  URL, token, identifier, or raw error.
+
+Evidence status for this source change:
+
+- Browser staging runtime: NOT_RUN.
+- Browser end-to-end: NOT_RUN.
+- Windows/Electron chosen-folder, native Office/default-app open, and reveal:
+  NOT_RUN.
+- Production deployment and telemetry-consumer validation: NOT_RUN.
+
+These runtime checks remain release blockers even when the unit/type/build
+checks pass.
+
 ## Debug Flags
 
 Enable scroll decisions:

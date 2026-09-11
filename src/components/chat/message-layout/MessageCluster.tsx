@@ -41,6 +41,7 @@ import { copyTextToClipboard } from "../../../utils/clipboard";
 import { getCopyableMessageText } from "../../../utils/messageCopy";
 import { downloadResourceWithName } from "../../../utils/downloadFile";
 import { useAttachmentDownloadUrl } from "../../../hooks/useAttachmentDownloadUrl";
+import { getStreamingDesktopFiles } from "../../../utils/desktopBridge";
 import { toast } from "../../ui";
 import { logger } from "../../../utils/logger";
 
@@ -263,13 +264,16 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     void retrySendMessage(message).catch(() => undefined);
   }, [message, retrySendMessage]);
 
-  const firstAttachment = React.useMemo(
-    () => message.attachments?.[0],
+  const firstDownloadableAttachment = React.useMemo(
+    () => message.attachments?.find((attachment) => attachment.canDownload !== false),
     [message.attachments],
   );
+  // Desktop direct downloads need the card UI for progress/cancel and selected
+  // folder semantics, so this legacy browser-menu action is hidden there.
+  const hasNativeAttachmentDownload = getStreamingDesktopFiles() !== null;
   const { resolveUrl: resolveAttachmentDownloadUrl } = useAttachmentDownloadUrl(
     message.conversationId,
-    firstAttachment,
+    firstDownloadableAttachment,
   );
 
   const openActions = React.useCallback(
@@ -327,7 +331,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   }, [closeActions, message, t]);
 
   const handleAttachmentDownload = React.useCallback(async () => {
-    if (!firstAttachment) {
+    if (!firstDownloadableAttachment) {
       closeActions();
       return;
     }
@@ -341,15 +345,15 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       closeActions();
       return;
     }
-    await downloadResourceWithName(downloadUrl, firstAttachment.fileName);
+    await downloadResourceWithName(downloadUrl, firstDownloadableAttachment.fileName);
     closeActions();
-  }, [closeActions, firstAttachment, resolveAttachmentDownloadUrl, t]);
+  }, [closeActions, firstDownloadableAttachment, resolveAttachmentDownloadUrl, t]);
 
   const isPersonalCloud = isPersonalCloudConversation({ type: conversationType });
 
   const actionPolicy = React.useMemo(
-    () =>
-      resolveMessageActions({
+    () => {
+      const resolved = resolveMessageActions({
         message,
         isOwn,
         isCoarsePointer: coarsePointer,
@@ -366,9 +370,19 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         canEdit: Boolean(onEdit),
         canRecallOthers: viewerCanRecallOthers,
         isPersonalCloud,
-      }),
+      });
+      return hasNativeAttachmentDownload
+        ? {
+            ...resolved,
+            menuActions: resolved.menuActions.filter(
+              (action) => action !== "downloadAttachment",
+            ),
+          }
+        : resolved;
+    },
     [
       coarsePointer,
+      hasNativeAttachmentDownload,
       isOwn,
       isPersonalCloud,
       isSelectionMode,

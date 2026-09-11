@@ -16,13 +16,55 @@ import { useFriendshipStore } from "./friendshipStore";
  * Sống ở file riêng (không nằm trong 2 store) vì friendshipStore đã import
  * enrichedProfileStore — đặt hook vào đó sẽ tạo circular import.
  */
+const normalizeAliasLabel = (value: string): string =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .toLowerCase();
+
+const resolveAlias = (
+  byUserId: Record<string, { alias?: string | null; displayName?: string; username?: string }>,
+  userId: string | undefined,
+  fallback: string,
+): string | undefined => {
+  const direct = userId ? byUserId[userId]?.alias?.trim() : undefined;
+  if (direct) return direct;
+
+  const label = normalizeAliasLabel(fallback);
+  if (!label) return undefined;
+  const matches = Object.values(byUserId).filter((friend) => {
+    if (!friend.alias?.trim()) return false;
+    return [friend.displayName, friend.username].some((name) => {
+      const candidate = normalizeAliasLabel(name ?? "");
+      return candidate === label || candidate.endsWith(" " + label) || label.endsWith(" " + candidate);
+    });
+  });
+  return matches.length === 1 ? matches[0]?.alias?.trim() : undefined;
+};
+
+export function resolveStoredDisplayName(
+  userId: string | undefined,
+  fallback: string,
+): string {
+  const alias = resolveAlias(
+    useFriendshipStore.getState().friendByUserId,
+    userId,
+    fallback,
+  );
+  const enriched = userId
+    ? useEnrichedProfileStore.getState().nameByUserId[userId]
+    : undefined;
+  return alias || enriched || fallback;
+}
+
 export function useResolvedDisplayName(
   userId: string | undefined,
   fallback: string,
 ): string {
-  const alias = useFriendshipStore((s) =>
-    userId ? (s.friendByUserId[userId]?.alias ?? null) : null,
-  );
+  const friendByUserId = useFriendshipStore((s) => s.friendByUserId);
+  const alias = resolveAlias(friendByUserId, userId, fallback);
   const enriched = useEnrichedProfileStore((s) =>
     userId ? s.nameByUserId[userId] : undefined,
   );

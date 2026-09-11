@@ -15,6 +15,52 @@ import { MentionChip, collectMentionRanges } from "./mentionNode";
  */
 export const GET_TEXT_BLOCK_SEPARATOR = "\n\n";
 
+type ClipboardFileItem = Pick<
+  DataTransferItem,
+  "getAsFile" | "kind" | "type"
+>;
+
+export interface ClipboardFileSelection {
+  files: File[];
+  unnamedNonImageFileCount: number;
+}
+
+/**
+ * Clipboard files use the same queue path as picker/drop files. Screenshots
+ * often have no filename, so images receive a safe generated name. Other
+ * unnamed files are rejected rather than inventing an extension/type pair.
+ */
+export const collectClipboardFiles = (
+  items: Iterable<ClipboardFileItem>,
+): ClipboardFileSelection => {
+  const files: File[] = [];
+  let unnamedNonImageFileCount = 0;
+
+  for (const item of items) {
+    if (item.kind !== "file") continue;
+
+    const raw = item.getAsFile();
+    if (!raw) continue;
+
+    const isImage =
+      raw.type.startsWith("image/") || item.type.startsWith("image/");
+    if (!raw.name && !isImage) {
+      unnamedNonImageFileCount += 1;
+      continue;
+    }
+
+    files.push(
+      raw.name
+        ? raw
+        : new File([raw], `pasted-image-${Date.now()}.png`, {
+            type: raw.type || "image/png",
+          }),
+    );
+  }
+
+  return { files, unnamedNonImageFileCount };
+};
+
 export interface TipTapEditorHandle {
   getHTML: () => string;
   getJSON: () => object;
@@ -70,8 +116,10 @@ interface TipTapEditorProps {
   onSelectionChange?: (text: string, caretOffset: number) => void;
   /** Return true to intercept the key (prevents TipTap's default handling). */
   onInterceptKeydown?: (event: KeyboardEvent) => boolean;
-  /** Called when image files are pasted from clipboard. Text/link paste is handled natively by TipTap. */
+  /** Called when supported clipboard files should enter the attachment queue. */
   onPasteFiles?: (files: File[]) => void;
+  /** Called when a clipboard file lacks a safe filename/type pair. */
+  onPasteFilesRejected?: (count: number) => void;
   className?: string;
   "data-testid"?: string;
 }
@@ -92,6 +140,7 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
       onSelectionChange,
       onInterceptKeydown,
       onPasteFiles,
+      onPasteFilesRejected,
       className,
       "data-testid": testId,
     },
@@ -101,6 +150,7 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
     const onInterceptKeydownRef = React.useRef(onInterceptKeydown);
     const onSelectionChangeRef = React.useRef(onSelectionChange);
     const onPasteFilesRef = React.useRef(onPasteFiles);
+    const onPasteFilesRejectedRef = React.useRef(onPasteFilesRejected);
     // Ref keeps latest placeholder without re-creating extensions on every change.
     const placeholderRef = React.useRef(placeholder);
 
@@ -109,6 +159,7 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
       onInterceptKeydownRef.current = onInterceptKeydown;
       onSelectionChangeRef.current = onSelectionChange;
       onPasteFilesRef.current = onPasteFiles;
+      onPasteFilesRejectedRef.current = onPasteFilesRejected;
       placeholderRef.current = placeholder;
     });
 
@@ -197,26 +248,25 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
           const handler = onPasteFilesRef.current;
           if (!handler) return false;
 
-          const items = Array.from(event.clipboardData?.items ?? []);
-          const imageItems = items.filter(
-            (item) => item.kind === "file" && item.type.startsWith("image/"),
+          const selection = collectClipboardFiles(
+            event.clipboardData?.items ?? [],
           );
-          if (imageItems.length === 0) return false;
+          if (
+            selection.files.length === 0 &&
+            selection.unnamedNonImageFileCount === 0
+          ) {
+            return false;
+          }
 
           event.preventDefault();
-          const files: File[] = [];
-          for (const item of imageItems) {
-            const raw = item.getAsFile();
-            if (!raw) continue;
-            // Assign a name when the clipboard doesn't provide one (e.g. screenshot).
-            const file = raw.name
-              ? raw
-              : new File([raw], `pasted-image-${Date.now()}.png`, {
-                  type: raw.type || "image/png",
-                });
-            files.push(file);
+          if (selection.files.length > 0) {
+            handler(selection.files);
           }
-          if (files.length > 0) handler(files);
+          if (selection.unnamedNonImageFileCount > 0) {
+            onPasteFilesRejectedRef.current?.(
+              selection.unnamedNonImageFileCount,
+            );
+          }
           return true;
         },
         handleKeyDown(_, event) {

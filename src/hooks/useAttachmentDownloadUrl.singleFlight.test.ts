@@ -1,5 +1,9 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { dedupeSignedUrlRequest } from "./useAttachmentDownloadUrl";
+import type { Attachment } from "../types";
+import {
+  buildAttachmentResolverCacheKey,
+  dedupeSignedUrlRequest,
+} from "./useAttachmentDownloadUrl";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -39,7 +43,6 @@ describe("dedupeSignedUrlRequest", () => {
   it("re-fetches after the in-flight request settles", async () => {
     const fetcher = vi.fn(() => Promise.resolve("first"));
     await dedupeSignedUrlRequest("conv:file2", fetcher);
-    // Slot cleared after settle → a later call runs the fetcher again.
     await dedupeSignedUrlRequest("conv:file2", fetcher);
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
@@ -62,5 +65,55 @@ describe("dedupeSignedUrlRequest", () => {
     );
     expect(failing).toHaveBeenCalledTimes(1);
     expect(ok).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("buildAttachmentResolverCacheKey", () => {
+  const attachment: Attachment = {
+    id: "att-1",
+    objectKey: "conv-a/report.pdf",
+    fileName: "report.pdf",
+    mimeType: "application/pdf",
+    fileSize: 1_024,
+  } as Attachment;
+
+  const keyFor = (
+    overrides: Partial<{
+      accountId: string;
+      conversationId: string;
+      purpose: "download" | "view" | "preview";
+      variant: string;
+      attachment: Attachment;
+    }> = {},
+  ) =>
+    buildAttachmentResolverCacheKey({
+      accountId: "account-a",
+      conversationId: "conv-a",
+      purpose: "view",
+      variant: "original-view",
+      attachment,
+      ...overrides,
+    });
+
+  it("partitions a signed source by account, context, purpose, variant, and version fields", () => {
+    const base = keyFor();
+    expect(base).not.toBe(keyFor({ accountId: "account-b" }));
+    expect(base).not.toBe(keyFor({ conversationId: "conv-b" }));
+    expect(base).not.toBe(keyFor({ purpose: "download", variant: "original" }));
+    expect(base).not.toBe(keyFor({ variant: "preview" }));
+    expect(base).not.toBe(
+      keyFor({
+        attachment: { ...attachment, checksum: "new-content" } as Attachment,
+      }),
+    );
+  });
+
+  it("does not produce a cache key without both source identity and access context", () => {
+    expect(keyFor({ conversationId: "" })).toBe("");
+    expect(
+      keyFor({
+        attachment: { ...attachment, id: "", objectKey: "" } as Attachment,
+      }),
+    ).toBe("");
   });
 });

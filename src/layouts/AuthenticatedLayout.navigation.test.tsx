@@ -13,6 +13,10 @@ import { AuthenticatedLayout } from "./AuthenticatedLayout";
 const mocks = vi.hoisted(() => ({
   checkReminder: vi.fn(),
   fetchFriends: vi.fn(),
+  notificationClickHandler: null as null | ((detail: {
+    conversationId?: string;
+    messageId?: string;
+  }) => void),
 }));
 
 vi.mock("../components/layout/CommandPalette", () => ({
@@ -48,7 +52,15 @@ vi.mock("../stores/friendshipStore", () => ({
 }));
 
 vi.mock("../features/chat/events/chatUiEvents", () => ({
-  createChatRouteState: vi.fn(),
+  createChatRouteState: vi.fn((intent) => ({ chatIntent: intent })),
+  listenForNotificationClick: (handler: typeof mocks.notificationClickHandler) => {
+    mocks.notificationClickHandler = handler;
+    return () => {
+      if (mocks.notificationClickHandler === handler) {
+        mocks.notificationClickHandler = null;
+      }
+    };
+  },
   listenForOpenConversation: () => vi.fn(),
   listenForStartDirectMessage: () => vi.fn(),
 }));
@@ -89,6 +101,7 @@ beforeEach(() => {
 afterEach(() => {
   globalThis.Request = nativeRequest;
   useChatSidebarStore.getState().reset();
+  mocks.notificationClickHandler = null;
   vi.clearAllMocks();
 });
 
@@ -136,6 +149,36 @@ describe("AuthenticatedLayout search dismissal", () => {
     expect(useChatSidebarStore.getState()).toMatchObject({
       isSearchOpen: false,
       searchQuery: "",
+    });
+  });
+});
+
+describe("AuthenticatedLayout notification navigation", () => {
+  it("opens the notified conversation from every authenticated route", async () => {
+    const router = createMemoryRouter(
+      [
+        {
+          element: <AuthenticatedLayout />,
+          children: [
+            { path: "/calendar", element: <div>Lịch</div> },
+            { path: "/chat/:conversationId", element: <div>Chat</div> },
+            { path: "/chat", element: <div>Chat</div> },
+          ],
+        },
+      ],
+      { initialEntries: ["/calendar"] },
+    );
+
+    render(<RouterProvider router={router} />);
+    expect(await screen.findByText("Lịch")).toBeInTheDocument();
+
+    act(() => mocks.notificationClickHandler?.({
+      conversationId: "conversation-42",
+      messageId: "message-7",
+    }));
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/chat/conversation-42");
     });
   });
 });

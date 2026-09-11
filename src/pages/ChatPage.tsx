@@ -49,6 +49,7 @@ import { getOtherParticipant } from "../utils/messageHelpers";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import {
   listenForContactProfileView,
+  listenForFileSourceInvalidated,
   listenForMentionProfileView,
   readChatRouteIntent,
 } from "../features/chat/events/chatUiEvents";
@@ -168,9 +169,11 @@ const ImagePreviewModalGallery: React.FC<{
   onClose: () => void;
 }> = ({ imagePreview, onClose }) => {
   const convId = imagePreview.conversationId ?? "";
+  // Missing capability fields are legacy payloads and remain allowed.
+  const previewBlocked = imagePreview.canPreview === false;
   const { data } = useGetMessagesQuery(
     { conversationId: convId },
-    { skip: !convId },
+    { skip: !convId || previewBlocked },
   );
 
   // Track attachment IDs that need preview URLs
@@ -188,10 +191,15 @@ const ImagePreviewModalGallery: React.FC<{
     inFlightPreviewIdsRef.current.clear();
   }, [convId, imagePreview.groupKey, imagePreview.url, imagePreview.initialIndex]);
 
-  const { images, initialIndex } = useMemo(() => {
+  const { images, initialIndex, canOpen } = useMemo(() => {
+    if (previewBlocked) {
+      return { images: [], initialIndex: 0, canOpen: false };
+    }
+
     const msgs = data?.messages ?? [];
     const gallery: GalleryImageWithAttachment[] = [];
     let found = 0;
+    let currentBlocked = false;
 
     for (const msg of msgs) {
       const attachments = Array.isArray(msg.attachments) ? msg.attachments : [];
@@ -202,8 +210,13 @@ const ImagePreviewModalGallery: React.FC<{
           att.url === imagePreview.url ||
           att.thumbnailUrl === imagePreview.url;
 
-        // For clicked image, use the already-resolved URL
-        // For other images, use preview URL if available, otherwise use stored URL
+        if (att.canPreview === false) {
+          if (isCurrentImage) currentBlocked = true;
+          continue;
+        }
+
+        // For clicked image, use the already-resolved URL.
+        // For other images, use a preview URL if available, otherwise stored URL.
         const url = isCurrentImage
           ? imagePreview.url
           : (previewUrls[att.id] ??
@@ -220,8 +233,14 @@ const ImagePreviewModalGallery: React.FC<{
           sentAt: msg.serverTs,
           groupKey: msg.id,
           attachmentId: att.id,
+          canPreview: att.canPreview,
+          canDownload: att.canDownload,
         });
       }
+    }
+
+    if (currentBlocked) {
+      return { images: [], initialIndex: 0, canOpen: false };
     }
 
     if (gallery.length === 0) {
@@ -232,12 +251,15 @@ const ImagePreviewModalGallery: React.FC<{
           senderName: imagePreview.senderName,
           senderAvatar: imagePreview.senderAvatar,
           sentAt: imagePreview.sentAt,
+          canPreview: imagePreview.canPreview,
+          canDownload: imagePreview.canDownload,
         }],
         initialIndex: 0,
+        canOpen: true,
       };
     }
-    return { images: gallery, initialIndex: found };
-  }, [data, imagePreview, previewUrls, thumbUrls]);
+    return { images: gallery, initialIndex: found, canOpen: true };
+  }, [data, imagePreview, previewBlocked, previewUrls, thumbUrls]);
 
   React.useEffect(() => {
     setCurrentIndex(initialIndex);
@@ -358,6 +380,8 @@ const ImagePreviewModalGallery: React.FC<{
   }, [convId, preloadAttachmentKey]);
 
   const [showArchive, setShowArchive] = React.useState(false);
+
+  if (!canOpen) return null;
 
   if (showArchive && convId) {
     // "Xem tất cả" → hand off to the full Kho lưu trữ (media tab). Closing it
@@ -527,6 +551,8 @@ export const ChatPage: React.FC = () => {
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<ImageClickPayload | null>(null);
   const filePreview = useFilePreview();
+  const closeFilePreview = filePreview.close;
+  const previewConversationId = filePreview.current?.conversationId ?? null;
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const [pendingDeleteMessage, setPendingDeleteMessage] = useState<{
     messageId: string;
@@ -1309,6 +1335,14 @@ export const ChatPage: React.FC = () => {
       setMentionProfile({ userId, displayName, avatarUrl });
     });
   }, []);
+
+  useEffect(() => {
+    return listenForFileSourceInvalidated(({ conversationId }) => {
+      if (previewConversationId === conversationId) {
+        closeFilePreview();
+      }
+    });
+  }, [closeFilePreview, previewConversationId]);
 
   const handledRouteIntentRef = useRef<string | null>(null);
   useEffect(() => {

@@ -41,6 +41,7 @@ import { downloadResourceWithName } from "../../../utils/downloadFile";
 import { resolvePublicResourceUrl } from "../../../config";
 import { fetchThumbnailUrlsShared } from "../../../hooks/useBatchThumbnailUrl";
 import { ImagePreviewModal } from "../../modals/ImagePreviewModal";
+import type { GalleryImage } from "../../modals/ImagePreviewModal";
 import { VideoPlayerModal } from "./VideoPlayerModal";
 import { FileName } from "../../common/FileName";
 import { MediaThumbnail } from "../../common/MediaThumbnail";
@@ -51,6 +52,11 @@ import { MessageStatus, MessageType, RoomType } from "../../../types";
 import { useAuthStore, useChatStore } from "../../../stores";
 import { buildResourceDeleteMenuItems } from "./resourceMenuPolicy";
 import { saveResourceMessageToCloud } from "./resourceCloudActions";
+import {
+  canDownloadResource,
+  canPreviewResource,
+  getResourceCapabilityMetadata,
+} from "./resourceCapabilities";
 
 export type SharedContentTab = "media" | "files" | "links";
 
@@ -141,6 +147,7 @@ const buildStorageForwardMessage = (
         height: "height" in item ? media.height ?? undefined : undefined,
         duration: "durationMs" in item ? media.durationMs ?? undefined : undefined,
         thumbnailUrl: "thumbnailUrl" in item ? media.thumbnailUrl ?? undefined : undefined,
+        ...getResourceCapabilityMetadata(item),
       },
     ],
   } as unknown as Message;
@@ -176,7 +183,7 @@ export const SharedContentModal: React.FC<SharedContentModalProps> = ({
     () => new Set(),
   );
   const [lightbox, setLightbox] = useState<{
-    images: Array<{ url: string; alt?: string }>;
+    images: GalleryImage[];
     index: number;
   } | null>(null);
   const [video, setVideo] = useState<{ url: string; fileName?: string } | null>(
@@ -318,7 +325,7 @@ export const SharedContentPanel: React.FC<SharedContentPanelProps> = ({
     () => new Set(),
   );
   const [lightbox, setLightbox] = useState<{
-    images: Array<{ url: string; alt?: string }>;
+    images: GalleryImage[];
     index: number;
   } | null>(null);
   const [video, setVideo] = useState<{ url: string; fileName?: string } | null>(
@@ -458,7 +465,7 @@ export const SharedContentPanel: React.FC<SharedContentPanelProps> = ({
 const ModalMediaTab: React.FC<{
   conversationId: string;
   hiddenMessageIds: Set<string>;
-  onImageOpen: (index: number, images: Array<{ url: string; alt?: string }>) => void;
+  onImageOpen: (index: number, images: GalleryImage[]) => void;
   onVideoOpen: (url: string, fileName?: string) => void;
   onForward: (item: ConversationResourcesMediaItem) => void;
   onJumpToMessage?: (messageId: string) => void;
@@ -512,8 +519,12 @@ const ModalMediaTab: React.FC<{
 
   // Create stable request key from items
   const itemsKey = useMemo(() => {
-    if (items.length === 0) return null;
-    return `${conversationId}:page${page}:${items.map((i) => i.fileId).sort().join("|")}`;
+    const fileIds = items
+      .filter(canPreviewResource)
+      .map((item) => item.fileId);
+    return fileIds.length > 0
+      ? `${conversationId}:page${page}:${fileIds.sort().join("|")}`
+      : null;
   }, [conversationId, page, items]);
 
   // Reset page and cache when conversation changes
@@ -530,7 +541,10 @@ const ModalMediaTab: React.FC<{
     if (!itemsKey) return;
 
     const needingFallback = items.filter(
-      (item) => !item.thumbnailUrl && !thumbnailUrls[item.fileId],
+      (item) =>
+        canPreviewResource(item) &&
+        !item.thumbnailUrl &&
+        !thumbnailUrls[item.fileId],
     );
     if (needingFallback.length === 0) return;
 
@@ -564,15 +578,21 @@ const ModalMediaTab: React.FC<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemsKey, conversationId]);
 
-  // Pre-resolve all URLs for gallery navigation — include all items (even those without a
-  // resolved URL yet) so that indices stay stable as thumbnails arrive asynchronously.
+  // Explicitly blocked media never enters the gallery or receives a source URL.
   const gallery = useMemo(
     () =>
-      items.map((item) => {
-        const raw = item.thumbnailUrl ?? thumbnailUrls[item.fileId] ?? null;
-        const url = raw ? (resolvePublicResourceUrl(raw, { context: "image" }) ?? "") : "";
-        return { url, alt: item.fileName, fileId: item.fileId };
-      }),
+      items
+        .filter(canPreviewResource)
+        .map((item) => {
+          const raw = item.thumbnailUrl ?? thumbnailUrls[item.fileId] ?? null;
+          const url = raw ? (resolvePublicResourceUrl(raw, { context: "image" }) ?? "") : "";
+          return {
+            url,
+            alt: item.fileName,
+            fileId: item.fileId,
+            ...getResourceCapabilityMetadata(item),
+          };
+        }),
     [items, thumbnailUrls],
   );
 
@@ -581,7 +601,11 @@ const ModalMediaTab: React.FC<{
       // Match by fileId first (stable); fall back to URL comparison
       let idx = gallery.findIndex((img) => img.fileId === clickedFileId);
       if (idx < 0) idx = gallery.findIndex((img) => img.url === clickedUrl);
-      const galleryForModal = gallery.map(({ url, alt }) => ({ url, alt }));
+      const galleryForModal: GalleryImage[] = gallery.map((image) => ({
+        url: image.url,
+        alt: image.alt,
+        ...getResourceCapabilityMetadata(image),
+      }));
       onImageOpen(idx >= 0 ? idx : 0, galleryForModal);
     },
     [gallery, onImageOpen],
@@ -712,9 +736,14 @@ const ModalMediaThumb: React.FC<{
 }) => {
   const isVideo =
     item.mimeType.startsWith("video/") || item.messageType === "video";
-  const rawSrc = item.thumbnailUrl ?? fallbackUrl ?? null;
+  const canPreview = canPreviewResource(item);
+  const canDownload = canDownloadResource(item);
+  const rawSrc = canPreview ? item.thumbnailUrl ?? fallbackUrl ?? null : null;
   const src = rawSrc ? (resolvePublicResourceUrl(rawSrc, { context: "image" }) ?? null) : null;
-  const canOpen = true;
+  const thumbnailAttachment = canPreview
+    ? item
+    : { ...item, thumbnailUrl: null, url: null, downloadUrl: null };
+  const canOpen = canPreview;
   const [menuOpen, setMenuOpen] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -731,6 +760,7 @@ const ModalMediaThumb: React.FC<{
   }, [menuOpen]);
 
   const getDownloadUrl = async () => {
+    if (!canDownload) return null;
     const res = await fileApi.getDownloadUrl({
       conversationId,
       attachmentId: item.fileId,
@@ -739,13 +769,25 @@ const ModalMediaThumb: React.FC<{
     return payload.url;
   };
 
+  const getPreviewUrl = async () => {
+    if (!canPreview) return null;
+    const res = await fileApi.getDownloadUrl({
+      conversationId,
+      attachmentId: item.fileId,
+      mode: "view",
+    });
+    const payload = unwrapApiSuccess(res);
+    return payload.url;
+  };
+
   const handleClick = async () => {
+    if (!canPreview) return;
     // Videos must be played from their resolved source — the thumbnail (src) is
     // only a still image, so routing it to the image lightbox shows a frozen
     // frame that can't be played.
     if (isVideo) {
       try {
-        const url = await getDownloadUrl();
+        const url = await getPreviewUrl();
         if (url) onVideoOpen(url, item.fileName);
       } catch {
         // Stable fallback stays visible; user can retry by clicking the tile.
@@ -756,7 +798,7 @@ const ModalMediaThumb: React.FC<{
   };
 
   const handleCopy = async () => {
-    if (isBusy) return;
+    if (!canDownload || isBusy) return;
     setIsBusy(true);
     try {
       const url = await getDownloadUrl();
@@ -773,7 +815,7 @@ const ModalMediaThumb: React.FC<{
   };
 
   const handleDownload = async () => {
-    if (isBusy) return;
+    if (!canDownload || isBusy) return;
     setIsBusy(true);
     try {
       const url = await getDownloadUrl();
@@ -836,6 +878,7 @@ const ModalMediaThumb: React.FC<{
         type="button"
         disabled={!canOpen}
         onClick={() => void handleClick()}
+        title={!canOpen ? "Tệp chưa sẵn sàng để xem trước" : undefined}
         className={clsx(
           "absolute inset-0 overflow-hidden rounded-md bg-surface-overlay",
           canOpen && "cursor-pointer hover:ring-2 hover:ring-primary/50",
@@ -843,7 +886,7 @@ const ModalMediaThumb: React.FC<{
         aria-label={item.fileName}
       >
         <MediaThumbnail
-          attachment={item}
+          attachment={thumbnailAttachment}
           src={src}
           variant="grid"
           imageClassName="transition-transform duration-200 group-hover:scale-105"
@@ -860,7 +903,7 @@ const ModalMediaThumb: React.FC<{
 
       {menuOpen ? (
         <StorageResourceMenu className="left-1.5 top-9">
-          <StorageMenuButton onClick={() => void handleCopy()} disabled={isBusy}>
+          <StorageMenuButton onClick={() => void handleCopy()} disabled={isBusy || !canDownload}>
             Copy
           </StorageMenuButton>
           <StorageMenuButton
@@ -880,7 +923,7 @@ const ModalMediaThumb: React.FC<{
           >
             Xem tin nhắn gốc
           </StorageMenuButton>
-          <StorageMenuButton onClick={() => void handleDownload()} disabled={isBusy}>
+          <StorageMenuButton onClick={() => void handleDownload()} disabled={isBusy || !canDownload}>
             Lưu về máy
           </StorageMenuButton>
           <div className="my-2 border-t border-border" />
@@ -1078,6 +1121,7 @@ const ModalFileRow: React.FC<{
   const [isDownloading, setIsDownloading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const canDownload = canDownloadResource(item);
   const rowRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -1092,6 +1136,7 @@ const ModalFileRow: React.FC<{
   }, [menuOpen]);
 
   const getDownloadUrl = async () => {
+    if (!canDownload) return null;
     const res = await fileApi.getDownloadUrl({
       conversationId,
       attachmentId: item.fileId,
@@ -1101,7 +1146,7 @@ const ModalFileRow: React.FC<{
   };
 
   const handleDownload = async () => {
-    if (isDownloading) return;
+    if (!canDownload || isDownloading) return;
     setIsDownloading(true);
     try {
       const url = await getDownloadUrl();
@@ -1115,7 +1160,7 @@ const ModalFileRow: React.FC<{
   };
 
   const handleCopy = async () => {
-    if (isBusy) return;
+    if (!canDownload || isBusy) return;
     setIsBusy(true);
     try {
       const url = await getDownloadUrl();
@@ -1183,8 +1228,8 @@ const ModalFileRow: React.FC<{
       <button
         type="button"
         onClick={() => void handleDownload()}
-        disabled={isDownloading}
-        title={item.fileName}
+        disabled={!canDownload || isDownloading}
+        title={!canDownload ? "Tệp chưa sẵn sàng để tải" : item.fileName}
         className="flex min-h-[62px] w-full items-center gap-3 px-3 py-2.5 text-left disabled:opacity-60"
       >
         <FileTypeIcon
@@ -1212,12 +1257,13 @@ const ModalFileRow: React.FC<{
         onForward={onForward}
         onToggleMenu={() => setMenuOpen((value) => !value)}
         onDownload={() => void handleDownload()}
+        downloadDisabled={!canDownload || isDownloading}
         className="right-2 top-1/2 -translate-y-1/2"
       />
 
       {menuOpen ? (
         <StorageResourceMenu className="right-2 top-12">
-          <StorageMenuButton onClick={() => void handleCopy()} disabled={isBusy}>
+          <StorageMenuButton onClick={() => void handleCopy()} disabled={isBusy || !canDownload}>
             Copy
           </StorageMenuButton>
           <StorageMenuButton
@@ -1239,7 +1285,7 @@ const ModalFileRow: React.FC<{
           </StorageMenuButton>
           <StorageMenuButton
             onClick={() => void handleDownload()}
-            disabled={isBusy || isDownloading}
+            disabled={isBusy || isDownloading || !canDownload}
           >
             Lưu về máy
           </StorageMenuButton>
@@ -1267,13 +1313,22 @@ const StorageHoverActions: React.FC<{
   onForward: () => void;
   onToggleMenu: () => void;
   onDownload?: () => void;
+  downloadDisabled?: boolean;
   className?: string;
   /**
    * Compact sizing for the media grid, where the tile is a small square and
    * the full-size 36px buttons cover most of the thumbnail.
    */
   size?: "default" | "compact";
-}> = ({ isOpen, onForward, onToggleMenu, onDownload, className, size = "default" }) => {
+}> = ({
+  isOpen,
+  onForward,
+  onToggleMenu,
+  onDownload,
+  downloadDisabled = false,
+  className,
+  size = "default",
+}) => {
   const compact = size === "compact";
   const barHeight = compact ? "h-7" : "h-9";
   const buttonSize = compact ? "h-7 w-7" : "h-9 w-9";
@@ -1299,9 +1354,10 @@ const StorageHoverActions: React.FC<{
             event.stopPropagation();
             onDownload();
           }}
+          disabled={downloadDisabled}
           title="Tải xuống"
           aria-label="Tải xuống"
-          className={buttonClass}
+          className={clsx(buttonClass, "disabled:cursor-not-allowed disabled:opacity-50")}
         >
           <ArrowDownTrayIcon className={iconSize} />
         </button>

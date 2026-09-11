@@ -35,7 +35,7 @@ export const StickerMessage: React.FC<StickerMessageProps> = ({
   const { url: stickerUrl, resolveUrl, isLoading } = useAttachmentDownloadUrl(
     conversationId,
     attachment,
-    { autoResolve: false },
+    { autoResolve: false, intent: "preview" },
   );
 
   // Resolve sticker URL when visible

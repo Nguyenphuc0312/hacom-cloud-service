@@ -2,6 +2,19 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const batchThumbnailUrls = vi.fn();
+const authState = vi.hoisted(() => ({ accountId: "viewer-1" }));
+
+vi.mock("../stores/authStore", () => {
+  const getState = () => ({
+    user: authState.accountId ? { id: authState.accountId } : null,
+  });
+  const useAuthStore = Object.assign(
+    (selector: (state: ReturnType<typeof getState>) => unknown) => selector(getState()),
+    { getState },
+  );
+
+  return { useAuthStore };
+});
 
 vi.mock("../services/api", () => ({
   fileApi: {

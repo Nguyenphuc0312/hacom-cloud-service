@@ -69,6 +69,14 @@ describe("decideIncomingMessageNotification", () => {
     expect(decision.showInAppToast).toBe(false);
   });
 
+  it("emits native toast for a focused packaged desktop", () => {
+    expect(
+      decideIncomingMessageNotification(
+        baseContext({ visibleAndFocused: true, forceDesktopNative: true }),
+      ).emitBrowserNotification,
+    ).toBe(true);
+  });
+
   it("treats a missing conversation as not muted when caller passes false", () => {
     const decision = decideIncomingMessageNotification(
       baseContext({ isMuted: false }),

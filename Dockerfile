@@ -42,6 +42,10 @@ ARG VITE_HR_API_BASE_URL
 # Màn "Công & Phép" (/timesheet, /leave, /timesheet/team) đã mở trên deploy.
 # Có thể truyền `false` làm rollback tạm thời.
 ARG VITE_WORK_MODULE_ENABLED=true
+# In-app file viewing is a reversible rollout only. Download/upload never use
+# these switches. Missing or malformed values must remain disabled.
+ARG VITE_FILE_VIEWER_ENABLED=false
+ARG VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED=false
 # Refresh token storage mode. "cookie" = HttpOnly cookie set by auth-service
 # (secure, XSS-proof). "session" = localStorage fallback for envs without
 # cookie-based auth. Production must always use "cookie".
@@ -61,6 +65,8 @@ ENV VITE_CHAT_SIMPLE_TIMELINE_DEBUG=${VITE_CHAT_SIMPLE_TIMELINE_DEBUG}
 ENV VITE_CHAT_USE_LEGACY_TIMELINE=${VITE_CHAT_USE_LEGACY_TIMELINE}
 ENV VITE_HR_API_BASE_URL=${VITE_HR_API_BASE_URL}
 ENV VITE_WORK_MODULE_ENABLED=${VITE_WORK_MODULE_ENABLED}
+ENV VITE_FILE_VIEWER_ENABLED=${VITE_FILE_VIEWER_ENABLED}
+ENV VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED=${VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED}
 ENV VITE_REFRESH_TOKEN_STORAGE_MODE=${VITE_REFRESH_TOKEN_STORAGE_MODE}
 
 WORKDIR /workspace
@@ -72,6 +78,7 @@ RUN npm run build
 RUN test -f /workspace/chat-shared-types/dist/index.d.ts
 
 WORKDIR /workspace/chat-web-client
+RUN npm install --no-save --ignore-scripts ../chat-shared-types
 RUN npm run build \
   && printf '{"buildSha":"%s"}\n' "${VITE_APP_BUILD_SHA}" > dist/build-info.json \
   && node scripts/verify-dist-assets.mjs

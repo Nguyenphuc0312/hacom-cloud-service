@@ -68,6 +68,30 @@ describe("normalizeAttachments", () => {
     ]);
     expect(attachment.type).toBe("other");
   });
+
+  it("giữ capability bảo mật khi server trả về", () => {
+    const [attachment] = normalizeAttachments([
+      {
+        id: "safe-state",
+        url: "https://x/safe-state.bin",
+        scanStatus: "scanning",
+        releaseStatus: "blocked",
+        releaseReason: "FILE_SCAN_IN_PROGRESS",
+        canAttach: false,
+        canDownload: false,
+        canPreview: false,
+      },
+    ]);
+
+    expect(attachment).toMatchObject({
+      scanStatus: "scanning",
+      releaseStatus: "blocked",
+      releaseReason: "FILE_SCAN_IN_PROGRESS",
+      canAttach: false,
+      canDownload: false,
+      canPreview: false,
+    });
+  });
 });
 
 describe("normalizeReactions", () => {
@@ -130,6 +154,16 @@ describe("normalizeMentions", () => {
 
   it("bỏ qua entry không có userId", () => {
     expect(normalizeMentions([{ displayName: "X" }, "", null])).toEqual([]);
+  });
+
+  it("giữ range để renderer định vị mention không cần đoán theo tên", () => {
+    expect(
+      normalizeMentions([
+        { user_id: "u1", display_name: "Nguyễn Minh Quang", offset: 0, length: 24 },
+      ]),
+    ).toEqual([
+      { userId: "u1", displayName: "Nguyễn Minh Quang", offset: 0, length: 24 },
+    ]);
   });
 });
 

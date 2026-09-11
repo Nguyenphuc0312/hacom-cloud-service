@@ -7,8 +7,7 @@ import React, {
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { toast } from "../ui";
-import { usePresence, useNotifications } from "../../hooks";
-import { useAuthStore } from "../../stores";
+import { usePresence } from "../../hooks";
 import { useChatStore } from "../../stores";
 import type { UserSummary } from "../../types";
 import { isDirectConversation } from "../../lib/conversationAdapter";
@@ -134,9 +133,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const openSearch = useChatSidebarStore((state) => state.openSearch);
   const closeSearch = useChatSidebarStore((state) => state.closeSearch);
   const deferredSearchQuery = useDeferredValue(searchQuery);
-  const isAuthenticated = !!useAuthStore((s) => s.user);
   const markAsRead = useChatStore((state) => state.markAsRead);
-  useNotifications(isAuthenticated);
 
   const handleSelectRoom = useCallback(
     (conversationId: string) => {

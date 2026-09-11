@@ -29,6 +29,18 @@ near a `VITE_CHAT_*` literal, the env var did not reach the Vite build.
 Cause is almost always a missing `--build-arg` line in the workflow or a
 missing `ARG`/`ENV` pair in the Dockerfile.
 
+## File viewer P5 flags
+
+VITE_FILE_VIEWER_ENABLED and VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED are public
+build-time switches with a fail-closed false default. They control only the
+in-app chat file viewer and its local allowlisted lifecycle event; they do not
+control upload, explicit download, or desktop native file operations.
+
+Use the staged rollout, rollback, privacy contract, and NOT_RUN runtime gates
+in [the file viewer P5 runbook](../docs/file-viewer-p5-rollout.md). Do not put
+these Vite values in Compose/runtime env files and expect a running image to
+change.
+
 ## Timeline V2 flags
 
 Three build-time switches gate the Timeline V2 scroll owner. All three

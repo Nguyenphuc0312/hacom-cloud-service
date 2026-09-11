@@ -49,6 +49,7 @@ import { logChatPerformance } from "../../utils/chatPerformance";
 import { resolveUploadFileType } from "../../utils/uploadPolicy";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { getConversationDisplayName, getMessagePreview, getOtherParticipant } from "../../utils/messageHelpers";
+import { getCopyableMessageText } from "../../utils/messageCopy";
 import { useEnrichedProfileStore } from "../../stores/enrichedProfileStore";
 import { useFriendshipStore } from "../../stores/friendshipStore";
 import { enrichUserProfile } from "../../services/enrichUserProfile";
@@ -93,6 +94,12 @@ function metaToAttachment(meta: UploadedFileMeta): Attachment {
     ...(meta.duration != null ? { duration: meta.duration } : {}),
     ...(meta.url ? { url: meta.url } : {}),
     ...(meta.thumbnailUrl ? { thumbnailUrl: meta.thumbnailUrl } : {}),
+    ...(meta.scanStatus ? { scanStatus: meta.scanStatus } : {}),
+    ...(meta.releaseStatus ? { releaseStatus: meta.releaseStatus } : {}),
+    ...(meta.releaseReason ? { releaseReason: meta.releaseReason } : {}),
+    ...(typeof meta.canAttach === "boolean" ? { canAttach: meta.canAttach } : {}),
+    ...(typeof meta.canDownload === "boolean" ? { canDownload: meta.canDownload } : {}),
+    ...(typeof meta.canPreview === "boolean" ? { canPreview: meta.canPreview } : {}),
   } as Attachment;
 }
 
@@ -543,7 +550,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   );
 
   // ── Multi-file upload queue ──
-  const uploadQueue = useUploadQueue({ conversationId: conversation.id });
+  const uploadQueue = useUploadQueue({
+    conversationId: conversation.id,
+    accountId: currentUser.id,
+  });
 
   // ── Presence subscription: subscribe to room members' presence ──
   usePresence({ conversationId: conversation.id });
@@ -592,8 +602,31 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           });
       }
 
-      // ── Build attachments from finalized upload drafts ──
+      // Build attachments from finalized upload drafts.
+      const activeQueueDrafts = uploadQueue.drafts;
+      const queuedBatchClientMessageId = activeQueueDrafts.length > 0
+        ? uploadQueue.getReadyBatchClientMessageId()
+        : undefined;
+
+      // This is intentionally a second guard behind the composer UI. A stale
+      // click or remount must never turn a partly-complete tray into a
+      // text-only/partial attachment message.
+      if (activeQueueDrafts.length > 0 && !queuedBatchClientMessageId) {
+        toast.error(
+          t("chat:attachmentTray.waitForUploads", {
+            defaultValue: "Please wait for uploads to finish before sending",
+          }),
+        );
+        throw new Error("Attachment batch is not ready to send");
+      }
+
       const queueMetas = uploadQueue.getReadyMeta();
+      if (
+        activeQueueDrafts.length > 0 &&
+        queueMetas.length !== activeQueueDrafts.length
+      ) {
+        throw new Error("Attachment batch metadata is incomplete");
+      }
       const allAttachments: Attachment[] = [];
 
       if (queueMetas.length > 0) {
@@ -669,6 +702,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           textOptions?.contentJson,
           textOptions?.plainText,
           textOptions?.linkPreview,
+          queuedBatchClientMessageId
+            ? { clientMessageId: queuedBatchClientMessageId }
+            : undefined,
         );
         const sendPromise = Promise.resolve(sendResult);
         return sendPromise
@@ -681,8 +717,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             setEditingMessage(undefined);
             setInputMode("normal");
 
-            if (queueMetas.length > 0) {
-              uploadQueue.acknowledgeSent();
+            const ack = (result as { ack?: unknown } | undefined)?.ack;
+            if (
+              queuedBatchClientMessageId &&
+              ack &&
+              typeof (ack as PromiseLike<unknown>).then === "function"
+            ) {
+              // Keep the persisted batch until the mutation canonicalizes the
+              // optimistic row, so retry reuses this exact id and attachments.
+              void Promise.resolve(ack).then(
+                () => uploadQueue.acknowledgeSent(queuedBatchClientMessageId),
+                () => undefined,
+              );
             }
 
             logMessageDebug("ChatWindow", "send_resolved", {
@@ -854,6 +900,13 @@ const [composerHeight, setComposerHeight] = React.useState(0);
           t("chat:composer.attachBlocked", {
             defaultValue: "Attachments are currently unavailable",
           }),
+      );
+    },
+    onDropFolderRejected: () => {
+      toast.error(
+        t("chat:dropZone.folderUnsupported", {
+          defaultValue: "Folders cannot be attached. Choose files instead.",
+        }),
       );
     },
   });
@@ -1307,7 +1360,8 @@ const [composerHeight, setComposerHeight] = React.useState(0);
 
     const selectedMsgs = cachedMessages
       .filter(isSelectedMessage)
-      .map((message) => message.content)
+      .map(getCopyableMessageText)
+      .filter((text): text is string => Boolean(text))
       .join("\n");
     void navigator.clipboard.writeText(selectedMsgs);
     toast.success(t("chat:message.copySuccess", { defaultValue: "Đã sao chép" }));

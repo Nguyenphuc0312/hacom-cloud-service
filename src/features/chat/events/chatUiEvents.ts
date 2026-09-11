@@ -22,6 +22,16 @@ export interface OpenConversationDetail {
   messageId?: string;
 }
 
+export type FileSourceInvalidationReason =
+  | "message-deleted"
+  | "message-recalled"
+  | "membership-lost";
+
+export interface FileSourceInvalidatedDetail {
+  conversationId: string;
+  reason: FileSourceInvalidationReason;
+}
+
 export type ChatRouteIntent =
   | ({ type: "open-conversation" } & OpenConversationDetail)
   | ({ type: "start-direct-message" } & StartDirectMessageDetail);
@@ -35,6 +45,7 @@ const NOTIFICATION_CLICK_EVENT = "chat:notification:clicked";
 const OPEN_CONVERSATION_EVENT = "chat:open-conversation";
 const START_DIRECT_MESSAGE_EVENT = "chat:start-direct-message";
 const MENTION_PROFILE_VIEW_EVENT = "chat:mention:view-profile";
+const FILE_SOURCE_INVALIDATED_EVENT = "chat:file-source:invalidated";
 
 let routeIntentSequence = 0;
 
@@ -146,3 +157,13 @@ export const dispatchMentionProfileView = (
 export const listenForMentionProfileView = (
   handler: (detail: MentionProfileViewDetail) => void,
 ): (() => void) => listenWindowEvent(MENTION_PROFILE_VIEW_EVENT, handler);
+
+export const dispatchFileSourceInvalidated = (
+  detail: FileSourceInvalidatedDetail,
+): void => {
+  dispatchWindowEvent(FILE_SOURCE_INVALIDATED_EVENT, detail);
+};
+
+export const listenForFileSourceInvalidated = (
+  handler: (detail: FileSourceInvalidatedDetail) => void,
+): (() => void) => listenWindowEvent(FILE_SOURCE_INVALIDATED_EVENT, handler);

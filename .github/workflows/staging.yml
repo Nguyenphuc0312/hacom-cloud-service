@@ -13,6 +13,51 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  staging-contract-preflight:
+    # The Chat staging runner and its restricted kubeconfig are currently
+    # owned by this repository. Do not infer backend workload names from the
+    # web deployment; inventory the existing staging contract first.
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop' }}
+    runs-on: [self-hosted, linux, x64, chat-staging, deploy-only]
+    environment: staging
+    permissions:
+      contents: read
+    steps:
+      - name: Verify the restricted Chat staging target
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export KUBECONFIG="$HOME/.kube/hacom-chat-staging-config"
+          if [[ ! -f "$KUBECONFIG" ]]; then
+            echo "::error title=Staging kubeconfig unavailable::The restricted Chat staging kubeconfig is absent on this runner. Provision the canonical hacom-chat staging credential; do not use a production kubeconfig."
+            exit 1
+          fi
+          if ! kubectl config current-context >/dev/null; then
+            echo "::error title=Staging kubeconfig invalid::The restricted Chat staging kubeconfig cannot select a context."
+            exit 1
+          fi
+          if ! kubectl get namespace hacom-chat >/dev/null; then
+            echo "::error title=Chat staging namespace unavailable::The configured staging credential cannot read namespace hacom-chat."
+            exit 1
+          fi
+          if ! kubectl auth can-i get deployments -n hacom-chat | grep -qx yes; then
+            echo "::error title=Staging deployment read denied::Grant the canonical staging deployer read access to deployments in hacom-chat."
+            exit 1
+          fi
+          if ! kubectl auth can-i get services -n hacom-chat | grep -qx yes; then
+            echo "::error title=Staging service read denied::Grant the canonical staging deployer read access to services in hacom-chat."
+            exit 1
+          fi
+      - name: Inventory existing Chat staging workloads
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export KUBECONFIG="$HOME/.kube/hacom-chat-staging-config"
+          kubectl get deployments -n hacom-chat \
+            -o='custom-columns=NAME:.metadata.name,READY:.status.readyReplicas,IMAGES:.spec.template.spec.containers[*].image'
+          kubectl get services -n hacom-chat \
+            -o='custom-columns=NAME:.metadata.name,TYPE:.spec.type,PORTS:.spec.ports[*].port'
+
   verify:
     runs-on: ubuntu-24.04
     environment: staging
@@ -65,6 +110,31 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve file viewer rollout flags
+        id: rollout_flags
+        shell: bash
+        env:
+          VITE_FILE_VIEWER_ENABLED: ${{ vars.VITE_FILE_VIEWER_ENABLED }}
+          VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED: ${{ vars.VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED }}
+        run: |
+          set -Eeuo pipefail
+          resolve_flag() {
+            local name="$1"
+            local value
+            value="$(printf '%s' "${2:-}" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+            [[ -n "${value}" ]] || value="false"
+            case "${value}" in
+              true|false) printf '%s' "${value}" ;;
+              *)
+                echo "::error title=Invalid boolean flag::${name} must be 'true' or 'false', got '${value}'" >&2
+                return 1
+                ;;
+            esac
+          }
+          file_viewer="$(resolve_flag VITE_FILE_VIEWER_ENABLED "${VITE_FILE_VIEWER_ENABLED:-}")"
+          lifecycle_telemetry="$(resolve_flag VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED "${VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED:-}")"
+          printf 'file_viewer=%s\n' "${file_viewer}" >> "${GITHUB_OUTPUT}"
+          printf 'lifecycle_telemetry=%s\n' "${lifecycle_telemetry}" >> "${GITHUB_OUTPUT}"
       - uses: docker/build-push-action@v7
         id: build
         with:
@@ -73,6 +143,9 @@ jobs:
           target: production
           push: true
           tags: ghcr.io/hacom-holding-dx/chat-web-client:${{ github.sha }}
+          build-args: |
+            VITE_FILE_VIEWER_ENABLED=${{ steps.rollout_flags.outputs.file_viewer }}
+            VITE_FILE_LIFECYCLE_TELEMETRY_ENABLED=${{ steps.rollout_flags.outputs.lifecycle_telemetry }}
       - id: image
         run: echo "image=ghcr.io/hacom-holding-dx/chat-web-client@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 

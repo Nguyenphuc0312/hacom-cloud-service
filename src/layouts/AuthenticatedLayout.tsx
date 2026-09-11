@@ -8,6 +8,7 @@ import { PersistentNavigationRail } from "../shared/layout";
 import { GlobalWebSocketProvider } from "../features/realtime/GlobalWebSocketProvider";
 import {
   createChatRouteState,
+  listenForNotificationClick,
   listenForOpenConversation,
   listenForStartDirectMessage,
 } from "../features/chat/events/chatUiEvents";
@@ -15,12 +16,14 @@ import { useReminderStore } from "../stores/reminderStore";
 import { useFriendshipStore } from "../stores/friendshipStore";
 import { useChatSidebarStore } from "../features/chat/state/chatSidebarStore";
 import { AuthenticatedRouteFallback } from "./AuthenticatedRouteFallback";
+import { useActivityAnalytics } from '../hooks/useActivityAnalytics';
 
 /**
  * Persistent authenticated app chrome. Route content changes through Outlet;
  * the navigation rail stays mounted across authenticated modules.
  */
 export const AuthenticatedLayout: React.FC = () => {
+  useActivityAnalytics();
   const navigate = useNavigate();
   const location = useLocation();
   const currentUser = useAuthStore((state) => state.user);
@@ -53,6 +56,28 @@ export const AuthenticatedLayout: React.FC = () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [checkReminder]);
+
+  React.useEffect(() => {
+    // Native desktop toasts and the in-app notification centre both dispatch
+    // this event. The listener belongs in the persistent layout (rather than
+    // ChatPage), because a notification can be clicked while the user is on
+    // Calendar, Tasks, or any other authenticated route.
+    return listenForNotificationClick((detail) => {
+      const { conversationId } = detail;
+      if (!conversationId) {
+        navigate(ROUTE_PATHS.NOTIFICATIONS);
+        return;
+      }
+
+      navigate(`${ROUTE_PATHS.CHAT}/${conversationId}`, {
+        state: createChatRouteState({
+          type: "open-conversation",
+          conversationId,
+          messageId: detail.messageId,
+        }),
+      });
+    });
+  }, [navigate]);
 
   React.useEffect(() => {
     return listenForOpenConversation((detail) => {
