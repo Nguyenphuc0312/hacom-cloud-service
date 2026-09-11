@@ -55,6 +55,12 @@ func main() {
 		logger.Error("initialize Auth user directory client", "error", err)
 		os.Exit(1)
 	}
+	// A nil *DirectoryClient assigned directly to an interface is non-nil and
+	// would panic when quota responses attempt identity enrichment in demo mode.
+	var userDirectory cloudadmin.UserDirectory
+	if userDirectoryClient != nil {
+		userDirectory = userDirectoryClient
+	}
 
 	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
 	if err != nil {
@@ -179,7 +185,7 @@ func main() {
 		GrafanaURL:         cfg.GrafanaURL,
 		WorkerMetricsURL:   cfg.WorkerMetricsURL,
 		HTTPTimeout:        cfg.ObservabilityHTTPTimeout,
-		UserDirectory:      userDirectoryClient,
+		UserDirectory:      userDirectory,
 	})
 	if err != nil {
 		logger.Error("create Cloud Admin handler", "error", err)
