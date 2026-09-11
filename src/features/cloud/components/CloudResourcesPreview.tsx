@@ -25,6 +25,11 @@ import FileTypeIcon from "../../../components/message/FileTypeIcon";
 import { getFileIconType } from "../../../utils/formatFileSize";
 import type { CloudItem } from "../types";
 import { CloudItemIcon } from "./CloudItemIcon";
+import {
+  CloudResourceEmptyText,
+  CloudResourceSection,
+  ViewAllResourcesButton,
+} from "./CloudResourceSection";
 import { formatBytes, formatCloudDateTime, getCloudItemTitle, getTrashCountdown, getTrashExpiry, getTrashSortTime, isTrashItemExpired, normalizeCloudItemType } from "../utils/cloudFormat";
 import { getCachedCloudFileAccess } from "../utils/cloudFileAccessCache";
 import { downloadResourceWithName, getHacomDesktopBridge } from "../../../utils/downloadFile";
@@ -163,7 +168,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
   return (
     <>
       <div className="divide-y divide-[#eef0f4] border-y border-[#eef0f4] bg-surface">
-        <ResourceSection label="Ảnh/Video" count={media.length} defaultExpanded>
+        <CloudResourceSection label="Ảnh/Video" count={media.length} defaultExpanded>
           {media.length ? <>
             <div className="grid grid-cols-3 gap-1.5">
               {media.slice(0, 6).map((item) => (
@@ -176,17 +181,17 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
                 </div>
               ))}
             </div>
-            <ViewAllButton onClick={() => setGalleryTab("media")} />
-          </> : <ResourceEmptyText>Chưa có ảnh hoặc video nào</ResourceEmptyText>}
-        </ResourceSection>
+            <ViewAllResourcesButton onClick={() => setGalleryTab("media")} />
+          </> : <CloudResourceEmptyText>Chưa có ảnh hoặc video nào</CloudResourceEmptyText>}
+        </CloudResourceSection>
 
-        <ResourceSection label="File" count={files.length}>
-          {files.length ? <><div className="space-y-1.5">{files.slice(0, 3).map((item) => <CloudFileRow key={item.id} item={item} senderName={senderName} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div><ViewAllButton onClick={() => setGalleryTab("files")} /></> : <ResourceEmptyText>Chưa có File được chia sẻ trong hội thoại này</ResourceEmptyText>}
-        </ResourceSection>
+        <CloudResourceSection label="File" count={files.length}>
+          {files.length ? <><div className="space-y-1.5">{files.slice(0, 3).map((item) => <CloudFileRow key={item.id} item={item} senderName={senderName} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div><ViewAllResourcesButton onClick={() => setGalleryTab("files")} /></> : <CloudResourceEmptyText>Chưa có File được chia sẻ trong hội thoại này</CloudResourceEmptyText>}
+        </CloudResourceSection>
 
-        <ResourceSection label="Link" count={links.length}>
-          {links.length ? <><div className="space-y-1.5">{links.slice(0, 3).map((item) => <CloudLinkRow key={item.id} item={item} senderName={senderName} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div><ViewAllButton onClick={() => setGalleryTab("links")} /></> : <ResourceEmptyText>Chưa có link nào được chia sẻ</ResourceEmptyText>}
-        </ResourceSection>
+        <CloudResourceSection label="Link" count={links.length}>
+          {links.length ? <><div className="space-y-1.5">{links.slice(0, 3).map((item) => <CloudLinkRow key={item.id} item={item} senderName={senderName} onDeleteItem={onDeleteItem} onViewOriginalMessage={onViewOriginalMessage} onShowInFolder={onShowInFolder} />)}</div><ViewAllResourcesButton onClick={() => setGalleryTab("links")} /></> : <CloudResourceEmptyText>Chưa có link nào được chia sẻ</CloudResourceEmptyText>}
+        </CloudResourceSection>
 
         <section className="bg-surface px-5 py-3">
           <button type="button" className="mb-2.5 flex w-full items-center justify-between text-left text-[16px] font-semibold text-text-primary transition-colors" aria-expanded={trashExpanded} aria-controls="cloud-resource-section-trash" onClick={() => setTrashExpanded((open) => !open)}>
@@ -983,56 +988,5 @@ const CalendarPicker: React.FC<{
     <div className="sticky bottom-0 mt-2 flex justify-end gap-2 border-t border-border/70 bg-surface pt-2"><button type="button" onClick={onCancel} className="rounded-md bg-surface-overlay px-4 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-hover">Hủy</button><button type="button" onClick={onConfirm} disabled={!fromDate && !toDate} className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">Xác nhận</button></div>
   </div>;
 };
-
-const ResourceSection: React.FC<{
-  label: string;
-  count: number;
-  children: React.ReactNode;
-  defaultExpanded?: boolean;
-}> = ({ label, count, children, defaultExpanded = count > 0 }) => {
-  // Match Hacom Chat: populated sections open by default, empty sections stay
-  // collapsed so the panel remains visually divided without empty blocks.
-  // Media is the primary preview surface, so its caller keeps it open even
-  // while the initial API response is still loading.
-  const [expanded, setExpanded] = useState(defaultExpanded);
-  const contentId = `cloud-resource-section-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-
-  return (
-    <section className="bg-surface px-5 py-3">
-      <button
-        type="button"
-        className="mb-2.5 flex w-full items-center justify-between text-left text-[16px] font-semibold text-text-primary transition-colors"
-        aria-expanded={expanded}
-        aria-controls={contentId}
-        onClick={() => setExpanded((open) => !open)}
-      >
-        <span>{label}</span>
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 text-text-muted transition-transform ${expanded ? "" : "-rotate-90"}`}
-          aria-hidden="true"
-        />
-      </button>
-      {expanded ? (
-        <div id={contentId}>
-          {children}
-        </div>
-      ) : null}
-    </section>
-  );
-};
-
-const ViewAllButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="mt-3 h-9 w-full rounded bg-[#e4e7ec] text-[14px] font-semibold text-text-primary transition-colors hover:bg-[#dde1e7]"
-  >
-    Xem tất cả
-  </button>
-);
-
-const ResourceEmptyText: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p className="py-4 text-center text-sm text-text-muted">{children}</p>
-);
 
 const EmptyState: React.FC<{ icon: React.ReactElement<{ className?: string }>; label: string }> = ({ icon, label }) => <div className="flex min-h-24 flex-col items-center justify-center gap-2 text-center text-text-muted">{React.cloneElement(icon, { className: "h-7 w-7" })}<p className="text-xs leading-5">{label}</p></div>;

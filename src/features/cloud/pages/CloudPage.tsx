@@ -33,7 +33,6 @@ import { AppShell, ModuleSidebar } from "../../../shared/layout";
 import { useAuthStore } from "../../../stores/authStore";
 import { useChatStore } from "../../../stores/chatStore";
 import {
-  MessageType,
   RoomType,
   UserStatus,
   type Conversation,
@@ -76,6 +75,14 @@ import {
   resolveCloudDeleteDragSource,
   type CloudDeleteDragPayload,
 } from "../utils/cloudDeleteDrag";
+import {
+  attachmentStatusForCloudProgress,
+  getCloudErrorTranslationKey,
+  getCloudMessageSearchText,
+  getMessageRangeIds,
+  isStandaloneHttpUrl,
+  stripCloudRichText,
+} from "../utils/cloudPageUtils";
 import { encodeMessageDrag } from "../../chat/quickForward";
 import { ROUTE_PATHS } from "../../../router/paths";
 import {
@@ -87,120 +94,6 @@ import {
   type AttachmentDraft,
 } from "../../../types/attachmentDraft";
 import "../styles/cloud.css";
-
-const getErrorTranslationKey = (code: string): string => {
-  switch (code) {
-    case "DEMO_USER_REQUIRED":
-    case "CLOUD_USER_MISSING":
-    case "CLOUD_AUTH_REQUIRED":
-    case "UNAUTHORIZED":
-    case "FORBIDDEN":
-    case "AUTH_REQUIRED":
-    case "INVALID_ACCESS_TOKEN":
-    case "TOKEN_EXPIRED":
-    case "SESSION_REVOKED":
-    case "ACCOUNT_NOT_ACTIVE":
-      return "errors.user";
-    case "QUOTA_EXCEEDED":
-      return "errors.quota";
-    case "FILE_TOO_LARGE":
-      return "errors.fileTooLarge";
-    case "DRIVE_NOT_ACTIVE":
-      return "errors.driveInactive";
-    case "ITEM_NOT_READY":
-      return "errors.itemNotReady";
-    case "TRASH_EXPIRED":
-      return "errors.trashExpired";
-    case "INVALID_QUOTA_TIER":
-      return "errors.invalidQuotaTier";
-    case "QUOTA_REQUEST_PENDING":
-      return "errors.quotaRequestPending";
-    case "IDEMPOTENCY_CONFLICT":
-      return "errors.idempotencyConflict";
-    case "OBJECT_UPLOAD_NETWORK_ERROR":
-    case "CLOUD_NETWORK_ERROR":
-    case "CLOUD_UNAVAILABLE":
-    case "AUTH_AUTHORITY_UNAVAILABLE":
-    case "CLOUD_REQUEST_FAILED":
-    case "SERVICE_UNAVAILABLE":
-    case "DEPENDENCY_UNAVAILABLE":
-    case "DATABASE_UNAVAILABLE":
-    case "CLOUD_NOT_READY":
-    case "INTERNAL_ERROR":
-      return "errors.offline";
-    default:
-      return "errors.generic";
-  }
-};
-
-const attachmentStatusForCloudProgress = (
-  progress: CloudUploadProgress,
-): AttachmentDraft["status"] => {
-  switch (progress.stage) {
-    case "reserving":
-      return "reserving";
-    case "uploading":
-      return "uploading";
-    case "finalizing":
-      return "completing";
-    case "processing":
-      return "security_pending";
-  }
-};
-
-/**
- * Search the message body only.  `createdAt` is presentation metadata and
- * must never participate in matching; media-only items are not message
- * results, so a timestamp-like filename cannot produce a false hit in the
- * "Tin nhắn" panel.
- */
-const getCloudMessageSearchText = (message: Message): string => {
-  if (message.type !== MessageType.TEXT) return "";
-  const plainText = String(message.plainText ?? "").trim();
-  const content = String(message.content ?? "").trim();
-  // Cloud text messages intentionally mirror content into plainText for the
-  // chat renderer. Do not concatenate identical fields or search snippets
-  // will show the same message twice (e.g. "123456 123456").
-  return plainText && content && plainText !== content
-    ? `${plainText} ${content}`
-    : plainText || content;
-};
-
-const stripRichText = (value: string): string =>
-  value
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .trim();
-
-const isStandaloneHttpUrl = (value: string): boolean => {
-  try {
-    const parsed = new URL(value);
-    return (
-      ["http:", "https:"].includes(parsed.protocol) &&
-      parsed.toString().length > 0
-    );
-  } catch {
-    return false;
-  }
-};
-
-const getMessageRangeIds = (
-  orderedMessages: Message[],
-  startId: string,
-  endId: string,
-): string[] => {
-  const startIndex = orderedMessages.findIndex((message) => message.id === startId);
-  const endIndex = orderedMessages.findIndex((message) => message.id === endId);
-  if (startIndex < 0 || endIndex < 0) return [];
-
-  const lowerIndex = Math.min(startIndex, endIndex);
-  const upperIndex = Math.max(startIndex, endIndex);
-  return orderedMessages
-    .slice(lowerIndex, upperIndex + 1)
-    .map((message) => message.id);
-};
 
 type CloudSelectionDrag = {
   startId: string;
@@ -602,7 +495,7 @@ export default function CloudPage() {
 
   const handleSend = useCallback(
     async (rawContent?: string) => {
-      const content = stripRichText(rawContent ?? "");
+      const content = stripCloudRichText(rawContent ?? "");
       // Files are uploaded as soon as they are selected. Only a failed or
       // interrupted draft still needs an upload during an explicit retry.
       const attachments = pendingAttachments.filter(
@@ -1574,7 +1467,7 @@ export default function CloudPage() {
             <ConversationLane className="pt-3">
               <InlineNotice
                 tone="error"
-                message={t(getErrorTranslationKey(workspace.error.code))}
+                message={t(getCloudErrorTranslationKey(workspace.error.code))}
                 dismissible
                 onDismiss={workspace.clearError}
                 action={
