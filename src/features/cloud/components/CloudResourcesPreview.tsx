@@ -163,7 +163,7 @@ export const CloudResourcesPreview: React.FC<CloudResourcesPreviewProps> = ({
   return (
     <>
       <div className="divide-y divide-[#eef0f4] border-y border-[#eef0f4] bg-surface">
-        <ResourceSection label="Ảnh/Video" count={media.length}>
+        <ResourceSection label="Ảnh/Video" count={media.length} defaultExpanded>
           {media.length ? <>
             <div className="grid grid-cols-3 gap-1.5">
               {media.slice(0, 6).map((item) => (
@@ -984,10 +984,17 @@ const CalendarPicker: React.FC<{
   </div>;
 };
 
-const ResourceSection: React.FC<{ label: string; count: number; children: React.ReactNode }> = ({ label, count, children }) => {
+const ResourceSection: React.FC<{
+  label: string;
+  count: number;
+  children: React.ReactNode;
+  defaultExpanded?: boolean;
+}> = ({ label, count, children, defaultExpanded = count > 0 }) => {
   // Match Hacom Chat: populated sections open by default, empty sections stay
   // collapsed so the panel remains visually divided without empty blocks.
-  const [expanded, setExpanded] = useState(count > 0);
+  // Media is the primary preview surface, so its caller keeps it open even
+  // while the initial API response is still loading.
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const contentId = `cloud-resource-section-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
   return (

@@ -68,6 +68,19 @@ const quota: CloudQuota = {
 };
 
 describe("CloudConversationInfoPanel", () => {
+  it("keeps the media section open while images load asynchronously", () => {
+    const { rerender } = render(<CloudResourcesPreview items={[]} />);
+    const mediaSection = screen.getByRole("button", { name: "Ảnh/Video" });
+
+    expect(mediaSection.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("Chưa có ảnh hoặc video nào")).not.toBeNull();
+
+    rerender(<CloudResourcesPreview items={[imageItem]} />);
+
+    expect(mediaSection.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("img", { name: "photo.png" })).not.toBeNull();
+  });
+
   it("keeps the File row compact without rendering the sender name", () => {
     const { unmount } = render(<CloudResourcesPreview items={[item]} senderName="Nguyễn Trường Thịnh" />);
 
