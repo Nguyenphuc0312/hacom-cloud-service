@@ -1,0 +1,3 @@
+-- PostgreSQL does not support removing an enum value safely in-place.
+-- This migration is intentionally irreversible; restore from a schema backup
+-- if a rollback of the cancelled status is required.

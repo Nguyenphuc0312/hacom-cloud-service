@@ -22,6 +22,23 @@ frontend SHA `af91a644`.
 - Worker operations/recovery: [`docs/process5-worker-operations-runbook.md`](docs/process5-worker-operations-runbook.md)
 - Prometheus alerts: [`deployments/monitoring/process5-worker-alerts.yml`](deployments/monitoring/process5-worker-alerts.yml)
 
+### Cloud Admin observability local stack
+
+`make up` now starts PostgreSQL, MinIO, the Cloud worker, Prometheus, and Grafana.
+Prometheus scrapes the host Cloud API at `host.docker.internal:8080/metrics` and
+the Compose worker at `worker:9091/metrics`. Grafana is available at
+`http://localhost:3001` with Prometheus provisioned as its default datasource.
+
+The Cloud Admin API reads these sources through:
+
+- `CLOUD_API_METRICS_URL`
+- `PROMETHEUS_URL`
+- `GRAFANA_URL`
+- `WORKER_METRICS_URL`
+
+The `/api/v1/admin/cloud/observability` response is `live` only when all four
+sources are reachable and Prometheus reports both scrape targets as up.
+
 The older section below is retained as the historical Phase 1 release procedure.
 
 ## Release candidate Quy trình 5

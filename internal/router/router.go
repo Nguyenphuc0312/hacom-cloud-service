@@ -84,6 +84,12 @@ func New(healthService *health.Service, cloudHandlers ...http.Handler) http.Hand
 	if len(cloudHandlers) > 2 && cloudHandlers[2] != nil {
 		mux.Handle("/metrics", cloudHandlers[2])
 	}
+	if len(cloudHandlers) > 3 && cloudHandlers[3] != nil {
+		mux.Handle(
+			"/api/v1/admin/cloud/",
+			http.StripPrefix("/api/v1/admin/cloud", cloudHandlers[3]),
+		)
+	}
 
 	return mux
 }

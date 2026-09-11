@@ -53,6 +53,72 @@ services:
     entrypoint: ["/bin/sh", "/init-minio.sh"]
     restart: "no"
 
+  worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile.worker
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      AUTH_MODE: demo
+      DATABASE_URL: postgres://${POSTGRES_USER:-hacom}:${POSTGRES_PASSWORD:-hacom}@postgres:5432/${POSTGRES_DB:-hacom_cloud}?sslmode=disable
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_USE_SSL: "false"
+      MINIO_BUCKET: ${MINIO_BUCKET:-hacom-cloud-private}
+      WORKER_ID: ${WORKER_ID:-cloud-worker-compose}
+      WORKER_METRICS_ADDR: :9091
+    ports:
+      - "9091:9091"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9091/metrics"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/process5-worker-alerts.yml:/etc/prometheus/process5-worker-alerts.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      worker:
+        condition: service_healthy
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   minio_data:
+  prometheus_data:
+  grafana_data:

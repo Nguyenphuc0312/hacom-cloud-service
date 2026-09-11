@@ -42,6 +42,23 @@ func buildAdminServiceAuthenticator(cfg config.Config) (auth.Authenticator, erro
 	return auth.NewServiceTokenAuthenticator(jwks, cfg.AuthIssuer, cfg.InternalServiceTokenAudience, cfg.InternalServiceTokenScope)
 }
 
+func buildUserDirectoryClient(cfg config.Config) (*auth.DirectoryClient, error) {
+	if cfg.AuthServiceTokenURL == "" || cfg.AuthServiceClientID == "" || cfg.AuthServiceClientSecret == "" {
+		if cfg.AuthMode == "jwt" {
+			return nil, errors.New("Auth user directory credentials are required when AUTH_MODE=jwt")
+		}
+		return nil, nil
+	}
+	return auth.NewDirectoryClient(auth.DirectoryClientConfig{
+		ServiceTokenURL: cfg.AuthServiceTokenURL,
+		BatchResolveURL: cfg.AuthUserDirectoryBatchURL,
+		ClientID:        cfg.AuthServiceClientID,
+		ClientSecret:    cfg.AuthServiceClientSecret,
+		Audience:        cfg.AuthServiceTokenAudience,
+		Scopes:          cfg.AuthServiceTokenScopes,
+	}, &http.Client{Timeout: cfg.AuthHTTPTimeout})
+}
+
 func buildJWTAuthenticator(cfg config.Config) (auth.Authenticator, io.Closer, error) {
 	httpClient := &http.Client{
 		Timeout: cfg.AuthHTTPTimeout,

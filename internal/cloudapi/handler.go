@@ -188,6 +188,7 @@ func New(
 	mux.HandleFunc("/links", methodNotAllowed(http.MethodPost))
 	mux.HandleFunc("GET /items", handler.listItems)
 	mux.HandleFunc("/items", methodNotAllowed(http.MethodGet))
+	mux.HandleFunc("GET /items/summary", handler.getItemSummary)
 	mux.HandleFunc("GET /items/{itemID}", handler.getItem)
 	if handler.trash != nil {
 		mux.HandleFunc("POST /items/{itemID}/trash", handler.moveToTrash)
@@ -451,6 +452,41 @@ func (h *Handler) listItems(writer http.ResponseWriter, request *http.Request) {
 		Items:      items,
 		NextCursor: page.NextCursor,
 	})
+}
+
+func (h *Handler) getItemSummary(writer http.ResponseWriter, request *http.Request) {
+	response := itemSummaryResponse{
+		ByType: make(map[cloud.ItemType]itemSummaryBucket),
+	}
+	cursor := ""
+	for {
+		page, err := h.service.ListItems(
+			request.Context(),
+			ownerUserID(request.Context()),
+			cloud.ListRequest{Cursor: cursor, Limit: cloud.MaxPageSize},
+		)
+		if err != nil {
+			h.writeServiceError(writer, request, err)
+			return
+		}
+		for _, item := range page.Items {
+			response.TotalCount++
+			response.TotalBytes += item.SizeBytes
+			bucket := response.ByType[item.Type]
+			bucket.Count++
+			bucket.Bytes += item.SizeBytes
+			response.ByType[item.Type] = bucket
+		}
+		if page.NextCursor == "" {
+			break
+		}
+		if page.NextCursor == cursor {
+			writeError(writer, http.StatusInternalServerError, "INTERNAL_ERROR", "invalid pagination cursor")
+			return
+		}
+		cursor = page.NextCursor
+	}
+	writeJSON(writer, http.StatusOK, response)
 }
 
 func (h *Handler) getQuota(writer http.ResponseWriter, request *http.Request) {

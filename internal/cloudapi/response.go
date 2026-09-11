@@ -28,6 +28,17 @@ type listItemsResponse struct {
 	NextCursor string         `json:"nextCursor,omitempty"`
 }
 
+type itemSummaryBucket struct {
+	Count int   `json:"count"`
+	Bytes int64 `json:"bytes"`
+}
+
+type itemSummaryResponse struct {
+	TotalCount int                                  `json:"totalCount"`
+	TotalBytes int64                                `json:"totalBytes"`
+	ByType     map[cloud.ItemType]itemSummaryBucket `json:"byType"`
+}
+
 type quotaResponse struct {
 	LimitBytes     int64     `json:"limitBytes"`
 	UsedBytes      int64     `json:"usedBytes"`

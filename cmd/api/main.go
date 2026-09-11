@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloud"
+	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloudadmin"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/cloudapi"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/config"
 	"github.com/Nguyenphuc0312/hacom-cloud-service/internal/fileaccess"
@@ -47,6 +48,11 @@ func main() {
 	adminServiceAuthenticator, err := buildAdminServiceAuthenticator(cfg)
 	if err != nil {
 		logger.Error("initialize Cloud admin service authentication", "error", err)
+		os.Exit(1)
+	}
+	userDirectoryClient, err := buildUserDirectoryClient(cfg)
+	if err != nil {
+		logger.Error("initialize Auth user directory client", "error", err)
 		os.Exit(1)
 	}
 
@@ -167,10 +173,22 @@ func main() {
 		logger.Error("create Cloud admin quota handler", "error", err)
 		os.Exit(1)
 	}
+	cloudAdminHandler, err := cloudadmin.New(db, quotaRequestService, trashService, authenticator, logger, cloudadmin.ObservabilityConfig{
+		CloudAPIMetricsURL: cfg.CloudAPIMetricsURL,
+		PrometheusURL:      cfg.PrometheusURL,
+		GrafanaURL:         cfg.GrafanaURL,
+		WorkerMetricsURL:   cfg.WorkerMetricsURL,
+		HTTPTimeout:        cfg.ObservabilityHTTPTimeout,
+		UserDirectory:      userDirectoryClient,
+	})
+	if err != nil {
+		logger.Error("create Cloud Admin handler", "error", err)
+		os.Exit(1)
+	}
 
 	server := &http.Server{
 		Addr:              cfg.APIAddr,
-		Handler:           router.New(healthService, cloudHandler, adminQuotaHandler, apiMetrics.Handler()),
+		Handler:           router.New(healthService, cloudHandler, adminQuotaHandler, apiMetrics.Handler(), cloudAdminHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

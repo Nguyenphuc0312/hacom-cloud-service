@@ -37,6 +37,7 @@ type Config struct {
 	AuthServiceClientSecret      string
 	AuthServiceTokenAudience     string
 	AuthServiceTokenScopes       []string
+	AuthUserDirectoryBatchURL    string
 	InternalServiceTokenAudience string
 	InternalServiceTokenScope    string
 	DemoAdminServiceToken        string
@@ -68,6 +69,11 @@ type Config struct {
 	WorkerTrashScanInterval      time.Duration
 	WorkerTrashBatchSize         int
 	WorkerMetricsAddr            string
+	CloudAPIMetricsURL           string
+	PrometheusURL                string
+	GrafanaURL                   string
+	WorkerMetricsURL             string
+	ObservabilityHTTPTimeout     time.Duration
 }
 
 func Load() (Config, error) {
@@ -104,6 +110,7 @@ func Load() (Config, error) {
 	authServiceClientSecret := os.Getenv("AUTH_SERVICE_CLIENT_SECRET")
 	authServiceTokenAudience := strings.TrimSpace(os.Getenv("AUTH_SERVICE_TOKEN_AUDIENCE"))
 	authServiceTokenScopes := splitCSV(os.Getenv("AUTH_SERVICE_TOKEN_SCOPES"))
+	authUserDirectoryBatchURL := strings.TrimSpace(env("AUTH_USER_DIRECTORY_BATCH_URL", "http://localhost:3101/internal/users/batch-resolve"))
 	internalServiceTokenAudience := strings.TrimSpace(env("INTERNAL_SERVICE_TOKEN_AUDIENCE", "hacom-cloud-service"))
 	internalServiceTokenScope := strings.TrimSpace(env("INTERNAL_SERVICE_TOKEN_SCOPE", "cloud.quota.review"))
 	demoAdminServiceToken := strings.TrimSpace(env("DEMO_ADMIN_SERVICE_TOKEN", "local-cloud-admin-service-token"))
@@ -263,6 +270,10 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	observabilityHTTPTimeout, err := durationEnv("OBSERVABILITY_HTTP_TIMEOUT", 2*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
 		AppEnv:                       appEnv,
@@ -284,6 +295,7 @@ func Load() (Config, error) {
 		AuthServiceClientSecret:      authServiceClientSecret,
 		AuthServiceTokenAudience:     authServiceTokenAudience,
 		AuthServiceTokenScopes:       authServiceTokenScopes,
+		AuthUserDirectoryBatchURL:    authUserDirectoryBatchURL,
 		InternalServiceTokenAudience: internalServiceTokenAudience,
 		InternalServiceTokenScope:    internalServiceTokenScope,
 		DemoAdminServiceToken:        demoAdminServiceToken,
@@ -315,6 +327,11 @@ func Load() (Config, error) {
 		WorkerTrashScanInterval:      workerTrashScanInterval,
 		WorkerTrashBatchSize:         workerTrashBatchSize,
 		WorkerMetricsAddr:            strings.TrimSpace(env("WORKER_METRICS_ADDR", ":9091")),
+		CloudAPIMetricsURL:           strings.TrimRight(strings.TrimSpace(env("CLOUD_API_METRICS_URL", "http://localhost:8080/metrics")), "/"),
+		PrometheusURL:                strings.TrimRight(strings.TrimSpace(env("PROMETHEUS_URL", "http://localhost:9090")), "/"),
+		GrafanaURL:                   strings.TrimRight(strings.TrimSpace(env("GRAFANA_URL", "http://localhost:3001")), "/"),
+		WorkerMetricsURL:             strings.TrimRight(strings.TrimSpace(env("WORKER_METRICS_URL", "http://localhost:9091/metrics")), "/"),
+		ObservabilityHTTPTimeout:     observabilityHTTPTimeout,
 	}
 
 	required := []struct {
